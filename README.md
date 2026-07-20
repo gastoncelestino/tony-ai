@@ -22,19 +22,19 @@ está verificado programáticamente en cada paso, no asumido.
 ```mermaid
 flowchart TD
 
-    USER[Proyecto<br/>(pedido del usuario)]
+    USER[Proyecto			(pedido del usuario)]
 
-    PLAN[Planning Engine<br/><b>Qwen3-Coder 30B</b>]
+    PLAN[Planning Engine	Qwen3-Coder 30B]
 
-    IMPL[Implementation<br/><b>OmniCoder 9B</b>]
+    IMPL[Implementation		OmniCoder 9B]
 
-    REVIEW[Revisión 4R (default)<br/><b>DeepSeek-R1 14B</b>]
+    REVIEW[Revisión 4R		DeepSeek-R1 14B]
 
-    JD[Judgment Day (explícito)<br/><b>DeepSeek-R1 + Qwen3</b>]
+    JD[Judgment Day			DeepSeek-R1 + Qwen3]
 
-    VERIFY[Verify<br/><b>sdd-verify · tests/build</b>]
+    VERIFY[Verify			sdd-verify · tests/build]
 
-    ARCHIVE[Archive<br/><b>Ornith-9B</b>]
+    ARCHIVE[Archive			Ornith-9B]
 
 
     subgraph CONTEXT["Servicios de contexto (todas las fases, no un paso)"]
