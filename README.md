@@ -37,7 +37,7 @@ flowchart TD
     ARCHIVE["Archive<br/>Ornith-9B"]
 
 
-    subgraph CONTEXT[""]
+    subgraph CONTEXT["  "]
 
         MEMORY["TonyMem"]
 
