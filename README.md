@@ -22,30 +22,30 @@ está verificado programáticamente en cada paso, no asumido.
 ```mermaid
 flowchart TD
 
-    USER["Proyecto<br/>Pedido del usuario"]
+    USER["Proyecto<br/>(pedido del usuario)"]
 
     PLAN["Planning Engine<br/>Qwen3-Coder 30B"]
 
     IMPL["Implementation<br/>OmniCoder 9B"]
 
-    REVIEW["Revision 4R (default)<br/>DeepSeek-R1 14B"]
+    REVIEW["Revisión 4R (default)<br/>DeepSeek-R1 14B"]
 
-    JD["Judgment Day (explicito)<br/>DeepSeek-R1 + Qwen3"]
+    JD["Judgment Day (explícito)<br/>DeepSeek-R1 + Qwen3"]
 
     VERIFY["Verify<br/>sdd-verify - tests/build"]
 
     ARCHIVE["Archive<br/>Ornith-9B"]
 
 
-    subgraph CONTEXT["Servicios de contexto - todas las fases"]
+    subgraph CONTEXT["Servicios de contexto<br/>(todas las fases, no un paso)"]
 
         MEMORY["TonyMem"]
 
         INDEX["Code Indexer"]
 
-        DCP["DCP<br/>Dynamic Context Pruning"]
+        DCP["DCP"]
 
-        QDRANT["Qdrant<br/>Vector Store para Code Indexer"]
+        QDRANT["Qdrant<br/>Vector Store de Code Indexer"]
 
     end
 
@@ -55,34 +55,36 @@ flowchart TD
     PLAN --> IMPL
 
     IMPL --> REVIEW
-
     IMPL --> JD
 
     REVIEW --> VERIFY
-
     JD --> VERIFY
 
     VERIFY --> ARCHIVE
 
 
-    MEMORY -.-> PLAN
     MEMORY -.-> IMPL
-    MEMORY -.-> REVIEW
-    MEMORY -.-> JD
-    MEMORY -.-> VERIFY
-
-
     INDEX -.-> IMPL
-    INDEX -.-> REVIEW
-    INDEX -.-> JD
+    DCP -.-> JD
+
 
     INDEX --> QDRANT
 
 
-    DCP -.-> PLAN
-    DCP -.-> IMPL
-    DCP -.-> REVIEW
-    DCP -.-> JD
+    classDef user fill:#f4f0e8,stroke:#999,color:#222;
+    classDef plan fill:#e8e6ff,stroke:#7770bb,color:#222;
+    classDef impl fill:#dff3ec,stroke:#4b9b83,color:#222;
+    classDef review fill:#f9e6dc,stroke:#a66a45,color:#222;
+    classDef verify fill:#dff3ec,stroke:#4b9b83,color:#222;
+    classDef archive fill:#f4f0e8,stroke:#999,color:#222;
+    classDef context fill:#ecebff,stroke:#7770bb,color:#222;
+
+
+    class USER,ARCHIVE user;
+    class PLAN plan;
+    class IMPL,VERIFY impl;
+    class REVIEW,JD review;
+    class MEMORY,INDEX,DCP,QDRANT context;
 ```
 
 Dos cosas que no son obvias mirando el diagrama:
