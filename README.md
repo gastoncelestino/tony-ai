@@ -43,9 +43,9 @@ flowchart TD
 
         INDEX[Code Indexer]
 
-        DCP[DCP<br/>Dynamic Context Pruning]
+        DCP[DCP	Dynamic Context Pruning]
 
-        QDRANT[Qdrant<br/>Vector Store<br/>para Code Indexer]
+        QDRANT[Qdrant	Vector Store<br/>para Code Indexer]
 
     end
 ```
