@@ -22,32 +22,67 @@ está verificado programáticamente en cada paso, no asumido.
 ```mermaid
 flowchart TD
 
-    USER[Proyecto			(pedido del usuario)]
+    USER["Proyecto<br/>Pedido del usuario"]
 
-    PLAN[Planning Engine	Qwen3-Coder 30B]
+    PLAN["Planning Engine<br/>Qwen3-Coder 30B"]
 
-    IMPL[Implementation		OmniCoder 9B]
+    IMPL["Implementation<br/>OmniCoder 9B"]
 
-    REVIEW[Revisión 4R		DeepSeek-R1 14B]
+    REVIEW["Revision 4R (default)<br/>DeepSeek-R1 14B"]
 
-    JD[Judgment Day			DeepSeek-R1 + Qwen3]
+    JD["Judgment Day (explicito)<br/>DeepSeek-R1 + Qwen3"]
 
-    VERIFY[Verify			sdd-verify · tests/build]
+    VERIFY["Verify<br/>sdd-verify - tests/build"]
 
-    ARCHIVE[Archive			Ornith-9B]
+    ARCHIVE["Archive<br/>Ornith-9B"]
 
 
-    subgraph CONTEXT["Servicios de contexto (todas las fases, no un paso)"]
+    subgraph CONTEXT["Servicios de contexto - todas las fases"]
 
-        MEMORY[TonyMem]
+        MEMORY["TonyMem"]
 
-        INDEX[Code Indexer]
+        INDEX["Code Indexer"]
 
-        DCP[DCP	Dynamic Context Pruning]
+        DCP["DCP<br/>Dynamic Context Pruning"]
 
-        QDRANT[Qdrant	Vector Store para Code Indexer]
+        QDRANT["Qdrant<br/>Vector Store para Code Indexer"]
 
     end
+
+
+    USER --> PLAN
+
+    PLAN --> IMPL
+
+    IMPL --> REVIEW
+
+    IMPL --> JD
+
+    REVIEW --> VERIFY
+
+    JD --> VERIFY
+
+    VERIFY --> ARCHIVE
+
+
+    MEMORY -.-> PLAN
+    MEMORY -.-> IMPL
+    MEMORY -.-> REVIEW
+    MEMORY -.-> JD
+    MEMORY -.-> VERIFY
+
+
+    INDEX -.-> IMPL
+    INDEX -.-> REVIEW
+    INDEX -.-> JD
+
+    INDEX --> QDRANT
+
+
+    DCP -.-> PLAN
+    DCP -.-> IMPL
+    DCP -.-> REVIEW
+    DCP -.-> JD
 ```
 
 Dos cosas que no son obvias mirando el diagrama:
