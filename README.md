@@ -22,24 +22,28 @@ está verificado programáticamente en cada paso, no asumido.
 
 ```mermaid
 flowchart TD
-    U[Proyecto / pedido del usuario] --> P[Planning Engine<br/><small>Qwen3-Coder 30B</small>]
-    P --> I[Implementation<br/><small>OmniCoder 9B</small>]
-    I --> R4[Revisión 4R — default<br/><small>DeepSeek-R1 14B</small>]
-    I -.explícito: "juzgar esto".-> JD[Judgment Day<br/><small>DeepSeek-R1 + Qwen3-Coder</small>]
-    JDM[TonyMem Recall<br/><small>jd_recall</small>] -.antes de juzgar.-> JD
-    JD -.después: terminal state.-> JDR[jd_record<br/><small>ledger + Qdrant</small>]
-    R4 --> V[Verify<br/><small>sdd-verify</small>]
-    JD --> V
-    V --> A[Archive<br/><small>Ornith 9B</small>]
+    U["Proyecto / pedido del usuario"] --> P["Planning Engine<br/>Qwen3-Coder 30B"]
+    P --> I["Implementation<br/>OmniCoder 9B"]
 
-    P -.consulta/guarda.- CTX
-    I -.consulta/guarda.- CTX
-    V -.consulta/guarda.- CTX
-    subgraph CTX[Servicios de contexto — todas las fases, no un paso]
-        TM[TonyMem]
-        CI[Code Indexer]
-        QD[Qdrant]
-        DCP[DCP — poda contexto en background]
+    I --> R4["Revisión 4R<br/>DeepSeek-R1 14B"]
+    I -.->|"explícito: juzgar esto"| JD["Judgment Day<br/>DeepSeek-R1 + Qwen3-Coder"]
+
+    JDM["TonyMem Recall<br/>jd_recall"] -.->|"antes de juzgar"| JD
+    JD -.->|"después: terminal state"| JDR["jd_record<br/>ledger + Qdrant"]
+
+    R4 --> V["Verify<br/>sdd-verify"]
+    JD --> V
+    V --> A["Archive<br/>Ornith 9B"]
+
+    P -.->|"consulta / guarda"| CTX
+    I -.->|"consulta / guarda"| CTX
+    V -.->|"consulta / guarda"| CTX
+
+    subgraph CTX["Servicios de contexto"]
+        TM["TonyMem"]
+        CI["Code Indexer"]
+        QD["Qdrant"]
+        DCP["DCP<br/>poda continua"]
     end
 ```
 
