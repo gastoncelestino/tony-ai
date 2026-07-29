@@ -1,0 +1,64 @@
+# config/tony-memory.yaml
+#
+# Reference configuration for TonyMem's memory + Judgment Day bridge.
+#
+# This file documents the knobs that exist — it is NOT read directly by
+# any of the Python/TS code (which is intentionally stdlib/dependency-free
+# and reads plain environment variables, same as code-index/core.py). Copy
+# the values you want into your shell profile, systemd unit, or the `mcp.*
+# .environment` blocks in opencode.json. Keeping this as documentation
+# instead of a parsed config avoids adding a YAML-parsing dependency to
+# any of the local-only tools.
+#
+# Env var <-> field mapping is listed next to each key.
+
+memory:
+  # Storage backend for the full-text observation store (local-memory/server.py,
+  # plugins/tonymem.ts). Only "sqlite" exists today — kept as a field for
+  # parity with the requested shape / future backends.
+  provider: sqlite
+  # env: LOCAL_MEMORY_DB
+  db_path: "{cwd}/.tonymem/memory.db"
+
+qdrant:
+  # env: TONY_QDRANT_URL (code-index/core.py, judgment-memory/ledger.py, plugins/qdrant.ts)
+  host: localhost
+  port: 6333
+  # Collections are derived, never set directly:
+  #   code search   -> codeidx_{project}   (code-index/core.py:collection_name)
+  #   judgment day  -> jdmem_{project}     (judgment-memory/ledger.py, plugins/qdrant.ts)
+  distance: cosine
+
+embedding:
+  # env: TONY_EMBED_MODEL — code-index defaults to bge-m3 (code chunks);
+  # judgment-memory defaults to nomic-embed-text (short natural-language
+  # lessons/tasks). Override per-server via each MCP entry's `environment`
+  # block in opencode.json if you want a different model per pipeline.
+  provider: ollama
+  # env: TONY_OLLAMA_URL
+  url: http://localhost:11434
+  model:
+    code_index: bge-m3
+    judgment_memory: nomic-embed-text
+
+judgment:
+  # Whether the parent orchestrator should persist Judgment Day lineages at
+  # all. When false, jd_record still works if called explicitly, but the
+  # Judgment Day Memory Bridge protocol (plugins/judgment-memory.ts) stops
+  # asking for it. There is no env var for this today — it's a protocol-level
+  # instruction, not a runtime toggle; flip it here as documentation of
+  # intent and update BRIDGE_INSTRUCTIONS in plugins/judgment-memory.ts
+  # (and the "mandatory" wording in skills/judgment-day/SKILL.md's recall
+  # step) if you actually want to make it optional.
+  persist: true
+  # Whether jd_recall runs proactively before Judgment Day launches judges.
+  # See judgment-day/SKILL.md step 1 and plugins/judgment-memory.ts's
+  # chat.message trigger-word detection.
+  learn: true
+  # Ledger location (judgment-memory/ledger.py, plugins/judgment-memory.ts)
+  # env: JUDGMENT_MEMORY_DB
+  db_path: "{cwd}/.tonymem/judgment-memory.db"
+  # Minimum Qdrant cosine score for a recall hit to be surfaced to judges —
+  # tune in plugins/judgment-memory.ts (JD_TRIGGER_RE block) and
+  # judgment-memory/server.py's jd_recall handler if you change this.
+  recall_score_threshold: 0.5
