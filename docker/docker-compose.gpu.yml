@@ -1,0 +1,24 @@
+# docker/docker-compose.gpu.yml
+#
+# Optional override: passes an NVIDIA GPU through to the `ollama` service.
+# CPU-only (the base docker-compose.yml) works fine for the embedding
+# models this repo uses — this is only worth adding if you're also running
+# larger LLMs through the same Ollama instance and want that faster too.
+#
+# Requires, on the NixOS host (see docker/README.md for the full snippet):
+#   - an NVIDIA driver configured (hardware.nvidia / hardware.opengl)
+#   - hardware.nvidia-container-toolkit.enable = true;
+#   - the docker/podman daemon restarted after enabling it
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

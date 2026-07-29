@@ -12,6 +12,7 @@ integradas sin reinventar lo que ya funciona:
 | **DCP** | *(no existía)* | Plugin externo integrado, no reinventado |
 | **Double Review** | *(ya existía como Judgment Day)* | 2 correcciones aplicadas |
 | **Model Router** | *(sin usar)* | 18 agentes ahora con modelo local asignado |
+| **Judgment Day Memory Bridge** | *(no existía)* | TonyMem + Qdrant conectados a Judgment Day: recall antes de juzgar, ledger persistente después |
 
 Todo lo demás — `commands/`, `skills/` (salvo un archivo agregado, ver abajo),
 `prompts/sdd/`, la CLI, el runtime — es **byte-idéntico** a Gentle-AI. Esto
@@ -21,70 +22,25 @@ está verificado programáticamente en cada paso, no asumido.
 
 ```mermaid
 flowchart TD
+    U[Proyecto / pedido del usuario] --> P[Planning Engine<br/><small>Qwen3-Coder 30B</small>]
+    P --> I[Implementation<br/><small>OmniCoder 9B</small>]
+    I --> R4[Revisión 4R — default<br/><small>DeepSeek-R1 14B</small>]
+    I -.explícito: "juzgar esto".-> JD[Judgment Day<br/><small>DeepSeek-R1 + Qwen3-Coder</small>]
+    JDM[TonyMem Recall<br/><small>jd_recall</small>] -.antes de juzgar.-> JD
+    JD -.después: terminal state.-> JDR[jd_record<br/><small>ledger + Qdrant</small>]
+    R4 --> V[Verify<br/><small>sdd-verify</small>]
+    JD --> V
+    V --> A[Archive<br/><small>Ornith 9B</small>]
 
-    USER["Proyecto<br/>(pedido del usuario)"]
-
-    PLAN["Planning Engine<br/>Qwen3-Coder 30B"]
-
-    IMPL["Implementation<br/>OmniCoder 9B"]
-
-    REVIEW["Revisión 4R (default)<br/>DeepSeek-R1 14B"]
-
-    JD["Judgment Day (explícito)<br/>DeepSeek-R1 + Qwen3"]
-
-    VERIFY["Verify<br/>sdd-verify - tests/build"]
-
-    ARCHIVE["Archive<br/>Ornith-9B"]
-
-
-    subgraph CONTEXT["  "]
-
-        MEMORY["TonyMem"]
-
-        INDEX["Code Indexer"]
-
-        DCP["DCP"]
-
-        QDRANT["Qdrant<br/>Vector Store de Code Indexer"]
-
+    P -.consulta/guarda.- CTX
+    I -.consulta/guarda.- CTX
+    V -.consulta/guarda.- CTX
+    subgraph CTX[Servicios de contexto — todas las fases, no un paso]
+        TM[TonyMem]
+        CI[Code Indexer]
+        QD[Qdrant]
+        DCP[DCP — poda contexto en background]
     end
-
-
-    USER --> PLAN
-
-    PLAN --> IMPL
-
-    IMPL --> REVIEW
-    IMPL --> JD
-
-    REVIEW --> VERIFY
-    JD --> VERIFY
-
-    VERIFY --> ARCHIVE
-
-
-    MEMORY -.-> IMPL
-    INDEX -.-> IMPL
-    DCP -.-> JD
-
-
-    INDEX --> QDRANT
-
-
-    classDef user fill:#f4f0e8,stroke:#999,color:#222;
-    classDef plan fill:#e8e6ff,stroke:#7770bb,color:#222;
-    classDef impl fill:#dff3ec,stroke:#4b9b83,color:#222;
-    classDef review fill:#f9e6dc,stroke:#a66a45,color:#222;
-    classDef verify fill:#dff3ec,stroke:#4b9b83,color:#222;
-    classDef archive fill:#f4f0e8,stroke:#999,color:#222;
-    classDef context fill:#ecebff,stroke:#7770bb,color:#222;
-
-
-    class USER,ARCHIVE user;
-    class PLAN plan;
-    class IMPL,VERIFY impl;
-    class REVIEW,JD review;
-    class MEMORY,INDEX,DCP,QDRANT context;
 ```
 
 Dos cosas que no son obvias mirando el diagrama:
@@ -98,6 +54,12 @@ Dos cosas que no son obvias mirando el diagrama:
    y escriben durante cada fase (contexto previo antes de arrancar, guardado
    de decisiones al terminar, poda de contexto continua). No hay una etapa
    "leer memoria" al final del pipeline.
+3. **Judgment Day ahora tiene memoria propia.** Antes de lanzar a los jueces,
+   se llama `jd_recall` (¿ya vimos un problema parecido?); cuando la
+   lineage llega a un estado terminal, el orquestador llama `jd_record`,
+   que persiste en un ledger SQLite propio (`judgment-memory/ledger.py`) y
+   lo embebe/indexa en Qdrant (colección `jdmem_{project}`, separada de la
+   de Code Indexer). Ver `judgment-memory/README.md`.
 
 Ver [`ARCHITECTURE.md`](./ARCHITECTURE.md) para el detalle de cada pieza y
 las decisiones detrás de cada cambio.
@@ -107,7 +69,10 @@ las decisiones detrás de cada cambio.
 Este repo es un **overlay**: contiene solo lo que cambia sobre una
 instalación existente de Gentle-AI. Ver
 [`TONY-AI-INSTALL.md`](./TONY-AI-INSTALL.md) para el paso a paso exacto
-(9 secciones, copy-paste, con verificación en cada una).
+(10 secciones, copy-paste, con verificación en cada una). Si corrés esto
+desde NixOS, `docker/README.md` tiene las notas puntuales (Docker vs
+Podman, GPU vía `nvidia-container-toolkit`) para levantar Ollama + Qdrant
+en contenedor sin instalarlos nativos.
 
 ## Estructura del repo
 
@@ -116,10 +81,20 @@ tony-ai-fork/
 ├── README.md                          # este archivo
 ├── ARCHITECTURE.md                    # documentación técnica profunda
 ├── TONY-AI-INSTALL.md                 # instrucciones de instalación exactas
-├── opencode.json                      # mcp.tonymem/code-index + Model Router (diff mínimo sobre el original)
+├── opencode.json                      # mcp.tonymem/code-index/judgment-memory + Model Router (diff mínimo sobre el original)
 ├── AGENTS.md                          # bloque TonyMem + bloque nuevo Code Indexer (diff mínimo)
+├── config/
+│   └── tony-memory.yaml               # referencia documentada de env vars (no se parsea, ver el archivo)
+├── docker/
+│   ├── docker-compose.yml             # Ollama + Qdrant (backing services, no los MCP servers)
+│   ├── docker-compose.gpu.yml         # override opcional, passthrough NVIDIA
+│   ├── .env.example
+│   └── README.md                      # notas específicas NixOS (Docker/Podman, GPU)
+├── Makefile                           # wrappers de conveniencia sobre docker/ + los tests
 ├── plugins/
-│   └── tonymem.ts                     # reemplaza plugins/engram.ts
+│   ├── tonymem.ts                     # reemplaza plugins/engram.ts
+│   ├── qdrant.ts                      # cliente REST Qdrant + Ollama compartido (TS)
+│   └── judgment-memory.ts             # bridge: recall antes de Judgment Day, captura pasiva después
 ├── local-memory/                      # TonyMem — MCP server (8 tools)
 │   ├── server.py
 │   └── README.md
@@ -128,10 +103,23 @@ tony-ai-fork/
 │   ├── server.py
 │   ├── test_core.py
 │   └── README.md
+├── judgment-memory/                   # Judgment Day <-> TonyMem bridge — MCP server (4 tools)
+│   ├── ledger.py                      # SQLite ledger + normalize + embed + Qdrant pipeline
+│   ├── server.py                      # jd_recall / jd_record / jd_history / jd_stats
+│   ├── schema.json                    # shape de un judgment record
+│   ├── test_ledger.py                 # regression test, mock Ollama/Qdrant
+│   ├── scripts/verify-qdrant.ts       # smoke test del cliente TS contra Ollama/Qdrant reales
+│   └── README.md
+├── commands/
+│   ├── memory-search.md               # /memory-search — TonyMem + judgment-memory
+│   ├── memory-stats.md                # /memory-stats
+│   └── judgment-history.md            # /judgment-history — solo SQLite, sin dependencia de Qdrant
 ├── .opencode/
 │   └── dcp.jsonc                      # config de DCP (plugin externo, no incluido acá)
-└── skills/_shared/
-    └── review-ledger-contract.md      # contrato faltante que judgment-day/SKILL.md referenciaba
+└── skills/
+    ├── judgment-day/SKILL.md          # +paso de recall/record (diff mínimo, ver ARCHITECTURE.md)
+    └── _shared/
+        └── review-ledger-contract.md  # contrato faltante que judgment-day/SKILL.md referenciaba
 ```
 
 ## Modelos locales (Model Router)
@@ -149,14 +137,17 @@ ver `TONY-AI-INSTALL.md` sección 3b.
 
 ## Qué NO se tocó (y por qué está bien así)
 
-`commands/*.md`, la mayoría de `skills/*/SKILL.md` y `skills/_shared/*.md`,
-`prompts/sdd/*.md`, la CLI, el runtime. Los nombres de tool (`mem_search`,
-`mem_save`, etc.) son idénticos a los que Engram exponía, así que estos
-archivos funcionan contra TonyMem sin saber que Engram ya no existe. Detalle
-completo de esta decisión en `ARCHITECTURE.md`.
+`commands/*.md` (salvo los 3 nuevos de memoria, que son archivos agregados,
+no modificados), la mayoría de `skills/*/SKILL.md` (`judgment-day/SKILL.md`
+es la única excepción — 2 líneas de diff, ver `ARCHITECTURE.md`) y
+`skills/_shared/*.md`, `prompts/sdd/*.md`, la CLI, el runtime. Los nombres
+de tool (`mem_search`, `mem_save`, etc.) son idénticos a los que Engram
+exponía, así que estos archivos funcionan contra TonyMem sin saber que
+Engram ya no existe. Detalle completo de esta decisión en `ARCHITECTURE.md`.
 
 ## Fases pendientes
 
-Ninguna, por ahora — los 4 componentes planeados (TonyMem, Code Indexer +
-Qdrant, DCP, Double Review) están integrados. Si en algún momento se agrega
+Ninguna, por ahora — los 4 componentes originalmente planeados (TonyMem,
+Code Indexer + Qdrant, DCP, Double Review) más el Judgment Day Memory
+Bridge agregado después están integrados. Si en algún momento se agrega
 algo nuevo, va acá.
