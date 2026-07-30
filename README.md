@@ -18,6 +18,23 @@ Todo lo demás — `commands/`, `skills/` (salvo un archivo agregado, ver abajo)
 `prompts/sdd/`, la CLI, el runtime — es **byte-idéntico** a Gentle-AI. Esto
 está verificado programáticamente en cada paso, no asumido.
 
+## Arquitectura de memoria: patrón "shared SQLite file"
+
+Cada servicio de memoria tiene un MCP server (Python) y un plugin (Bun) que comparten el mismo archivo SQLite en modo WAL:
+
+```
+┌─────────────────────────┐    ┌─────────────────────────┐
+│  local-memory/server.py │    │   plugins/tonymem.ts    │
+│  SQLite: memory.db      │◄──►│  bun:sqlite (WAL mode)  │
+└─────────────────────────┘    └─────────────────────────┘
+
+┌─────────────────────────┐    ┌─────────────────────────┐
+│  judgment-memory/       │    │  plugins/judgment-      │
+│  SQLite: judgment-      │◄──►│  memory.ts + qdrant.ts  │
+│  memory.db              │    │  bun:sqlite (WAL mode)  │
+└─────────────────────────┘    └─────────────────────────┘
+```
+
 ## Cómo funciona (visión general)
 
 ```mermaid
@@ -58,23 +75,23 @@ El diseño central de Tony-AI es que **cada servicio de memoria tiene un MCP ser
 
 ```
 ┌─────────────────────────┐    ┌─────────────────────────┐
-│  local-memory/server.py  │    │   plugins/tonymem.ts    │
-│  (MCP server, 8 tools)   │    │  (OpenCode hooks)       │
+│  local-memory/server.py │    │   plugins/tonymem.ts    │
+│  (MCP server, 8 tools)  │    │  (OpenCode hooks)       │
 │                         │    │                         │
 │  SQLite: memory.db      │◄──►│  bun:sqlite (WAL mode)  │
 │  observations table     │    │  same file, same schema │
 └─────────────────────────┘    └─────────────────────────┘
 
 ┌─────────────────────────┐    ┌─────────────────────────┐
-│  judgment-memory/        │    │  plugins/judgment-      │
-│  ledger.py + server.py   │    │  memory.ts + qdrant.ts  │
-│  (MCP server, 4 tools)   │    │  (OpenCode hooks)       │
+│  judgment-memory/       │    │  plugins/judgment-      │
+│  ledger.py + server.py  │    │  memory.ts + qdrant.ts  │
+│  (MCP server, 4 tools)  │    │  (OpenCode hooks)       │
 │                         │    │                         │
 │  SQLite: judgment-      │◄──►│  bun:sqlite (WAL mode)  │
 │  memory.db              │    │  same file, same schema │
 │  judgments table        │    │                         │
 │                         │    │  HTTP → Qdrant/Ollama   │
-│  Qdrant: jdmem_{proj}  │◄──►│  (via plugins/qdrant.ts)│
+│  Qdrant: jdmem_{proj}   │◄──►│  (via plugins/qdrant.ts)│
 └─────────────────────────┘    └─────────────────────────┘
 ```
 
@@ -265,13 +282,18 @@ Code Indexer + Qdrant, DCP, Double Review) más el Judgment Day Memory
 Bridge agregado después están integrados. Si en algún momento se agrega
 algo nuevo, va acá.
 
-### Limitaciones conocidas
+## Configuración avanzada
 
-- **Hooks de plugin sin tests de runtime**: `plugins/judgment-memory.ts`
-  usa hooks de OpenCode que solo se pueden ejercer dentro de una sesión
-  real. `test_hooks.ts` cierra esta brecha con un mock del plugin context.
-- **Chunking por regex**: puede cortar mal código denso sin blank lines
-  entre funciones. La mejora natural es tree-sitter (documentado en
-  `code-index/README.md`).
-- **Umbral de recall hardcodeado**: `jd_recall` usa un score threshold
-  como constante, no configurable en runtime.
+```bash
+# Umbral de recall configurable (default 0.5)
+export TONY_RECALL_SCORE_THRESHOLD=0.8
+
+# Logging de captura pasiva
+export JUDGMENT_MEMORY_DEBUG=1
+```
+
+## Limitaciones conocidas
+
+- **Chunking por regex**: puede cortar mal código denso. tree-sitter opcional disponible.
+- **Umbral de recall**: configurable via `TONY_RECALL_SCORE_THRESHOLD`.
+- **Captura pasiva**: robusta con múltiples patrones y validación.

@@ -27,6 +27,11 @@ import json
 import os
 import sys
 
+OLLAMA_URL = os.environ.get("TONY_OLLAMA_URL", "http://localhost:11434")
+EMBED_MODEL = os.environ.get("TONY_EMBED_MODEL", "nomic-embed-text")
+QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
+RECALL_SCORE_THRESHOLD = float(os.environ.get("TONY_RECALL_SCORE_THRESHOLD", "0.5"))
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ledger  # noqa: E402
 
@@ -48,7 +53,8 @@ TOOLS = {
             "required": ["task"],
         },
         "handler": lambda args: ledger.recall(
-            args["task"], project=args.get("project", "default"), limit=int(args.get("limit", 5))
+            args["task"], project=args.get("project", "default"), limit=int(args.get("limit", 5)),
+            embed_model=EMBED_MODEL, ollama_url=OLLAMA_URL, qdrant_url=QDRANT_URL,
         ),
     },
     "jd_record": {

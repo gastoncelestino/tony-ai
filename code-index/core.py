@@ -33,7 +33,38 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
+import importlib.util
+from typing import Optional
 from dataclasses import dataclass, field
+
+_HAS_TREESITTER = False
+_treesitter_parser = None
+
+def _try_load_treesitter():
+    """Lazy-load tree-sitter if available. Returns parser or None."""
+    global _HAS_TREESITTER, _treesitter_parser
+    if _HAS_TREESITTER:
+        return _treesitter_parser
+    try:
+        spec = importlib.util.find_spec("tree_sitter")
+        if spec is None:
+            return None
+        from tree_sitter import Parser
+        try:
+            from tree_sitter_languages import get_language
+            lang = get_language("python")
+        except ImportError:
+            try:
+                from tree_sitter import Language
+                lang = Language("python")
+            except Exception:
+                return None
+        _treesitter_parser = Parser()
+        _treesitter_parser.set_language(lang)
+        _HAS_TREESITTER = True
+        return _treesitter_parser
+    except Exception:
+        return None
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -128,6 +159,13 @@ def chunk_lines(lines: list, ext: str) -> list:
     n = len(lines)
     if n == 0:
         return []
+    # Try tree-sitter first (if available)
+    parser = _try_load_treesitter()
+    if parser is not None:
+        try:
+            return _chunk_treesitter(lines, ext, parser)
+        except Exception:
+            pass
     pattern = BOUNDARY_PATTERNS.get(ext)
     if not pattern:
         return _split_fixed(lines, ext)
@@ -162,9 +200,68 @@ def chunk_lines(lines: list, ext: str) -> list:
                 merged.append((start + sub_start, start + sub_end))
         else:
             merged.append((start, end))
-    if pending_start is not None:
+        if pending_start is not None:
         merged.append((pending_start, n - 1))
     return merged
+
+
+def _chunk_treesitter(lines: list, ext: str, parser) -> list:
+    """Chunk using tree-sitter AST for precise function/class boundaries."""
+    lang_map = {
+        ".py": "python", ".ts": "typescript", ".tsx": "typescript",
+        ".js": "javascript", ".jsx": "javascript", ".go": "go",
+        ".rs": "rust", ".java": "java", ".c": "c", ".cpp": "cpp",
+        ".h": "c", ".hpp": "cpp",
+    }
+    lang_name = lang_map.get(ext)
+    if not lang_name:
+        return _split_fixed(lines, ext)
+    try:
+        from tree_sitter_languages import get_language
+        lang = get_language(lang_name)
+        parser.set_language(lang)
+    except ImportError:
+        pass
+    content = "\n".join(lines)
+    tree = parser.parse(bytes(content, "utf-8"))
+    boundaries = []
+    def walk(node):
+        if node.type in ("function_definition", "method_definition", "class_definition",
+                         "function_declarator", "method_declarator", "class_declaration",
+                         "function_declaration", "function"):
+            boundaries.append((node.start_point[0], node.end_point[0]))
+        for child in node.children:
+            walk(child)
+    walk(tree.root_node)
+    if not boundaries:
+        return _split_fixed(lines, ext)
+    boundaries.sort()
+    ranges = []
+    for start, end in boundaries:
+        if ranges and start <= ranges[-1][1] + 1:
+            ranges[-1] = (ranges[-1][0], max(ranges[-1][1], end))
+        else:
+            ranges.append((start, end))
+    if ranges and ranges[0][0] > 0:
+        ranges.insert(0, (0, ranges[0][0] - 1))
+    merged = []
+    pending_start = None
+    for start, end in ranges:
+    if pending_start is not None:
+        start = pending_start
+        pending_start = None
+    length = end - start + 1
+    if length < MIN_CHUNK_LINES and (start, end) != ranges[-1]:
+        pending_start = start
+        continue
+    if length > MAX_CHUNK_LINES:
+        for sub_start, sub_end in _split_fixed(lines[start:end + 1], ext):
+            merged.append((start + sub_start, start + sub_end))
+    else:
+        merged.append((start, end))
+    if pending_start is not None:
+        merged.append((pending_start, len(lines) - 1))
+    return merged if merged else _split_fixed(lines, ext)
 
 
 def chunk_file(path: str, content: str) -> list:
