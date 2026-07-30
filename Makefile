@@ -1,36 +1,39 @@
-# Makefile — convenience wrapper around docker/ and the test scripts.
-# Nothing here is required — every target is a one-liner documented in
-# docker/README.md / judgment-memory/README.md. Use directly if you'd
-# rather not remember the flags.
+# Makefile para Tony-AI
+# Wrappers de conveniencia sobre docker/ + los tests
 
-COMPOSE := docker compose -f docker/docker-compose.yml
+.PHONY: test test-python test-ts verify-qdrant docker-up docker-down clean
 
-.PHONY: up up-gpu down down-clean logs ps verify verify-ledger verify-qdrant
+# ─── Tests ─────────────────────────────────────────────────────────────────────
 
-up:            ## Start Ollama + Qdrant, pull embedding models
-	$(COMPOSE) up -d
-	$(COMPOSE) logs -f ollama-pull
+test: test-python test-ts
 
-up-gpu:        ## Same, with GPU passthrough for Ollama (see docker/README.md)
-	docker compose -f docker/docker-compose.yml -f docker/docker-compose.gpu.yml up -d
-	$(COMPOSE) logs -f ollama-pull
+test-python:
+	@echo "▶ Running Python tests..."
+	@cd code-index && python3 test_core.py
+	@cd judgment-memory && python3 test_ledger.py
+	@echo "✓ Python tests passed"
 
-down:          ## Stop containers, keep volumes (models/vectors persist)
-	$(COMPOSE) down
+test-ts:
+	@echo "▶ Running TypeScript tests..."
+	@cd judgment-memory && bun test test_hooks.ts
+	@echo "✓ TypeScript tests passed"
 
-down-clean:    ## Stop containers AND delete volumes (re-pulls everything next time)
-	$(COMPOSE) down -v
+verify-qdrant:
+	@echo "▶ Running Qdrant smoke test (requires Ollama + Qdrant running)..."
+	@cd judgment-memory && bun run scripts/verify-qdrant.ts
+	@echo "✓ Qdrant smoke test passed"
 
-logs:          ## Tail logs for both services
-	$(COMPOSE) logs -f qdrant ollama
+# ─── Docker ───────────────────────────────────────────────────────────────────
 
-ps:            ## Show container + healthcheck status
-	$(COMPOSE) ps
+docker-up:
+	@cd docker && docker compose up -d
+	@cd docker && docker compose logs -f ollama-pull
 
-verify-ledger: ## Mock-based test — no services required
-	python3 judgment-memory/test_ledger.py
+docker-down:
+	@cd docker && docker compose down
 
-verify-qdrant: ## Real smoke test against the containers started by `make up`
-	bun run judgment-memory/scripts/verify-qdrant.ts
+# ─── Utility ──────────────────────────────────────────────────────────────────
 
-verify: verify-ledger verify-qdrant  ## Both test scripts, in order
+clean:
+	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db
+	@echo "✓ Cleaned local databases"

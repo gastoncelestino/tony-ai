@@ -40,24 +40,62 @@ flowchart TD
     V -.->|"consulta / guarda"| CTX
 
     subgraph CTX["Servicios de contexto"]
-        TM["TonyMem"]
-        CI["Code Indexer"]
-        QD["Qdrant"]
-        DCP["DCP<br/>poda continua"]
+        direction TB
+        TM["TonyMem<br/>memoria de decisiones"]
+        CI["Code Indexer<br/>búsqueda semántica de código"]
+        QD["Qdrant<br/>vector store"]
+        DCP["DCP<br/>poda continua de contexto"]
     end
+
+    TM -.->|"shared SQLite file"| TM2["local-memory/server.py"]
+    CI -.->|"HTTP API"| QD
+    DCP -.->|"plugin global"| OC["OpenCode"]
 ```
 
-Dos cosas que no son obvias mirando el diagrama:
+### Arquitectura de memoria: el patrón "shared SQLite file"
+
+El diseño central de Tony-AI es que **cada servicio de memoria tiene un MCP server (Python) y un plugin (Bun) que comparten el mismo archivo SQLite**:
+
+```
+┌─────────────────────────┐    ┌─────────────────────────┐
+│  local-memory/server.py  │    │   plugins/tonymem.ts    │
+│  (MCP server, 8 tools)   │    │  (OpenCode hooks)       │
+│                         │    │                         │
+│  SQLite: memory.db      │◄──►│  bun:sqlite (WAL mode)  │
+│  observations table     │    │  same file, same schema │
+└─────────────────────────┘    └─────────────────────────┘
+
+┌─────────────────────────┐    ┌─────────────────────────┐
+│  judgment-memory/        │    │  plugins/judgment-      │
+│  ledger.py + server.py   │    │  memory.ts + qdrant.ts  │
+│  (MCP server, 4 tools)   │    │  (OpenCode hooks)       │
+│                         │    │                         │
+│  SQLite: judgment-      │◄──►│  bun:sqlite (WAL mode)  │
+│  memory.db              │    │  same file, same schema │
+│  judgments table        │    │                         │
+│                         │    │  HTTP → Qdrant/Ollama   │
+│  Qdrant: jdmem_{proj}  │◄──►│  (via plugins/qdrant.ts)│
+└─────────────────────────┘    └─────────────────────────┘
+```
+
+Este patrón **elimina el daemon HTTP** que tenía Engram (Go binary + puerto 7437),
+remplazándolo por acceso directo al archivo SQLite en modo WAL. WAL es el modo
+de concurrencia que SQLite está diseñado para soportar: un escritor a la vez,
+lectores nunca bloquean.
+
+### Tres cosas que no son obvias mirando el diagrama
 
 1. **Judgment Day reemplaza a la revisión 4R, no corre en paralelo con ella.**
    Por defecto, después de Implementation corre la revisión 4R ordinaria
    (`review-risk/readability/reliability/resilience` + `review-refuter`).
    Judgment Day (dos jueces ciegos, `jd-judge-a`/`jd-judge-b`) solo se activa
    si lo pedís explícitamente — nunca los dos a la vez.
+
 2. **TonyMem, Code Indexer/Qdrant y DCP no son un paso final.** Se consultan
    y escriben durante cada fase (contexto previo antes de arrancar, guardado
    de decisiones al terminar, poda de contexto continua). No hay una etapa
    "leer memoria" al final del pipeline.
+
 3. **Judgment Day ahora tiene memoria propia.** Antes de lanzar a los jueces,
    se llama `jd_recall` (¿ya vimos un problema parecido?); cuando la
    lineage llega a un estado terminal, el orquestador llama `jd_record`,
@@ -78,6 +116,37 @@ desde NixOS, `docker/README.md` tiene las notas puntuales (Docker vs
 Podman, GPU vía `nvidia-container-toolkit`) para levantar Ollama + Qdrant
 en contenedor sin instalarlos nativos.
 
+## Uso de los comandos nuevos
+
+### `/memory-search`
+
+Busca en TonyMem (decisiones, arquitectura, bugs, patrones) y en
+judgment-memory (lecciones de revisiones anteriores). Combina `mem_search`
+y `jd_recall` en una sola interfaz.
+
+```
+/memory-search "manejo de reintentos HTTP"
+```
+
+### `/memory-stats`
+
+Muestra estadísticas de uso de memoria por proyecto: número de observaciones,
+tipos más comunes, última actividad.
+
+```
+/memory-stats
+```
+
+### `/judgment-history`
+
+Lista los últimos juicios de Judgment Day para el proyecto actual. Lee
+directamente del SQLite ledger (`judgment-memory.db`), sin depender de
+Qdrant/Ollama.
+
+```
+/judgment-history
+```
+
 ## Estructura del repo
 
 ```
@@ -85,45 +154,50 @@ tony-ai-fork/
 ├── README.md                          # este archivo
 ├── ARCHITECTURE.md                    # documentación técnica profunda
 ├── TONY-AI-INSTALL.md                 # instrucciones de instalación exactas
-├── opencode.json                      # mcp.tonymem/code-index/judgment-memory + Model Router (diff mínimo sobre el original)
-├── AGENTS.md                          # bloque TonyMem + bloque nuevo Code Indexer (diff mínimo)
+├── opencode.json                      # mcp.tonymem/code-index/judgment-memory + Model Router
+├── AGENTS.md                          # bloque TonyMem + bloque nuevo Code Indexer
 ├── config/
-│   └── tony-memory.yaml               # referencia documentada de env vars (no se parsea, ver el archivo)
+│   └── tony-memory.yaml               # referencia documentada de env vars
 ├── docker/
-│   ├── docker-compose.yml             # Ollama + Qdrant (backing services, no los MCP servers)
+│   ├── docker-compose.yml             # Ollama + Qdrant (backing services)
 │   ├── docker-compose.gpu.yml         # override opcional, passthrough NVIDIA
 │   ├── .env.example
-│   └── README.md                      # notas específicas NixOS (Docker/Podman, GPU)
-├── Makefile                           # wrappers de conveniencia sobre docker/ + los tests
+│   └── README.md                      # notas específicas NixOS
+├── Makefile                           # wrappers de conveniencia sobre tests
 ├── plugins/
 │   ├── tonymem.ts                     # reemplaza plugins/engram.ts
-│   ├── qdrant.ts                      # cliente REST Qdrant + Ollama compartido (TS)
-│   └── judgment-memory.ts             # bridge: recall antes de Judgment Day, captura pasiva después
+│   ├── qdrant.ts                      # cliente REST Qdrant + Ollama (TS)
+│   └── judgment-memory.ts             # bridge: recall antes de JD, captura después
 ├── local-memory/                      # TonyMem — MCP server (8 tools)
 │   ├── server.py
 │   └── README.md
 ├── code-index/                        # Code Indexer + Qdrant — MCP server (3 tools)
 │   ├── core.py
 │   ├── server.py
-│   ├── test_core.py
+│   ├── test_core.py                   # regression test (mock Ollama/Qdrant)
 │   └── README.md
-├── judgment-memory/                   # Judgment Day <-> TonyMem bridge — MCP server (4 tools)
-│   ├── ledger.py                      # SQLite ledger + normalize + embed + Qdrant pipeline
+├── judgment-memory/                   # Judgment Day <-> TonyMem bridge
+│   ├── ledger.py                      # SQLite ledger + normalize + embed + Qdrant
 │   ├── server.py                      # jd_recall / jd_record / jd_history / jd_stats
 │   ├── schema.json                    # shape de un judgment record
-│   ├── test_ledger.py                 # regression test, mock Ollama/Qdrant
-│   ├── scripts/verify-qdrant.ts       # smoke test del cliente TS contra Ollama/Qdrant reales
+│   ├── test_ledger.py                 # regression test (mock Ollama/Qdrant)
+│   ├── test_hooks.ts                  # test harness para hooks de plugin
+│   ├── __mocks__/                     # mocks para tests
+│   │   ├── opencode-plugin.ts         # mock del Plugin context + eventos
+│   │   └── http-mock.ts               # mock HTTP para Ollama/Qdrant
+│   ├── scripts/
+│   │   └── verify-qdrant.ts           # smoke test del cliente TS real
 │   └── README.md
 ├── commands/
 │   ├── memory-search.md               # /memory-search — TonyMem + judgment-memory
 │   ├── memory-stats.md                # /memory-stats
-│   └── judgment-history.md            # /judgment-history — solo SQLite, sin dependencia de Qdrant
+│   └── judgment-history.md            # /judgment-history — solo SQLite
 ├── .opencode/
-│   └── dcp.jsonc                      # config de DCP (plugin externo, no incluido acá)
+│   └── dcp.jsonc                      # config de DCP (plugin externo)
 └── skills/
-    ├── judgment-day/SKILL.md          # +paso de recall/record (diff mínimo, ver ARCHITECTURE.md)
+    ├── judgment-day/SKILL.md          # +paso de recall/record
     └── _shared/
-        └── review-ledger-contract.md  # contrato faltante que judgment-day/SKILL.md referenciaba
+        └── review-ledger-contract.md  # contrato faltante
 ```
 
 ## Modelos locales (Model Router)
@@ -149,9 +223,55 @@ de tool (`mem_search`, `mem_save`, etc.) son idénticos a los que Engram
 exponía, así que estos archivos funcionan contra TonyMem sin saber que
 Engram ya no existe. Detalle completo de esta decisión en `ARCHITECTURE.md`.
 
+### La convención `prompt-capture`
+
+`mem_save_prompt` (llamado por el hook `chat.message` en `tonymem.ts`)
+guarda el prompt crudo del usuario con `type='prompt-capture'`. Estas
+entradas se usan para `mem_context` (recuperar el contexto de la sesión
+actual) pero **se excluyen por defecto de `mem_search`** — no son
+decisiones ni descubrimientos, son bookkeeping interno. Si necesitás
+buscar prompts, filtrá explícitamente por `type='prompt-capture'`.
+
+## Tests
+
+```bash
+# Tests de Python (ledger, code-index)
+make test-python
+
+# Tests de TypeScript (hooks de plugin, cliente Qdrant)
+make test-ts
+
+# Smoke test del cliente Qdrant contra servicios reales
+make verify-qdrant
+
+# Todo
+make test
+```
+
+| Componente | Test | Qué cubre |
+|---|---|---|
+| TonyMem server | `local-memory/server.py` (manual JSON-RPC) | Sesión completa: save, search, context, session-summary, prompt-capture |
+| TonyMem plugin | `plugins/tonymem.ts` (tipado `tsc`) | Tipado contra stubs de `bun:sqlite`/`@opencode-ai/plugin` |
+| Code Indexer | `code-index/test_core.py` | Chunking + mock HTTP end-to-end, 4/4 escenarios |
+| DCP config | validado contra `dcp.schema.json` | Schema completo, `additionalProperties: false` |
+| Judgment Day Memory Bridge | `judgment-memory/test_ledger.py` | Mock Ollama+Qdrant, 7/7 escenarios incl. camino feliz |
+| Judgment Day Memory Bridge | `judgment-memory/test_hooks.ts` | Hooks de plugin (`chat.message`, `tool.execute.after`, `system.transform`) |
+| Judgment Day Memory Bridge | `judgment-memory/scripts/verify-qdrant.ts` | Smoke test del cliente TS contra servicios reales |
+
 ## Fases pendientes
 
 Ninguna, por ahora — los 4 componentes originalmente planeados (TonyMem,
 Code Indexer + Qdrant, DCP, Double Review) más el Judgment Day Memory
 Bridge agregado después están integrados. Si en algún momento se agrega
 algo nuevo, va acá.
+
+### Limitaciones conocidas
+
+- **Hooks de plugin sin tests de runtime**: `plugins/judgment-memory.ts`
+  usa hooks de OpenCode que solo se pueden ejercer dentro de una sesión
+  real. `test_hooks.ts` cierra esta brecha con un mock del plugin context.
+- **Chunking por regex**: puede cortar mal código denso sin blank lines
+  entre funciones. La mejora natural es tree-sitter (documentado en
+  `code-index/README.md`).
+- **Umbral de recall hardcodeado**: `jd_recall` usa un score threshold
+  como constante, no configurable en runtime.
