@@ -313,18 +313,16 @@
       }
     },
     "judgment-memory": {
-      "command": [
-        "python3",
-		"./judgment-memory/server.py"
-      ],
-      "type": "local",
-      "environment": {
-        "JUDGMENT_MEMORY_DB": "{cwd}/.tonymem/judgment-memory.db",
-        "TONY_OLLAMA_URL": "http://localhost:11434",
-        "TONY_QDRANT_URL": "http://localhost:6333",
-        "TONY_EMBED_MODEL": "nomic-embed-text"
-      }
-    }
+	  "command": ["python3", "/home/tony/tools/tonymem/judgment-memory/server.py"],
+	  "type": "local",
+	  "environment": {
+		"JUDGMENT_MEMORY_DB": "{cwd}/.tonymem/judgment-memory.db",
+		"TONY_OLLAMA_URL": "http://localhost:11434",
+		"TONY_QDRANT_URL": "http://localhost:6333",
+		"TONY_EMBED_MODEL": "nomic-embed-text",
+		"TONY_RECALL_SCORE_THRESHOLD": "0.5"
+	  }
+	}
   },
   "permission": {
     "bash": {

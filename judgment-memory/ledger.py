@@ -62,6 +62,7 @@ QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
 
 FINAL_VALUES = {"approve", "reject", "escalated"}
 AGREEMENT_VALUES = {"confirmed", "suspect", "contradiction"}
+RECALL_SCORE_THRESHOLD = float(os.environ.get("TONY_RECALL_SCORE_THRESHOLD", "0.5"))
 
 
 def now() -> str:
@@ -409,6 +410,7 @@ def recall(task: str, project: str = "default", limit: int = 5,
                 "lesson": h["payload"].get("lesson"),
             }
             for h in hits
+            if h["score"] > RECALL_SCORE_THRESHOLD
         ],
     }
 

@@ -61,4 +61,8 @@ judgment:
   # Minimum Qdrant cosine score for a recall hit to be surfaced to judges —
   # tune in plugins/judgment-memory.ts (JD_TRIGGER_RE block) and
   # judgment-memory/server.py's jd_recall handler if you change this.
+  # NOW READABLE: set TONY_RECALL_SCORE_THRESHOLD env var to override.
+  # Read by judgment-memory/ledger.py, judgment-memory/server.py,
+  # and plugins/judgment-memory.ts. Default: 0.5.
   recall_score_threshold: 0.5
+  # env: TONY_RECALL_SCORE_THRESHOLD

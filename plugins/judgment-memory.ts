@@ -47,6 +47,11 @@ const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH =
   process.env.JUDGMENT_MEMORY_DB ?? path.join(PLUGIN_DIR, "..", "judgment-memory", "judgment-memory.db")
 
+// Configurable recall score threshold (env var, default 0.5)
+const RECALL_SCORE_THRESHOLD = parseFloat(
+  process.env.TONY_RECALL_SCORE_THRESHOLD ?? "0.5"
+)
+
 // Keywords from judgment-day/SKILL.md's own Activation Contract ("judgment
 // day, dual review, adversarial review, juzgar") — used only to decide
 // when to run a proactive recall, never to gate anything else.
@@ -56,6 +61,11 @@ const JD_TRIGGER_RE = /\b(judgment\s*day|dual\s*review|adversarial\s*review|juzg
 const JD_TERMINAL_RE = /JUDGMENT:\s*(APPROVED|ESCALATED)/i
 
 const JUDGMENT_MEMORY_TOOLS = new Set(["jd_recall", "jd_record", "jd_history", "jd_stats"])
+
+// Passive capture stats and logging
+let passiveCaptureCount = 0
+let passiveCaptureErrors = 0
+const PASSIVE_CAPTURE_LOG = process.env.JUDGMENT_MEMORY_DEBUG === "1"
 
 const BRIDGE_INSTRUCTIONS = `## Judgment Day Memory Bridge — Protocol
 
@@ -178,22 +188,55 @@ function upsertJudgment(rec: PassiveRecord, pointId: string | null): void {
 // judgment-day/SKILL.md guarantees are present in some form. Never invents
 // judge verdicts, confidence, or agreement — those only exist in the full
 // record jd_record receives from the orchestrator.
-
+// Robust parsing with multiple patterns
 function parsePassiveRecord(text: string, sessionId: string, project: string): PassiveRecord | null {
   const terminalMatch = text.match(JD_TERMINAL_RE)
   if (!terminalMatch) return null
 
   const final = terminalMatch[1].toUpperCase() === "APPROVED" ? "approve" : "escalated"
 
-  // Best-effort task/target extraction — look for a "Target:" or "target
-  // identity" style line; fall back to a truncated head of the text.
-  const targetMatch = text.match(/(?:target(?: identity)?)\s*[:\-]\s*(.+)/i)
-  const task = (targetMatch?.[1] ?? text.slice(0, 120)).trim().slice(0, 200)
+  // Multiple patterns for robustness
+  const targetPatterns = [
+    /(?:target(?: identity)?)\s*[:\\-]\s*(.+)/i,
+    /(?:target|issue|task|bug)\s*[:\\-]\s*(.+)/i,
+    /(?:reviewing|review)\s+["']?([^"'\n]+)["']?/i,
+  ]
 
-  // Best-effort lesson extraction — a line starting with "Lesson:" or
-  // "Learned:". Omitted (not fabricated) if absent.
-  const lessonMatch = text.match(/(?:lesson|learned)\s*[:\-]\s*(.+)/i)
-  const lesson = lessonMatch?.[1]?.trim().slice(0, 500)
+  let task: string | null = null
+  for (const pattern of targetPatterns) {
+    const match = text.match(pattern)
+    if (match && match[1]) {
+      task = match[1].trim().slice(0, 200)
+      break
+    }
+  }
+
+  if (!task) {
+    const lines = text.split("\n").filter(l => l.trim() && !JD_TERMINAL_RE.test(l))
+    task = lines.length > 0 ? lines[0].trim().slice(0, 200) : "unknown task"
+  }
+
+  if (!task || task.trim().length === 0) {
+    if (PASSIVE_CAPTURE_LOG) {
+      console.error("[judgment-memory] passive capture: task extraction failed, skipping")
+    }
+    passiveCaptureErrors++
+    return null
+  }
+
+  const lessonPatterns = [
+    /(?:lesson|learned|takeaway|key takeaway)\s*[:\\-]\s*(.+)/i,
+    /(?:key insight|insight)\s*[:\\-]\s*(.+)/i,
+  ]
+
+  let lesson: string | undefined
+  for (const pattern of lessonPatterns) {
+    const match = text.match(pattern)
+    if (match && match[1]) {
+      lesson = match[1].trim().slice(0, 500)
+      break
+    }
+  }
 
   return {
     executionId: `passive/${sessionId}/${Date.now()}`,
@@ -253,11 +296,12 @@ export const JudgmentMemory: Plugin = async (ctx) => {
 
       if (!content || !JD_TRIGGER_RE.test(content)) return
 
+      // Use configurable threshold
       const result = await semanticSearch(project, content, 3)
       if (!result.available || result.hits.length === 0) return
 
       const lines = result.hits
-        .filter((h) => (h.score ?? 0) > 0.5)
+        .filter((h) => (h.score ?? 0) > RECALL_SCORE_THRESHOLD)
         .map((h) => {
           const p = h.payload as Record<string, any>
           return `- [${p.final ?? "?"}] ${p.task ?? "?"} — lesson: ${p.lesson ?? "(none)"}${p.fix ? `, fix: ${p.fix}` : ""}`
@@ -283,11 +327,14 @@ export const JudgmentMemory: Plugin = async (ctx) => {
       const rec = parsePassiveRecord(text, sessionId ?? "unknown", project)
       if (!rec) return
 
-      // Ledger write always happens (durable, no network dependency).
-      upsertJudgment(rec, null)
+      // Logging
+      if (PASSIVE_CAPTURE_LOG) {
+        console.error(`[judgment-memory] passive capture: ${rec.final} for task "${rec.task.slice(0, 50)}..."`)
+      }
 
-      // Vector index is best-effort — never blocks or throws into the
-      // agent turn if Ollama/Qdrant are down.
+      upsertJudgment(rec, null)
+      passiveCaptureCount++
+
       try {
         const [vec] = await embedTexts([`task: ${rec.task}\noutcome: ${rec.final}\nlesson: ${rec.lesson ?? ""}`])
         const coll = collectionName(rec.project)
@@ -299,8 +346,12 @@ export const JudgmentMemory: Plugin = async (ctx) => {
             payload: { ...rec, execution_id: rec.executionId, source: "passive-capture" },
           },
         ])
+        if (PASSIVE_CAPTURE_LOG) {
+          console.error("[judgment-memory] passive capture: indexed to Qdrant")
+        }
       } catch (err) {
         console.error("[judgment-memory] passive index failed (ledger write still succeeded):", err)
+        passiveCaptureErrors++
       }
     },
 
@@ -311,6 +362,12 @@ export const JudgmentMemory: Plugin = async (ctx) => {
         output.system[output.system.length - 1] += "\n\n" + block
       } else {
         output.system.push(block)
+      }
+
+      // Log stats
+      if (PASSIVE_CAPTURE_LOG && passiveCaptureCount > 0) {
+        output.system[output.system.length - 1] +=
+          `\n\n[judgment-memory stats] passive captures: ${passiveCaptureCount}, errors: ${passiveCaptureErrors}`
       }
 
       const sessionID: string = input.sessionID ?? ""
@@ -324,3 +381,12 @@ export const JudgmentMemory: Plugin = async (ctx) => {
 }
 
 export default JudgmentMemory
+
+// Export for tests
+export {
+  parsePassiveRecord,
+  upsertJudgment,
+  extractProjectName,
+  JD_TRIGGER_RE,
+  JD_TERMINAL_RE
+}
