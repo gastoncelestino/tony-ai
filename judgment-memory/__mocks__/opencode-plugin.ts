@@ -1,9 +1,8 @@
-import type { Plugin } from "@opencode-ai/plugin"
-
-export interface MockEvent {
-  type: string
-  properties?: Record<string, any>
-}
+/**
+ * __mocks__/opencode-plugin.ts
+ * Mock del OpenCode plugin context para tests.
+ * Proporciona funciones factory para crear inputs/outputs mock de cada hook.
+ */
 
 export interface MockHookInput {
   sessionID: string
@@ -14,7 +13,6 @@ export interface MockHookInput {
 
 export interface MockHookOutput {
   parts?: Array<{ type: string; text?: string }>
-  message?: { summary?: { title?: string; body?: string } }
   system?: string[]
   context?: string[]
   [key: string]: any
@@ -22,116 +20,85 @@ export interface MockHookOutput {
 
 export interface MockPluginContext {
   directory: string
-  events: MockEvent[]
+  events: Array<{ type: string; properties?: Record<string, any> }>
   hooks: Record<string, (input: any, output: any) => Promise<void> | void>
 }
 
-export function createMockChatMessage(
-  sessionID: string,
-  content: string,
-  directory: string = "/test/project"
-): [MockHookInput, MockHookOutput] {
-  return [
-    { sessionID, directory },
-    {
-      parts: [{ type: "text", text: content }],
-      message: { summary: { title: "", body: "" } }
-    }
-  ]
+export function createMockContext(
+  directory: string,
+  sessionId = "test-session-123"
+): MockPluginContext {
+  return {
+    directory,
+    events: [],
+    hooks: {}
+  }
 }
 
-export function createMockChatMessageEmpty(
-  sessionID: string,
-  summary: { title: string; body: string },
-  directory: string = "/test/project"
-): [MockHookInput, MockHookOutput] {
-  return [
-    { sessionID, directory },
-    {
-      parts: [],
-      message: { summary }
+export function createMockChatMessage(content: string, sessionId = "test-session"): Promise<{ input: MockHookInput; output: MockHookOutput }> {
+  return Promise.resolve({
+    input: { sessionID: sessionId, directory: "/tmp/test" },
+    output: {
+      parts: [{ type: "text", text: content }],
+      message: { summary: { title: content.slice(0, 50), body: "" } }
     }
-  ]
+  })
+}
+
+export async function createMockChatMessageEmpty(sessionId = "test-session"): Promise<{ input: MockHookInput; output: MockHookOutput }> {
+  return {
+    input: { sessionID: sessionId, directory: "/tmp/test" },
+    output: {
+      parts: [],
+      message: { summary: { title: "empty", body: "" } }
+    }
+  }
 }
 
 export function createMockTaskOutput(
-  sessionID: string,
-  output: string,
-  directory: string = "/test/project"
-): [MockHookInput, MockHookOutput] {
-  return [
-    { sessionID, directory, tool: "Task" },
-    { text: output }
-  ]
-}
-
-export function createMockTaskOutputObject(
-  sessionID: string,
-  output: Record<string, any>,
-  directory: string = "/test/project"
-): [MockHookInput, MockHookOutput] {
-  return [
-    { sessionID, directory, tool: "Task" },
-    { result: output }
-  ]
-}
-
-export function createMockSystemTransform(
-  sessionID: string,
-  directory: string = "/test/project"
-): [MockHookInput, MockHookOutput] {
-  return [
-    { sessionID, directory },
-    { system: ["existing system prompt"], context: [] }
-  ]
-}
-
-export function createMockSessionCreated(
   sessionId: string,
-  parentID?: string,
-  title?: string
-): MockEvent {
+  output: string,
+  tool = "Task"
+): [MockHookInput, MockHookOutput] {
+  return [
+    { sessionID: sessionId, directory: "/tmp/test", tool },
+    { parts: [{ type: "text", text: output }] }
+  ]
+}
+
+export function createMockSystemTransform(sessionId = "test-session"): [MockHookInput, MockHookOutput] {
+  return [
+    { sessionID: sessionId, directory: "/tmp/test" },
+    { system: ["existing instructions"], context: [] }
+  ]
+}
+
+export function createMockSessionCreated(sessionId: string, isSubAgent = false): { event: MockEvent } {
   return {
-    type: "session.created",
-    properties: {
-      info: {
-        id: sessionId,
-        parentID,
-        title: title ?? "Test Session"
+    event: {
+      type: "session.created",
+      properties: {
+        info: {
+          id: sessionId,
+          parentID: isSubAgent ? "parent-123" : undefined,
+          title: isSubAgent ? "Test subagent)" : "Test session"
+        }
       }
     }
   }
 }
 
 export async function runMockPlugin(
-  pluginFactory: (ctx: any) => Promise<Record<string, any>>,
-  ctx: { directory: string }
+  pluginModule: any,
+  ctx: Partial<MockPluginContext> = {}
 ): Promise<Record<string, (input: any, output: any) => Promise<void> | void>> {
-  const events: MockEvent[] = []
-
-  return await pluginFactory({
-    directory: ctx.directory,
-    event: async ({ event }: { event: MockEvent }) => {
-      events.push(event)
-    }
-  })
-}
-
-export function getHookResult(
-  hooks: Record<string, (input: any, output: any) => Promise<void> | void>,
-  hookName: string,
-  input: MockHookInput,
-  output: MockHookOutput
-): MockHookOutput {
-  const hook = hooks[hookName]
-  if (!hook) {
-    throw new Error(`Hook "${hookName}" not found`)
+  const context = {
+    directory: ctx.directory ?? "/tmp/test",
+    events: [],
+    ...ctx
   }
-  const result = hook(input, output)
-  if (result instanceof Promise) {
-    throw new Error(`Hook "${hookName}" is async — use await runHook() instead`)
-  }
-  return output
+  const hooks = await pluginModule.JudgmentMemory(context)
+  return hooks
 }
 
 export async function runHook(
