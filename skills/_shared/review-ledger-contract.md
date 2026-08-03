@@ -29,7 +29,7 @@ Every review lineage produces exactly these, never more, never fewer:
 ### Persistence paths (exact, per artifact store — do not vary)
 
 - **openspec / hybrid**: `openspec/changes/{change-name}/reviews/{transaction,ledger,receipt,chain-bundle,gate-context}.json`
-- **engram** (TonyMem, same tool names): exact topic keys `sdd/{change-name}/review/{transaction,ledger,receipt,chain-bundle,gate-context}`, written with `mem_save`/`mem_update` and read with `mem_search` + `mem_get_observation`, same convention every other SDD artifact already uses.
+- **tonymem** (TonyMem, same tool names): exact topic keys `sdd/{change-name}/review/{transaction,ledger,receipt,chain-bundle,gate-context}`, written with `mem_save`/`mem_update` and read with `mem_search` + `mem_get_observation`, same convention every other SDD artifact already uses.
 
 The chain bundle is a portable, non-authoritative recovery source. It requires
 explicit validated import into the repository-derived store before anything
