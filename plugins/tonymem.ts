@@ -1,14 +1,14 @@
 /**
- * TonyMem — OpenCode plugin adapter (Tony-AI fork of Engram)
+ * TonyMem — OpenCode plugin adapter (Tony-AI fork of tonymem)
  *
- * Unlike Engram (Go binary + HTTP daemon on 127.0.0.1:7437), TonyMem has no
+ * Unlike tonymem (Go binary + HTTP daemon on 127.0.0.1:7437), TonyMem has no
  * server process to manage. This plugin talks directly to the same SQLite
  * file that `local-memory/server.py` (the MCP tool server) reads and writes,
  * using Bun's built-in `bun:sqlite` — no npm install, no extra process.
  *
  * Both processes open the DB in WAL mode, which is exactly the concurrency
  * mode SQLite is built for (one writer at a time, readers never block). This
- * removes an entire failure class Engram had (daemon not running, port
+ * removes an entire failure class tonymem had (daemon not running, port
  * conflicts, spawn races) at the cost of nothing — it's a straight
  * simplification, not a compromise.
  *
@@ -16,7 +16,7 @@
  *   OpenCode events → this plugin → bun:sqlite → memory.db (same file
  *   local-memory/server.py uses, same `observations` table/schema)
  *
- * Feature parity with plugins/engram.ts:
+ * Feature parity with plugins/tonymem.ts:
  *   - session tracking (in-memory only — TonyMem doesn't need a `sessions`
  *     table; start time lives in a Map exactly like `knownSessions` did)
  *   - sub-agent session suppression (issue #116 fix, carried over verbatim)
@@ -60,7 +60,7 @@ const TONYMEM_TOOLS = new Set([
 
 // ─── Memory Instructions ─────────────────────────────────────────────────────
 // These get injected into the agent's context so it knows to call mem_save.
-// Same triggers/policy as Engram's — only the branding and the tool surface
+// Same triggers/policy as tonymem's — only the branding and the tool surface
 // (no mem_judge, mem_review, mem_merge_projects — TonyMem doesn't have them,
 // and no current prompt actually depends on them) changed.
 
@@ -345,7 +345,7 @@ export const TonyMem: Plugin = async (ctx) => {
   // Track last nudge time per session to debounce save reminders
   const lastNudgeTime = new Map<string, number>() // sessionID -> epoch seconds
 
-  // Track session start time locally — replaces the HTTP round-trip Engram
+  // Track session start time locally — replaces the HTTP round-trip tonymem
   // needed to ask its daemon "when did this session start".
   const sessionStartTime = new Map<string, number>() // sessionID -> epoch seconds
 
@@ -353,7 +353,7 @@ export const TonyMem: Plugin = async (ctx) => {
   // Sub-agents (Task() calls) have a parentID or a title ending in " subagent)".
   // We must not register them as top-level TonyMem sessions — they cause session
   // inflation (e.g. 170 sessions for 1 real conversation, carried over from
-  // Engram issue #116).
+  // tonymem issue #116).
   const subAgentSessions = new Set<string>()
   const knownSessions = new Set<string>()
 

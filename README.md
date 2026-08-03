@@ -241,7 +241,7 @@ make clean           # eliminar bases de datos/index SQLite locales
 tony-ai/
 ├── README.md                          # este archivo
 ├── opencode.json                      # mcp.tonymem/code-index/judgment-memory + Model Router
-├── AGENTS.md                          # bloque TonyMem + bloque nuevo Code Indexer
+├── AGENTS.md                          # Reglas + Idioma + Instrucciones + TonyMem + Code Indexer
 ├── config/
 │   └── tony-memory.yaml               # referencia documentada de env vars
 ├── docker/
@@ -251,7 +251,7 @@ tony-ai/
 │   └── README.md                      # notas específicas NixOS
 ├── Makefile                           # wrappers de conveniencia sobre tests
 ├── plugins/
-│   ├── tonymem.ts                     # reemplaza plugins/engram.ts
+│   ├── tonymem.ts                     # memoria local SQLite
 │   ├── qdrant.ts                      # cliente REST Qdrant + Ollama (TS)
 │   └── judgment-memory.ts             # bridge: recall antes de JD, captura después
 ├── local-memory/                      # TonyMem — MCP server (8 tools)
@@ -350,7 +350,7 @@ Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/to
 - `config/tony-memory.yaml`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/config/tony-memory.yaml
 
 
-# Cómo Usarlo
+## Cómo Usarlo
 Una vez corriendo con OpenCode, podes usar comandos como:
 ```bash
 /sdd-init — inicializar el entorno
@@ -359,3 +359,13 @@ Una vez corriendo con OpenCode, podes usar comandos como:
 /judgment-history — ver resultados de revisiones anteriores
 ``` 
 💡 Tip: La primera vez que uses /sdd-init, vas a necesitar contestar unas preguntas sobre cómo querés trabajar (modo interactivo vs automático, dónde guardar las specs, etc.).
+
+## Agradecimientos
+Toda la definición de SDD, orchestator, algunos prompts y commands, se basan en un repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
+Se trató de reutilizar el código que ya está probado y funciona correctamente, se agregaron componentes como `Code Indexer` (RAG semántico), `TonyMem` una base de datos SQLite, `Judgment Day` SQLite y Qdrant para juicios y Ollama con modelos locales.
+Seguramente van a existir algunos skills, commands, plugins, prompts que son distintos, la idea fue adaptar lo que ya funciona y que corra con modelos locales.
+
+La intención es copiar y pegar este repositorio en tu proyecto y que funcione en OpenCode. Sin instalacion, sin correr ningun comando, intentando tener un control de los archivos y directorios.
+Se trató de documentar lo más posible, por si querés modificar alguna parte.
+
+Muchas gracias

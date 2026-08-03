@@ -37,7 +37,7 @@ You are a sub-agent responsible for ARCHIVING. You merge delta specs into the ma
 
 From the orchestrator:
 - Change name
-- Artifact store mode (`engram | openspec | hybrid | none`)
+- Artifact store mode (`tonymem | openspec | hybrid | none`)
 - Structured status from `skills/_shared/sdd-status-contract.md`, including artifact paths, task progress, dependency states, and actionContext
 - Any explicit intentional archive override text from the user/orchestrator
 
@@ -45,9 +45,9 @@ From the orchestrator:
 
 > Follow **Section B** (retrieval) and **Section C** (persistence) from `skills/_shared/sdd-phase-common.md`.
 
-- **engram**: Read `sdd/{change-name}/proposal`, `sdd/{change-name}/spec`, `sdd/{change-name}/design`, `sdd/{change-name}/tasks`, `sdd/{change-name}/verify-report`, and exact `sdd/{change-name}/review/{transaction,ledger,receipt,gate-context}` topics (all required). Record all observation IDs in the archive report for traceability. Save as `sdd/{change-name}/archive-report`.
+- **tonymem**: Read `sdd/{change-name}/proposal`, `sdd/{change-name}/spec`, `sdd/{change-name}/design`, `sdd/{change-name}/tasks`, `sdd/{change-name}/verify-report`, and exact `sdd/{change-name}/review/{transaction,ledger,receipt,gate-context}` topics (all required). Record all observation IDs in the archive report for traceability. Save as `sdd/{change-name}/archive-report`.
 - **openspec**: Read and follow `skills/_shared/openspec-convention.md`. Perform merge and archive folder moves.
-- **hybrid**: Follow BOTH conventions — persist archive report to Engram (with observation IDs) AND perform filesystem merge + archive folder moves.
+- **hybrid**: Follow BOTH conventions — persist archive report to tonymem (with observation IDs) AND perform filesystem merge + archive folder moves.
 - **none**: Return closure summary only. Do not perform archive file operations.
 
 ### Native Review Receipt Gate
@@ -60,7 +60,7 @@ Before any task reconciliation, spec sync, or archive move, require structured s
 
 Before syncing specs or moving any archive folder, inspect the tasks artifact:
 
-- **engram**: read the full `sdd/{change-name}/tasks` observation.
+- **tonymem**: read the full `sdd/{change-name}/tasks` observation.
 - **openspec/hybrid**: read `openspec/changes/{change-name}/tasks.md`.
 
 If any implementation task remains unchecked (`- [ ]`):
@@ -94,7 +94,7 @@ Follow **Section A** from `skills/_shared/sdd-phase-common.md`.
 
 Do not start this step until the **Task Completion Gate** above passes.
 
-**IF mode is `engram`:** Skip filesystem sync — artifacts live in Engram only. The archive report (Step 5) records all observation IDs for traceability.
+**IF mode is `tonymem`:** Skip filesystem sync — artifacts live in tonymem only. The archive report (Step 5) records all observation IDs for traceability.
 
 **IF mode is `none`:** Skip — no artifacts to sync.
 
@@ -131,7 +131,7 @@ openspec/changes/{change-name}/specs/{domain}/spec.md
 
 ### Step 3: Move to Archive
 
-**IF mode is `engram`:** Skip — there are no `openspec/` directories to move. The archive report in Engram serves as the audit trail.
+**IF mode is `tonymem`:** Skip — there are no `openspec/` directories to move. The archive report in tonymem serves as the audit trail.
 
 **IF mode is `none`:** Skip — no filesystem operations.
 
@@ -153,7 +153,7 @@ Use today's date in ISO format (e.g., `2026-02-16`).
 - [ ] Archived `tasks.md` has no unchecked implementation tasks, unless the orchestrator explicitly approved archive-time stale-checkbox reconciliation backed by apply-progress/verify-report proof
 - [ ] Active changes directory no longer has this change
 
-**IF mode is `engram`:** Confirm all artifact observation IDs are recorded in the archive report and the tasks observation has no unchecked implementation tasks unless the orchestrator explicitly approved archive-time stale-checkbox reconciliation backed by apply-progress/verify-report proof.
+**IF mode is `tonymem`:** Confirm all artifact observation IDs are recorded in the archive report and the tasks observation has no unchecked implementation tasks unless the orchestrator explicitly approved archive-time stale-checkbox reconciliation backed by apply-progress/verify-report proof.
 
 **IF mode is `none`:** Skip verification — no persisted artifacts.
 
@@ -174,7 +174,7 @@ Return to the orchestrator:
 ## Change Archived
 
 **Change**: {change-name}
-**Archived to**: `openspec/changes/archive/{YYYY-MM-DD}-{change-name}/` (openspec/hybrid) | Engram archive report (engram) | inline (none)
+**Archived to**: `openspec/changes/archive/{YYYY-MM-DD}-{change-name}/` (openspec/hybrid) | tonymem archive report (tonymem) | inline (none)
 
 ### Specs Synced
 | Domain | Action | Details |
