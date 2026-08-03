@@ -326,16 +326,6 @@ Llamado por el hook `chat.message` en `tonymem.ts`: guarda el prompt crudo del u
 Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
 — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por type='prompt-capture'.
 
-# Cómo Usarlo
-Una vez corriendo con OpenCode, podes usar comandos como:
-```bash
-/sdd-init — inicializar el entorno
-/sdd-new "mejorar login" — crear un nuevo cambio
-/memory-search "manejo de errores HTTP" — buscar decisiones anteriores
-/judgment-history — ver resultados de revisiones anteriores
-``` 
-💡 Tip: La primera vez que uses /sdd-init, vas a necesitar contestar unas preguntas sobre cómo querés trabajar (modo interactivo vs automático, dónde guardar las specs, etc.).
-
 ## Principios de diseño
 - **Local-first**: el almacenamiento es SQLite y está pensado para quedarse en tu máquina.
 - **Dependency-light**: los servidores en Python usan solo stdlib, deliberadamente.
@@ -359,3 +349,13 @@ Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/to
 - `docker/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/docker/README.md
 - `config/tony-memory.yaml`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/config/tony-memory.yaml
 
+
+# Cómo Usarlo
+Una vez corriendo con OpenCode, podes usar comandos como:
+```bash
+/sdd-init — inicializar el entorno
+/sdd-new "mejorar login" — crear un nuevo cambio
+/memory-search "manejo de errores HTTP" — buscar decisiones anteriores
+/judgment-history — ver resultados de revisiones anteriores
+``` 
+💡 Tip: La primera vez que uses /sdd-init, vas a necesitar contestar unas preguntas sobre cómo querés trabajar (modo interactivo vs automático, dónde guardar las specs, etc.).
