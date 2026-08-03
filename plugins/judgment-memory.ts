@@ -47,11 +47,6 @@ const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH =
   process.env.JUDGMENT_MEMORY_DB ?? path.join(PLUGIN_DIR, "..", "judgment-memory", "judgment-memory.db")
 
-// Configurable recall score threshold (env var, default 0.5)
-const RECALL_SCORE_THRESHOLD = parseFloat(
-  process.env.TONY_RECALL_SCORE_THRESHOLD ?? "0.5"
-)
-
 // Keywords from judgment-day/SKILL.md's own Activation Contract ("judgment
 // day, dual review, adversarial review, juzgar") — used only to decide
 // when to run a proactive recall, never to gate anything else.
@@ -61,6 +56,11 @@ const JD_TRIGGER_RE = /\b(judgment\s*day|dual\s*review|adversarial\s*review|juzg
 const JD_TERMINAL_RE = /JUDGMENT:\s*(APPROVED|ESCALATED)/i
 
 const JUDGMENT_MEMORY_TOOLS = new Set(["jd_recall", "jd_record", "jd_history", "jd_stats"])
+
+// Configurable recall score threshold (env var, default 0.5)
+const RECALL_SCORE_THRESHOLD = parseFloat(
+  process.env.TONY_RECALL_SCORE_THRESHOLD ?? "0.5"
+)
 
 // Passive capture stats and logging
 let passiveCaptureCount = 0
