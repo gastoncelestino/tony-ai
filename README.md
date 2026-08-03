@@ -77,7 +77,7 @@ flowchart TD
     DCP -.->|"plugin global"| OC["OpenCode"]
 ```
 
-### Patrón de memoria: archivo "SQLite compartido"
+## Patrón de memoria: archivo "SQLite compartido"
 El diseño central de Tony-AI es que **cada servicio de memoria tiene un servidor MCP (Python) y un plugin (Bun) que comparten el mismo archivo SQLite**:
 ```
 ┌─────────────────────────┐    ┌─────────────────────────┐
@@ -102,7 +102,7 @@ El diseño central de Tony-AI es que **cada servicio de memoria tiene un servido
 ```
 Este patrón permite un acceso directo al archivo SQLite en modo WAL, que es el modo de concurrencia que SQLite está diseñado para soportar: un escritor a la vez, lectores nunca bloquean.
 
-### Tres conceptos clave:
+## Tres conceptos clave:
 1. **Judgment Day no corre en paralelo con revisión 4R.**  
    Por defecto, después de la implementación corre la revisión 4R ordinaria (`review-risk/readability/reliability/resilience` + `review-refuter`). Judgment Day (dos jueces ciegos, `jd-judge-a`/`jd-judge-b`) solo se activa explícitamente — nunca ambos a la vez.
 
@@ -114,12 +114,12 @@ Este patrón permite un acceso directo al archivo SQLite en modo WAL, que es el 
 
 ## Componentes
 
-# Servicios de contexto
+## Servicios de contexto
 - **TonyMem** — Memoria persistente para decisiones, hallazgos y compartición de contexto entre sesiones.
 - **Code Indexer + Qdrant** — Búsqueda semántica sobre el código usando embeddings locales.
 - **Poda de Contexto Dinámica (DCP)** — Gestión automática de la ventana de contexto.
 
-# Judgment Day
+## Judgment Day
 Cuando se activa explícitamente (por keywords como "juzgar" o "dual review"), ejecuta dos jueces de IA independientes:
 
 - `jd-judge-a` (DeepSeek-R1 14B)
@@ -155,19 +155,19 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 - **Bun** para los scripts de verificación basados en TypeScript y plugins.
 - **Docker o Podman** si querés los servicios de soporte administrados por el repositorio.
 
-### Requerido para características semánticas
+## Requerido para características semánticas
 - **Ollama** corriendo localmente.
 - **Qdrant** corriendo localmente o remotamente.
 - La capa de memoria local funciona sin Ollama ni Qdrant. La búsqueda semántica de código y el recall de juicios requieren ambos servicios.
 
-## Inicio rápido
+## 1. Inicio rápido
 ```bash
 # 1. Clonar el repositorio
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
 ```
 
-# 2. Iniciar Ollama y Qdrant con Docker Compose
+## 2. Iniciar Ollama y Qdrant con Docker Compose
 ```bash
 cd docker
 cp .env.example .env   # opcional
@@ -176,17 +176,17 @@ docker compose logs -f ollama-pull
 cd ..
 ```
 
-# 3. Correr el suite de tests
+## 3. Correr el suite de tests
 ```bash
 make test
 ```
 
-# 4. Verificar el pipeline real de Qdrant/Ollama
+## 4. Verificar el pipeline real de Qdrant/Ollama
 ```bash
 make verify-qdrant
 ```
 
-# Correr el indexador de código
+## Correr el indexador de código
 ```bash
 cd code-index
 python3 core.py index --path /ruta/al/repo --project mi-proyecto
@@ -194,19 +194,19 @@ python3 core.py search --query "manejo de reintentos HTTP" --project mi-proyecto
 python3 core.py status --path /ruta/al/repo --project mi-proyecto
 ```
 
-# Correr tests de judgment-memory
+## Correr tests de judgment-memory
 ```bash
 cd judgment-memory
 python3 test_ledger.py
 ```
 
-# Correr local-memory manualmente
+## Correr local-memory manualmente
 ```bash
 cd local-memory
 python3 server.py
 ```
 
-# Descargar modelos requeridos
+## Descargar modelos requeridos
 ```bash
 ollama pull qwen3-coder:30b
 ollama pull omnicoder:9b
@@ -295,7 +295,7 @@ Comando							Descripción
 /memory-stats					Mostrar estadísticas de memoria
 /judgment-history [project]		Ver historial de juicios
 
-# `/memory-search`
+## `/memory-search`
 Busca en TonyMem (decisiones, arquitectura, bugs, patrones) y en judgment-memory (lecciones de revisiones anteriores). Combina `mem_search`
 y `jd_recall` en una sola interfaz.
 
@@ -303,19 +303,19 @@ y `jd_recall` en una sola interfaz.
 /memory-search "manejo de reintentos HTTP"
 ```
 
-# `/memory-stats`
+## `/memory-stats`
 Muestra estadísticas de uso de memoria por proyecto: número de observaciones, tipos más comunes, última actividad.
 ```
 /memory-stats
 ```
 
-# `/judgment-history`
+## `/judgment-history`
 Lista los últimos juicios de Judgment Day para el proyecto actual. Lee directamente del SQLite ledger (`judgment-memory.db`), sin depender de Qdrant/Ollama.
 ```
 /judgment-history
 ```
 
-# `prompt-capture`
+## `prompt-capture`
 `mem_save_prompt` (llamado por el hook `chat.message` en `tonymem.ts`) guarda el prompt crudo del usuario con `type='prompt-capture'`. 
 
 Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
