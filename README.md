@@ -1,11 +1,12 @@
 # Tony-AI
-Tony-AI es un sistema de orquestación de agentes de IA para desarrollo de software que utiliza un flujo de trabajo de Desarrollo Guiado por Especificaciones (SDD) con múltiples LLMs locales. 
-Herramientas locales de IA centradas en **memoria persistente**, **búsqueda semántica de código** y **historial de juicios** para un orquestador de estilo OpenCode/SDD. 
+Tony-AI es un sistema de orquestación de agentes de IA para desarrollo de software que utiliza un flujo de trabajo de 
+Desarrollo Guiado por Especificaciones (SDD) con múltiples LLMs locales. 
+Herramientas locales de IA centradas en **memoria persistente**, **búsqueda semántica de código**, **historial de juicios** para un orquestador de estilo OpenCode/SDD. 
 El repositorio combina tres subsistemas principales: `local-memory/` para memoria libre y duradera en SQLite,  `code-index/` para búsqueda semántica sobre código fuente usando Ollama + Qdrant, y `judgment-memory/` para almacenar y recuperar resultados previos de revisiones/juicios. 
 Los assets de Docker en `docker/` proporcionan los servicios de soporte locales de Ollama y Qdrant utilizados por los componentes semánticos.
 
 ## ¿Qué es SDD?
-Desarrollo Guiado por Especificaciones es un enfoque estructurado para construir cambios en software a través de ocho fases:
+Spec-Driven Development es un enfoque estructurado para construir cambios en software a través de ocho fases:
 
 1. **Explorar** — Investigar ideas, leer código, comparar enfoques
 2. **Proponer** — Crear una propuesta de cambio con contexto de negocio
