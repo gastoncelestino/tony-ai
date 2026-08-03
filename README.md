@@ -236,87 +236,92 @@ make clean           # eliminar bases de datos/index SQLite locales
 | Judgment Day Memory Bridge 		| `judgment-memory/scripts/verify-qdrant.ts` 	| Smoke test del cliente TS contra servicios reales 	
 
 ## Estructura del proyecto
+```
 tony-ai/
-├── README.md
-├── opencode.json
-├── AGENTS.md
+├── README.md                          # este archivo
+├── opencode.json                      # mcp.tonymem/code-index/judgment-memory + Model Router
+├── AGENTS.md                          # bloque TonyMem + bloque nuevo Code Indexer
 ├── config/
-│   └── tony-memory.yaml
+│   └── tony-memory.yaml               # referencia documentada de env vars
 ├── docker/
-│   ├── docker-compose.yml
-│   ├── docker-compose.gpu.yml
+│   ├── docker-compose.yml             # Ollama + Qdrant (backing services)
+│   ├── docker-compose.gpu.yml         # override opcional, passthrough NVIDIA
 │   ├── .env.example
-│   └── README.md
-├── Makefile
+│   └── README.md                      # notas específicas NixOS
+├── Makefile                           # wrappers de conveniencia sobre tests
 ├── plugins/
-│   ├── tonymem.ts
-│   ├── qdrant.ts
-│   └── judgment-memory.ts
-├── local-memory/
+│   ├── tonymem.ts                     # reemplaza plugins/engram.ts
+│   ├── qdrant.ts                      # cliente REST Qdrant + Ollama (TS)
+│   └── judgment-memory.ts             # bridge: recall antes de JD, captura después
+├── local-memory/                      # TonyMem — MCP server (8 tools)
 │   ├── server.py
 │   └── README.md
-├── code-index/
+├── code-index/                        # Code Indexer + Qdrant — MCP server (3 tools)
 │   ├── core.py
 │   ├── server.py
-│   ├── test_core.py
+│   ├── test_core.py                   # regression test (mock Ollama/Qdrant)
 │   └── README.md
-├── judgment-memory/
-│   ├── ledger.py
-│   ├── server.py
-│   ├── schema.json
-│   ├── test_ledger.py
-│   ├── scripts/verify-qdrant.ts
-│   ├── __mocks__/
-│   │   ├── opencode-plugin.ts
-│   │   └── http-mock.ts
-│   ├── test_hooks.ts
+├── judgment-memory/                   # Judgment Day <-> TonyMem bridge
+│   ├── ledger.py                      # SQLite ledger + normalize + embed + Qdrant
+│   ├── server.py                      # jd_recall / jd_record / jd_history / jd_stats
+│   ├── schema.json                    # shape de un judgment record
+│   ├── test_ledger.py                 # regression test (mock Ollama/Qdrant)
+│   ├── test_hooks.ts                  # test harness para hooks de plugin
+│   ├── __mocks__/                     # mocks para tests
+│   │   ├── opencode-plugin.ts         # mock del Plugin context + eventos
+│   │   └── http-mock.ts               # mock HTTP para Ollama/Qdrant
+│   ├── scripts/
+│   │   └── verify-qdrant.ts           # smoke test del cliente TS real
 │   └── README.md
 ├── commands/
-│   ├── memory-search.md
-│   ├── memory-stats.md
-│   └── judgment-history.md
+│   ├── memory-search.md               # /memory-search — TonyMem + judgment-memory
+│   ├── memory-stats.md                # /memory-stats
+│   └── judgment-history.md            # /judgment-history — solo SQLite
 ├── .opencode/
-│   └── dcp.jsonc
+│   └── dcp.jsonc                      # config de DCP (plugin externo)
 └── skills/
-    └── judgment-day/
-        └── SKILL.md
+    ├── judgment-day/SKILL.md          # +paso de recall/record
+    └── _shared/
+        └── review-ledger-contract.md  
+```
 
 ## Comandos
-Comando							Descripción
-/sdd-init						Inicializar contexto SDD
-/sdd-explore <task>				Investigar una idea
-/sdd-status [change]			Ver estado del cambio actual
-/sdd-apply [change]				Implementar tareas
-/sdd-verify [change]			Validar implementación
-/sdd-archive [change]			Cerrar un cambio
-/sdd-new <description>			Empezar un nuevo cambio
-/sdd-ff <description>			Fast-forward propuesta → tareas
-/memory-search <q>				Buscar en TonyMem
-/memory-stats					Mostrar estadísticas de memoria
-/judgment-history [project]		Ver historial de juicios
+|Comando						|	Descripción						|
+|-------------------------------|-----------------------------------|
+|/sdd-init						|Inicializar contexto SDD			|
+|/sdd-explore <task>			|Investigar una idea				|
+|/sdd-status [change]			|Ver estado del cambio actual		|
+|/sdd-apply [change]			|Implementar tareas					|
+|/sdd-verify [change]			|Validar implementación				|
+|/sdd-archive [change]			|Cerrar un cambio					|
+|/sdd-new <description>			|Empezar un nuevo cambio			|
+|/sdd-ff <description>			|Fast-forward propuesta → tareas	|
+|/memory-search <q>				|Buscar en TonyMem					|
+|/memory-stats					|Mostrar estadísticas de memoria	|
+|/judgment-history [project]	|Ver historial de juicios			|
 
-## `/memory-search`
+```bash
+/memory-search	"manejo de reintentos HTTP"
+```
 Busca en TonyMem (decisiones, arquitectura, bugs, patrones) y en judgment-memory (lecciones de revisiones anteriores). Combina `mem_search`
 y `jd_recall` en una sola interfaz.
 
-```
-/memory-search "manejo de reintentos HTTP"
-```
 
-## `/memory-stats`
-Muestra estadísticas de uso de memoria por proyecto: número de observaciones, tipos más comunes, última actividad.
-```
+```bash
 /memory-stats
 ```
+Muestra estadísticas de uso de memoria por proyecto: número de observaciones, tipos más comunes, última actividad.
 
-## `/judgment-history`
-Lista los últimos juicios de Judgment Day para el proyecto actual. Lee directamente del SQLite ledger (`judgment-memory.db`), sin depender de Qdrant/Ollama.
-```
+```bash
 /judgment-history
 ```
+Lista los últimos juicios de Judgment Day para el proyecto actual. Lee directamente del SQLite ledger (`judgment-memory.db`), sin depender de Qdrant/Ollama.
 
-## `prompt-capture`
-`mem_save_prompt` (llamado por el hook `chat.message` en `tonymem.ts`) guarda el prompt crudo del usuario con `type='prompt-capture'`. 
+```bash
+mem_save_prompt
+``` 
+(llamado por el hook `chat.message` en `tonymem.ts`) guarda el prompt crudo del usuario con `type='prompt-capture'`. 
+
 
 Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
 — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por type='prompt-capture'.
