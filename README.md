@@ -319,13 +319,22 @@ Muestra estadísticas de uso de memoria por proyecto: número de observaciones, 
 Lista los últimos juicios de Judgment Day para el proyecto actual. Lee directamente del SQLite ledger (`judgment-memory.db`), sin depender de Qdrant/Ollama.
 
 ```bash
-mem_save_prompt
+/mem_save_prompt
 ``` 
-(llamado por el hook `chat.message` en `tonymem.ts`) guarda el prompt crudo del usuario con `type='prompt-capture'`. 
-
+Llamado por el hook `chat.message` en `tonymem.ts`: guarda el prompt crudo del usuario con `type='prompt-capture'`. 
 
 Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
 — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por type='prompt-capture'.
+
+# Cómo Usarlo
+Una vez corriendo con OpenCode, podes usar comandos como:
+```bash
+/sdd-init — inicializar el entorno
+/sdd-new "mejorar login" — crear un nuevo cambio
+/memory-search "manejo de errores HTTP" — buscar decisiones anteriores
+/judgment-history — ver resultados de revisiones anteriores
+``` 
+💡 Tip: La primera vez que uses /sdd-init, vas a necesitar contestar unas preguntas sobre cómo querés trabajar (modo interactivo vs automático, dónde guardar las specs, etc.).
 
 ## Principios de diseño
 - **Local-first**: el almacenamiento es SQLite y está pensado para quedarse en tu máquina.
