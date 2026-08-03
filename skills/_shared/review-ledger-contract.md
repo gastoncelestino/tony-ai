@@ -2,7 +2,7 @@
 
 Shared contract for both review lineages this project runs: ordinary 4R
 (`review-risk`, `review-readability`, `review-reliability`, `review-resilience`,
-corroborated by `review-refuter`, orchestrated through the native `gentle-ai
+corroborated by `review-refuter`, orchestrated through the native `tony-ai
 review start/finalize/validate` facade) and Judgment Day (`jd-judge-a` +
 `jd-judge-b` blind dual review, orchestrated entirely by the parent — see
 `../judgment-day/SKILL.md`). Both lineages read and write the same five
@@ -39,7 +39,7 @@ those are readable.
 ## `transaction` schema
 
 ```yaml
-schemaName: gentle-ai.review-transaction
+schemaName: tony-ai.review-transaction
 schemaVersion: 1
 targetIdentity: <sha256 of the immutable candidate target>
 mode: ordinary_4r | judgment_day
@@ -69,7 +69,7 @@ baseRelationship: <base SHA or ref this target was built against>
 ## `ledger` schema
 
 ```yaml
-schemaName: gentle-ai.review-ledger
+schemaName: tony-ai.review-ledger
 schemaVersion: 1
 targetIdentity: <matches transaction.targetIdentity>
 findings:
@@ -107,7 +107,7 @@ findings:
 ## `receipt` schema (terminal only — must not exist before `state: approved`)
 
 ```yaml
-schemaName: gentle-ai.review-receipt
+schemaName: tony-ai.review-receipt
 schemaVersion: 1
 targetIdentity: <matches transaction.targetIdentity>
 finalCandidateTree: <sha256 of the tree the receipt approves>
@@ -129,7 +129,7 @@ trusting it; a stale receipt blocks archive the same as a missing one.
 ## `gate-context` schema (post-apply gate only)
 
 ```yaml
-schemaName: gentle-ai.review-gate-context
+schemaName: tony-ai.review-gate-context
 schemaVersion: 1
 targetIdentity: <matches transaction.targetIdentity>
 result: allow | scope-changed | invalidated | escalated
@@ -155,7 +155,7 @@ not require it, since final verification has to complete before it can exist.
 
 ## Cross-references
 
-- Ordinary 4R corroboration and native facade calls (`gentle-ai review
+- Ordinary 4R corroboration and native facade calls (`tony-ai review
   start/finalize/validate`): see `commands/sdd-apply.md`'s Authority-First
   Terminal Procedure table.
 - Judgment Day execution order, hard rules, and judge/fix prompts: see

@@ -73,7 +73,7 @@ The archived audit trail MUST NOT contain stale unchecked tasks for completed wo
 
 ### Strict-vs-OpenSpec Archive Policy
 
-OpenSpec permits archiving with incomplete artifacts or tasks after a user confirmation. gentle-ai is stricter by default:
+OpenSpec permits archiving with incomplete artifacts or tasks after a user confirmation. tony-ai is stricter by default:
 
 - Incomplete implementation tasks block archive unless they are stale checkboxes and apply-progress/verify-report prove completion.
 - CRITICAL issues in `verify-report` always block archive. Do not accept an override for CRITICAL verification issues.

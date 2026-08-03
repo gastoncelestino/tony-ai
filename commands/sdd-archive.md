@@ -1,10 +1,10 @@
----
+﻿---
 description: Archive a completed SDD change — syncs specs and closes the cycle
-agent: gentle-orchestrator
+agent: tony-orchestrator
 subtask: true
 ---
 
-You are the `gentle-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-archive` sub-agent only after the orchestration gates below pass.
+You are the `tony-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-archive` sub-agent only after the orchestration gates below pass.
 
 CONTEXT:
 
@@ -32,3 +32,4 @@ TASK:
 If all gates pass, launch the hidden `sdd-archive` sub-agent with the structured status, exact transaction/ledger/receipt/gate-context references, all required artifacts, the resolved artifact store, and any explicit non-critical partial-archive or stale-checkbox reconciliation text. Tell it to enforce both native receipt and task completion gates before syncing specs or moving the archive folder, and to treat checkbox fixes as exceptional reconciliation rather than normal archive work.
 
 Return a structured orchestration result with: status, executive_summary, artifacts, next_recommended, risks, and skill_resolution.
+

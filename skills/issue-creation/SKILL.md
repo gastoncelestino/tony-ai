@@ -1,6 +1,6 @@
 ---
 name: issue-creation
-description: "Create Gentle AI issues with issue-first checks. Trigger: creating GitHub issues, bug reports, or feature requests."
+description: "Create Tony AI issues with issue-first checks. Trigger: creating GitHub issues, bug reports, or feature requests."
 license: Apache-2.0
 metadata:
   author: gentleman-programming
@@ -21,7 +21,6 @@ Use this skill when:
 1. **Blank issues are disabled** — MUST use a template (bug report or feature request)
 2. **Every issue gets `status:needs-review` automatically** on creation
 3. **A maintainer MUST add `status:approved`** before any PR can be opened
-4. **Questions go to [Discussions](https://github.com/Gentleman-Programming/agent-teams-lite/discussions)**, not issues
 
 ---
 

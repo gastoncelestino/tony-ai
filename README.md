@@ -145,7 +145,7 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 
 | Rol 				| Modelo 					| Agentes 																												|
 |-------------------|---------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| Planificación 	| `ollama/qwen3-coder:30b` 	| `gentle-orchestrator`, `sdd-explore`, `sdd-propose`, `sdd-design`, `sdd-spec`, `sdd-tasks`, `sdd-init`, `sdd-onboard` |
+| Planificación 	| `ollama/qwen3-coder:30b` 	| `tony-orchestrator`, `sdd-explore`, `sdd-propose`, `sdd-design`, `sdd-spec`, `sdd-tasks`, `sdd-init`, `sdd-onboard` 	|
 | Implementación 	| `ollama/omnicoder:9b` 	| `sdd-apply` 																											|
 | Revisión 			| `ollama/deepseek-r1:14b` 	| `sdd-verify`, `review-*` (5), `jd-judge-a` 																			|
 | Revisión (juez B) | `ollama/qwen3-coder:30b` 	| `jd-judge-b` — deliberadamente distinto de `jd-judge-a` 																|

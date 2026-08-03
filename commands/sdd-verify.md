@@ -1,10 +1,10 @@
----
+﻿---
 description: Validate implementation matches specs, design, and tasks
-agent: gentle-orchestrator
+agent: tony-orchestrator
 subtask: true
 ---
 
-You are the `gentle-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-verify` sub-agent only after the orchestration gates below pass.
+You are the `tony-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-verify` sub-agent only after the orchestration gates below pass.
 
 CONTEXT:
 
@@ -29,3 +29,4 @@ TASK:
 If all gates pass and the native bounded transaction is `ready_final_verification` or `final_verifying`, launch the hidden `sdd-verify` sub-agent with the structured status, exact transaction/ledger references, available artifacts, and strict TDD instructions if `sdd-init` detected strict TDD. This is the single independent requirements/runtime verification; a contradiction escalates and never starts another review/refuter/fix loop.
 
 Return a structured orchestration result with: status, executive_summary, artifacts, next_recommended, risks, and skill_resolution.
+

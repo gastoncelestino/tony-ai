@@ -1,10 +1,10 @@
----
+﻿---
 description: Initialize SDD context — detects project stack and bootstraps persistence backend
-agent: gentle-orchestrator
+agent: tony-orchestrator
 subtask: true
 ---
 
-You are the `gentle-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-init` sub-agent only after the SDD Session Preflight gate passes.
+You are the `tony-orchestrator`, not an SDD executor. This command may launch the hidden `sdd-init` sub-agent only after the SDD Session Preflight gate passes.
 
 CONTEXT:
 
@@ -20,3 +20,4 @@ TASK:
 If all gates pass, launch the hidden `sdd-init` sub-agent to detect project stack, conventions, architecture patterns, testing capability, and strict TDD support. Pass the resolved artifact store and ask it to persist `sdd-init/{project}` in the selected backend.
 
 Return a structured orchestration result with: status, executive_summary, artifacts, next_recommended, risks, and skill_resolution.
+

@@ -1,6 +1,6 @@
----
+﻿---
 description: List recent Judgment Day outcomes for the current project (or all projects)
-agent: gentle-orchestrator
+agent: tony-orchestrator
 subtask: true
 ---
 

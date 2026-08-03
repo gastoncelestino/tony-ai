@@ -15,7 +15,7 @@ Usage: point OpenCode (or any MCP-capable client) at this file with
 Tony-AI fork note: this file adds four tools (mem_context,
 mem_session_summary, mem_suggest_topic_key, mem_save_prompt) on top of the
 original 4-tool contract (mem_save, mem_search, mem_get_observation,
-mem_update). They exist because Gentle-AI's AGENTS.md and shared skills
+mem_update). They exist because Tony-AI's AGENTS.md and shared skills
 call them by name — everything here is a real implementation over the same
 `observations` table, nothing is stubbed. No prompt/skill/command file had
 to change: the tool names match exactly what those files already call.
