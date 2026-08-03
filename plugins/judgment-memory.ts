@@ -57,7 +57,6 @@ const JD_TERMINAL_RE = /JUDGMENT:\s*(APPROVED|ESCALATED)/i
 
 const JUDGMENT_MEMORY_TOOLS = new Set(["jd_recall", "jd_record", "jd_history", "jd_stats"])
 
-// Configurable recall score threshold (env var, default 0.5)
 const RECALL_SCORE_THRESHOLD = parseFloat(
   process.env.TONY_RECALL_SCORE_THRESHOLD ?? "0.5"
 )
@@ -195,13 +194,12 @@ function parsePassiveRecord(text: string, sessionId: string, project: string): P
 
   const final = terminalMatch[1].toUpperCase() === "APPROVED" ? "approve" : "escalated"
 
-  // Multiple patterns for robustness
+  // === ROBUST TASK EXTRACTION (NEW) ===
   const targetPatterns = [
-    /(?:target(?: identity)?)\s*[:\\-]\s*(.+)/i,
-    /(?:target|issue|task|bug)\s*[:\\-]\s*(.+)/i,
-    /(?:reviewing|review)\s+["']?([^"'\n]+)["']?/i,
+    /(?:target(?: identity)?)\s*[:\-]\s*(.+)/i,
+    /(?:target|issue|task|bug)\s*[:\-]\s*(.+)/i,
+    /(?:reviewing|review)\s*["']?([^"'\n]+)["']?/i,
   ]
-
   let task: string | null = null
   for (const pattern of targetPatterns) {
     const match = text.match(pattern)
@@ -210,12 +208,10 @@ function parsePassiveRecord(text: string, sessionId: string, project: string): P
       break
     }
   }
-
   if (!task) {
     const lines = text.split("\n").filter(l => l.trim() && !JD_TERMINAL_RE.test(l))
     task = lines.length > 0 ? lines[0].trim().slice(0, 200) : "unknown task"
   }
-
   if (!task || task.trim().length === 0) {
     if (PASSIVE_CAPTURE_LOG) {
       console.error("[judgment-memory] passive capture: task extraction failed, skipping")
@@ -224,11 +220,11 @@ function parsePassiveRecord(text: string, sessionId: string, project: string): P
     return null
   }
 
+  // === ROBUST LESSON EXTRACTION (NEW) ===
   const lessonPatterns = [
-    /(?:lesson|learned|takeaway|key takeaway)\s*[:\\-]\s*(.+)/i,
-    /(?:key insight|insight)\s*[:\\-]\s*(.+)/i,
+    /(?:lesson|learned|takeaway|key takeaway)\s*[:\-]\s*(.+)/i,
+    /(?:key insight|insight)\s*[:\-]\s*(.+)/i,
   ]
-
   let lesson: string | undefined
   for (const pattern of lessonPatterns) {
     const match = text.match(pattern)
@@ -329,11 +325,10 @@ export const JudgmentMemory: Plugin = async (ctx) => {
 
       // Logging
       if (PASSIVE_CAPTURE_LOG) {
-        console.error(`[judgment-memory] passive capture: ${rec.final} for task "${rec.task.slice(0, 50)}..."`)
-      }
-
-      upsertJudgment(rec, null)
-      passiveCaptureCount++
+		console.error(`[judgment-memory] passive capture: ${rec.final} for task "${rec.task.slice(0, 50)}..."`)
+	  }
+	  upsertJudgment(rec, null)
+	  passiveCaptureCount++
 
       try {
         const [vec] = await embedTexts([`task: ${rec.task}\noutcome: ${rec.final}\nlesson: ${rec.lesson ?? ""}`])
@@ -366,9 +361,9 @@ export const JudgmentMemory: Plugin = async (ctx) => {
 
       // Log stats
       if (PASSIVE_CAPTURE_LOG && passiveCaptureCount > 0) {
-        output.system[output.system.length - 1] +=
-          `\n\n[judgment-memory stats] passive captures: ${passiveCaptureCount}, errors: ${passiveCaptureErrors}`
-      }
+		output.system[output.system.length - 1] +=
+		  `\n\n[judgment-memory stats] passive captures: ${passiveCaptureCount}, errors: ${passiveCaptureErrors}`
+	  }
 
       const sessionID: string = input.sessionID ?? ""
       const recall = pendingRecall.get(sessionID)

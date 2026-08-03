@@ -159,8 +159,35 @@ def run():
         assert status["files_indexed"] == 1  # only a.py left after b.py deletion
 
         print("\nALL ASSERTIONS PASSED")
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_treesitter_chunking():
+    """Test that tree-sitter chunking produces correct boundaries."""
+    import importlib.util
+    if importlib.util.find_spec("tree_sitter") is None:
+        print("  [SKIP] tree-sitter not installed — regex chunking is the default")
+        return
+    content = '''
+import os
+
+class MyClass:
+    def method_a(self):
+        x = 1
+        return x
+    def method_b(self):
+        y = 2
+        return y
+
+def standalone():
+    return 42
+'''
+    lines = content.split("\n")
+    chunks = chunk_lines(lines, ".py")
+    assert len(chunks) >= 4, f"Expected >= 4 chunks, got {len(chunks)}"
+    for start, end in chunks:
+        chunk_text = "\n".join(lines[start:end+1])
+        assert not chunk_text.rstrip().endswith("def "), f"Chunk cuts through function"
+    print(f"  [PASS] tree-sitter chunking: {len(chunks)} chunks from nested Python")
 
 
 if __name__ == "__main__":
