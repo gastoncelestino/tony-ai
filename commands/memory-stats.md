@@ -1,6 +1,6 @@
----
+﻿---
 description: Show TonyMem observation and Judgment Day memory stats for the current project
-agent: gentle-orchestrator
+agent: tony-orchestrator
 subtask: true
 ---
 

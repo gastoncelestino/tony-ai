@@ -87,7 +87,7 @@ build_exit_code: 125
 4. Count completed and incomplete tasks. Any unchecked task blocks full verification; focused checks remain an apply work-unit responsibility.
 5. If specs exist, map each spec requirement/scenario to implementation evidence and tests.
 6. If design exists, check design decisions against changed code. If design is missing, skip design coherence and record why.
-7. Run test, build/type-check, and coverage commands when available. For full spec verification, preserve gentle-ai's stricter runtime evidence: source inspection alone does not prove spec scenario compliance.
+7. Run test, build/type-check, and coverage commands when available. For full spec verification, preserve tony-ai's stricter runtime evidence: source inspection alone does not prove spec scenario compliance.
 8. Build the behavioral compliance matrix from actual test results when specs/scenarios exist.
 9. Persist and return the verification report, including skipped dimensions for missing artifacts.
 

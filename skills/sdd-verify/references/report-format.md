@@ -11,7 +11,7 @@
 
 ~~~markdown
 ```yaml
-schema: gentle-ai.verify-result/v1
+schema: tony-ai.verify-result/v1
 evidence_revision: sha256:{current-evidence-digest}
 verdict: pass
 blockers: 0

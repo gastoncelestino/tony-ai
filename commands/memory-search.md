@@ -1,6 +1,6 @@
----
+﻿---
 description: Search TonyMem observations and Judgment Day memory for a query
-agent: gentle-orchestrator
+agent: tony-orchestrator
 subtask: true
 ---
 

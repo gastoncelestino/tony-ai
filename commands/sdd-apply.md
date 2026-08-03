@@ -1,10 +1,10 @@
----
+﻿---
 description: Implement SDD tasks — writes code following specs and design
-agent: gentle-orchestrator
+agent: tony-orchestrator
 subtask: true
 ---
 
-You are the `gentle-orchestrator`, not an SDD executor. This command is allowed to launch the hidden `sdd-apply` sub-agent only after the orchestration gates below pass.
+You are the `tony-orchestrator`, not an SDD executor. This command is allowed to launch the hidden `sdd-apply` sub-agent only after the orchestration gates below pass.
 
 CONTEXT:
 
@@ -37,7 +37,7 @@ If all gates pass, launch the hidden `sdd-apply` sub-agent with:
 Return a structured orchestration result with: status, executive_summary, artifacts, next_recommended, risks, and skill_resolution.
 
 POST-APPLY REVIEW ROUTING:
-After apply returns, rerun native status. If `nextRecommended: review`, the parent orchestrator runs `gentle-ai review start --cwd <repo>`. The facade derives repository scope, lineage, tier, lenses, and correction budget from live Git. The apply executor never launches review.
+After apply returns, rerun native status. If `nextRecommended: review`, the parent orchestrator runs `tony-ai review start --cwd <repo>`. The facade derives repository scope, lineage, tier, lenses, and correction budget from live Git. The apply executor never launches review.
 
 ### Authority-First Terminal Procedure
 
@@ -45,11 +45,12 @@ Use only the compact facade; it appends and reads back native authority before m
 
 | Order | Operation | Required result | Terminal mirrors |
 |---|---|---|---|
-| 01 | `gentle-ai review start` | target, tier, lenses, and budget bound | blocked |
-| 02 | `gentle-ai review finalize` | results, evidence, native transitions, and receipt bound | blocked |
-| 03 | `gentle-ai review validate --gate <gate> --cwd <repo>` | authority, receipt, and live Git checked | blocked |
+| 01 | `tony-ai review start` | target, tier, lenses, and budget bound | blocked |
+| 02 | `tony-ai review finalize` | results, evidence, native transitions, and receipt bound | blocked |
+| 03 | `tony-ai review validate --gate <gate> --cwd <repo>` | authority, receipt, and live Git checked | blocked |
 | 04 | `reconcile-terminal-mirrors` | existing mirrors reconciled | allowed |
 
 After ambiguous output, rerun the same facade operation; native discovery resumes committed authority without another budget. Malformed or ambiguous lineage remains invalid.
 
 Reuse a valid receipt; later commit/push/PR/release events only validate it.
+
