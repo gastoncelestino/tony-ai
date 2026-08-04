@@ -468,6 +468,61 @@ Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión a
 — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por type='prompt-capture'.
 
 
+
+
+
+## TonyMem - Memoria Persistente
+```bash
+# Cada decisión/descubrimiento se guarda en SQLite
+mem_save(task="manejo retry HTTP", observation="usar exponential backoff")
+# Luego se recupera en nuevas conversaciones
+mem_search("retry HTTP") → encuentra la decisión guardada
+```
+Aprende de: Decisiones arquitectónicas, bugs resueltos, patrones de código
+
+## Judgment Memory - Lecciones de Revisiones
+```bash
+# Después de cada Judgment Day:
+jd_record(task="validar JWT", final="approve", lesson="siempre verificar signature expiration")
+# Futuras tareas similares recuerdan esta lección
+```
+Aprende de: Errores de review, mejores prácticas validadas
+
+## Code Indexer - Conocimiento del Codebase
+- Indexa incrementalmente (solo cambios)
+- Embeddings semánticos con bge-m3
+- Búsquedas como "cómo se maneja la autenticación" te encuentran código relevante
+
+Aprende de: Crecimiento del codebase, patrones emergentes
+
+# Hooks de OpenCode (tonymem.ts)
+```bash
+// Hook que captura automáticamente lo que haces
+"chat.message" → mem_save_prompt() // guarda prompts
+"task.execute.after" → guarda discoveries importantes
+```
+
+📈 Cómo funciona el aprendizaje en práctica:
+```bash
+Usuario: "Implementa login con refresh token"
+```
+```bash
+Tony-AI:
+1. mem_search() → encuentra decisión previa sobre JWT
+2. code_search() → encuentra cómo funciona auth actual
+3. jd_recall() → recuerda lección sobre token expiration
+4. Implementa → tony_mem guarda la nueva decisión
+5. juzgar esto → dos jueces review + lesson guardada
+```
+
+```bash
+🔁 Beneficios concretos:
+Primera tarea: Configuras todo desde cero
+Segunda tarea: Sistema te sugiere patrones similares
+Tercera tarea: Ya tiene memoria de errores evitados
+Tu sistema es progresivamente más útil con el uso. No es ML tradicional, es memoria semántica operacional.
+```
+
 ## Principios de diseño
 - **Local-first**: el almacenamiento es SQLite y está pensado para quedarse en tu máquina.
 - **Dependency-light**: los servidores en Python usan solo stdlib, deliberadamente.
