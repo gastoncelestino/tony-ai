@@ -176,7 +176,7 @@ cd tony-ai
 ```
 
 
-# 1. Instalación manual (opcional)
+# 1. Instalación manual (si no hiciste la instalación automática)
 ## Crear la carpeta .opencode en tu perfil de usuario si no existe
 ```bash
 mkdir "$env:USERPROFILE/.opencode"
