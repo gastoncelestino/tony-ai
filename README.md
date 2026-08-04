@@ -135,29 +135,6 @@ Cuando se activa explícitamente (por keywords como "juzgar" o "dual review"), e
 
 Antes de juzgar, `jd_recall` busca juicios similares anteriores. Después de completar, `jd_record` persiste el veredicto.
 
-## Variables de entorno
-
-| Variable 						| Propósito 								| Valor por defecto 					| Usado por 							|
-|-------------------------------|-------------------------------------------|---------------------------------------|---------------------------------------|
-| `TONY_OLLAMA_URL` 			| Endpoint de Ollama 						| `http://localhost:11434` 				| Todos los servicios de embeddings 	|
-| `TONY_QDRANT_URL` 			| Endpoint de Qdrant 						| `http://localhost:6333` 				| Code Indexer, Judgment Memory 		|
-| `TONY_EMBED_MODEL` 			| Override del modelo de embeddings 		| `bge-m3` / `nomic-embed-text` 		| Por servicio de embeddings 			|
-| `LOCAL_MEMORY_DB` 			| Archivo SQLite para TonyMem 				| `{cwd}/.tonymem/memory.db` 			| TonyMem 								|
-| `JUDGMENT_MEMORY_DB` 			| Archivo SQLite para juicios 				| `{cwd}/.tonymem/judgment-memory.db` 	| Judgment Memory 						|
-| `TONY_RECALL_SCORE_THRESHOLD` | Score mínimo para superficie de recall	| `0.5` 								| Filtrado de recall de Judgment Memory |
-
-Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que `judgment-memory/` usa `nomic-embed-text` para tareas más cortas de recuperación en lenguaje natural.
-
-## Modelos locales
-
-| Rol 				| Modelo 					| Agentes 																												|
-|-------------------|---------------------------|-----------------------------------------------------------------------------------------------------------------------|
-| Planificación 	| `ollama/qwen3-coder:30b` 	| `tony-orchestrator`, `sdd-explore`, `sdd-propose`, `sdd-design`, `sdd-spec`, `sdd-tasks`, `sdd-init`, `sdd-onboard` 	|
-| Implementación 	| `ollama/omnicoder:9b` 	| `sdd-apply` 																											|
-| Revisión 			| `ollama/deepseek-r1:14b` 	| `sdd-verify`, `review-*` (5), `jd-judge-a` 																			|
-| Revisión (juez B) | `ollama/qwen3-coder:30b` 	| `jd-judge-b` — deliberadamente distinto de `jd-judge-a` 																|
-| Ejecución 		| `ollama/ornith:9b` 		| `sdd-archive`, `jd-fix-agent` 																						|
-
 ## Prerequisitos (lo que tenes que instalar para que funcione)
 - **Python 3.10+** para los servidores MCP en Python.
 - **Bun** para los scripts de verificación basados en TypeScript y plugins.
@@ -362,7 +339,7 @@ tony-ai/
 ## Comandos
 |			Comando				|			Descripción								|		Fuente			|  Offline 	|
 |-------------------------------|---------------------------------------------------|-----------------------|-----------|
-|/sdd-init						|Inicializar contexto SDD							|TonyMem + config		|	 ✅		|
+|/sdd-init						|Inicializar contexto SDD							|SQLite + config		|	 ✅		|
 |/sdd-explore <task>			|Investigar una idea								|Sub-agente explore		| 	 ❌		|
 |/sdd-status [change]			|Ver estado del cambio actual						|Artifact store			|  	 ✅		|
 |/sdd-apply	[change]			|Implementar tareas									|Sub-agente writer		|	 ❌		|
@@ -370,12 +347,43 @@ tony-ai/
 |/sdd-archive	[change]		|Cerrar un cambio									|SQLite/JSON			|	 ✅		|
 |/sdd-new "feature"				|Nuevo feature con SDD completo						|Sub-agentes			|	 ❌		|
 |/sdd-tasks						|Ver plan de trabajo actual							|Artifact store			|	 ✅		|
-|/sdd-ff						|Fast-forward propuesta → tareas					|Sub-agentes planning	|    ✅		|
-|/memory-search "query"			|Búsqueda semántica en TonyMem + Judgment Memory	|SQLite + Qdrant		|	 ❌		|
-|/judgment-history [project]	|Ver historial de juicios							|SQLite ledger			|	 ✅		|
+|/sdd-ff						|Fast-forward propuesta → tareas					|Sub-agentes planning	|    ❌		|
+|/memory-search "query"			|Búsqueda semántica en TonyMem + Judgment Memory	|SQLite + Qdrant		| ✅	❌	|
 |/memory-stats					|Estadísticas de uso de memoria						|SQLite					|	 ✅		|
+|/mem_save_prompt				|Hook interno de tonymem.ts							|TonyMem				|	 ✅		|
+|/judgment-history [project]	|Ver historial de juicios							|SQLite ledger			|	 ✅		|
 |juzgar esto: "feature"			|Activar Judgment Day (revisión adversarial)		|2 jueces + memoria		|	 ❌		|
 
+💡 Todo funciona offline excepto `/sdd-explore, /sdd-apply, /sdd-verify, /sdd-new, /sdd-ff, /memory-search y /jd_recall`.
+
+## 💾 Persistencia de Prompts
+Hook chat.message → auto-guarda con type='prompt-capture'
+Incluido en mem_context por defecto
+Excluido de mem_search (bookkeeping)
+Filtrar explícitamente: mem_search(query="...", type='prompt-capture')
+
+## Variables de entorno
+
+| Variable 						| Propósito 								| Valor por defecto 					| Usado por 							|
+|-------------------------------|-------------------------------------------|---------------------------------------|---------------------------------------|
+| `TONY_OLLAMA_URL` 			| Endpoint de Ollama 						| `http://localhost:11434` 				| Todos los servicios de embeddings 	|
+| `TONY_QDRANT_URL` 			| Endpoint de Qdrant 						| `http://localhost:6333` 				| Code Indexer, Judgment Memory 		|
+| `TONY_EMBED_MODEL` 			| Override del modelo de embeddings 		| `bge-m3` / `nomic-embed-text` 		| Por servicio de embeddings 			|
+| `LOCAL_MEMORY_DB` 			| Archivo SQLite para TonyMem 				| `{cwd}/.tonymem/memory.db` 			| TonyMem 								|
+| `JUDGMENT_MEMORY_DB` 			| Archivo SQLite para juicios 				| `{cwd}/.tonymem/judgment-memory.db` 	| Judgment Memory 						|
+| `TONY_RECALL_SCORE_THRESHOLD` | Score mínimo para superficie de recall	| `0.5` 								| Filtrado de recall de Judgment Memory |
+
+Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que `judgment-memory/` usa `nomic-embed-text` para tareas más cortas de recuperación en lenguaje natural.
+
+## Modelos locales
+
+| Rol 				| Modelo 					| Agentes 																												|
+|-------------------|---------------------------|-----------------------------------------------------------------------------------------------------------------------|
+| Planificación 	| `ollama/qwen3-coder:30b` 	| `tony-orchestrator`, `sdd-explore`, `sdd-propose`, `sdd-design`, `sdd-spec`, `sdd-tasks`, `sdd-init`, `sdd-onboard` 	|
+| Implementación 	| `ollama/omnicoder:9b` 	| `sdd-apply` 																											|
+| Revisión 			| `ollama/deepseek-r1:14b` 	| `sdd-verify`, `review-*` (5), `jd-judge-a` 																			|
+| Revisión (juez B) | `ollama/qwen3-coder:30b` 	| `jd-judge-b` — deliberadamente distinto de `jd-judge-a` 																|
+| Ejecución 		| `ollama/ornith:9b` 		| `sdd-archive`, `jd-fix-agent` 																						|
 
 ## Luego de instalar todo, Cómo lo utilizo?
 ```bash
@@ -427,21 +435,6 @@ tony-ai/
 Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
 — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por type='prompt-capture'.
 
-## Offline y Online
-|Comando						|	Fuente de datos					|	¿Depende de RED?	|
-|-------------------------------|-----------------------------------|-----------------------|
-|/memory-search					|	TonyMem (SQLite) + Qdrant		|			Sí			|
-|/memory-stats					|	TonyMem (SQLite)				|			No			|
-|/judgment-history				|	SQLite ledger					|			No			|
-|/mem_save_prompt				|	Hook interno de tonymem.ts		|	No (auto-guardado)	|
-
-💡 Todo funciona offline excepto /memory-search y /jd_recall, que usan embeddings locales de Ollama.
-
-## 💾 Persistencia de Prompts
-Hook chat.message → auto-guarda con type='prompt-capture'
-Incluido en mem_context por defecto
-Excluido de mem_search (bookkeeping)
-Filtrar explícitamente: mem_search(query="...", type='prompt-capture')
 
 ## Principios de diseño
 - **Local-first**: el almacenamiento es SQLite y está pensado para quedarse en tu máquina.
@@ -452,10 +445,12 @@ Filtrar explícitamente: mem_search(query="...", type='prompt-capture')
 	- `judgment-memory/`/ almacena resultados normalizados de flujos de revisión completados.
 **Indexado incremental**: el indexador de código saltea archivos sin cambios y limpia los borrados del índice.
 
+
 ## Notas
 - `AGENTS.md` define convenciones de orquestación, reglas de respuesta y patrones de uso de memoria/indexación esperados por el ecosistema de agentes circundante.
 - `opencode.json` está presente en la raíz del repositorio, indicando que el repo está pensado para integrarse con una configuración de MCP/tooling compatible con OpenCode.
 El setup de Docker es solo para **Ollama** y **Qdrant**; los servidores MCP en Python están pensados para correr directamente sobre stdio en lugar de dentro de contenedores.
+
 
 ## Fuentes
 Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/tony-ai/contents
@@ -465,6 +460,7 @@ Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/to
 - `local-memory/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/local-memory/README.md
 - `docker/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/docker/README.md
 - `config/tony-memory.yaml`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/config/tony-memory.yaml
+
 
 ## Agradecimientos
 Toda la definición de SDD, orchestator, algunos prompts y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
