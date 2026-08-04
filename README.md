@@ -502,7 +502,7 @@ Aprende de: Crecimiento del codebase, patrones emergentes
 "task.execute.after" → guarda discoveries importantes
 ```
 
-📈 Cómo funciona el aprendizaje en práctica:
+## 📈 Cómo funciona el aprendizaje en práctica:
 ```bash
 Usuario: "Implementa login con refresh token"
 ```
