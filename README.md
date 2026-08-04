@@ -177,13 +177,6 @@ copy /tony-ai/plugins/judgment-memory.ts "$env:USERPROFILE/.opencode/plugins/"
 
 ## Deberías ver algo como:
 ```bash
-├── opencode.json
-├── AGENTS.md
-├── plugins/
-│   └── tonymem.ts
-│	└── qdrant.ts
-│	└── udgment-memory.ts
-
 📄 opencode.json
 📄 AGENTS.md
 📁 plugins
@@ -198,11 +191,13 @@ cd docker
 cp .env.example .env   # opcional
 docker compose up -d  # inicia Qdrant (vector DB) en el puerto 6333 y Ollama en el puerto 11434
 docker compose ps
-```bash
+```
+
 Deberías ver algo como:
 NAME            IMAGE                  COMMAND                  SERVICE             STATUS           PORTS
 tony-ai-qdrant  qdrant/qdrant:latest   "/bin/qdrant --config…"  qdrant              running (healthy)  0.0.0.0:6333->6333/tcp
 tony-ai-ollama  ollama/ollama:latest   "/usr/bin/ollama bind_…" ollama              running (healthy)  0.0.0.0:11434->11434/tcp
+
 ```bash
 docker compose logs -f ollama-pull
 ```
