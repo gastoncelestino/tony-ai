@@ -292,7 +292,7 @@
     "tonymem": {
       "command": [
         "python3",
-		"./local-memory/server.py"
+		"{env:TONY_REPO_ROOT}/local-memory/server.py"
       ],
       "type": "local",
       "environment": {
@@ -302,20 +302,26 @@
     "code-index": {
       "command": [
         "python3",
-		"./code-index/server.py"
+		"{env:TONY_REPO_ROOT}/code-index/server.py"
       ],
       "type": "local",
       "environment": {
-        "TONY_INDEX_ROOT": "{cwd}",
-        "TONY_OLLAMA_URL": "http://localhost:11434",
-        "TONY_QDRANT_URL": "http://localhost:6333",
-        "TONY_EMBED_MODEL": "bge-m3"
+		"TONY_REPO_ROOT": "{env:TONY_REPO_ROOT}",
+		"TONY_INDEX_ROOT": "{cwd}",
+		"TONY_OLLAMA_URL": "http://localhost:11434",
+		"TONY_QDRANT_URL": "http://localhost:6333",
+		"TONY_EMBED_MODEL": "bge-m3",
+		"TONY_INDEX_CHUNKER": "regex"
       }
     },
     "judgment-memory": {
-	  "command": ["python3", "/home/tony/tools/tonymem/judgment-memory/server.py"],
+	  "command": [
+		"python3", 
+		"{env:TONY_REPO_ROOT}/judgment-memory/server.py"
+	  ],
 	  "type": "local",
 	  "environment": {
+		"TONY_REPO_ROOT": "{env:TONY_REPO_ROOT}",
 		"JUDGMENT_MEMORY_DB": "{cwd}/.tonymem/judgment-memory.db",
 		"TONY_OLLAMA_URL": "http://localhost:11434",
 		"TONY_QDRANT_URL": "http://localhost:6333",
