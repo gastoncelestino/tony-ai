@@ -495,7 +495,7 @@ Aprende de: Errores de review, mejores prácticas validadas
 
 Aprende de: Crecimiento del codebase, patrones emergentes
 
-# Hooks de OpenCode (tonymem.ts)
+## Hooks de OpenCode (tonymem.ts)
 ```bash
 // Hook que captura automáticamente lo que haces
 "chat.message" → mem_save_prompt() // guarda prompts
