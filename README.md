@@ -145,12 +145,40 @@ Antes de juzgar, `jd_recall` busca juicios similares anteriores. Después de com
 - **Qdrant** corriendo localmente o remotamente.
 - La capa de memoria local funciona sin Ollama ni Qdrant. La búsqueda semántica de código y el recall de juicios requieren ambos servicios.
 
-## 1. Clonar repositorio
+
+## Podes elegir Instalación automática o manual
+
+## Clonar repositorio
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
 ```
 
+## 1. Instalación automática (opcional)
+```bash
+./scripts/setup.sh    # Instalar todo automáticamente
+./scripts/health.sh   # Verificar estado del sistema
+```
+
+## setup.sh — Instalador automático:
+```bash
+1. Verifica dependencias (Docker, Ollama, Bun)
+2. Descarga modelos faltantes
+3. Configura .env
+4. Inicia servicios
+5. Descarga modelo de embeddings
+```
+
+## health.sh — Verificación de salud:
+```bash
+1. Servicios Docker activos
+2. Conectividad Ollama/Qdrant
+3. Funcionalidad de embeddings
+4. Integridad de bases de datos
+```
+
+
+## 1. Instalación manual (opcional)
 ## Crear la carpeta .opencode en tu perfil de usuario si no existe
 ```bash
 mkdir "$env:USERPROFILE/.opencode"
