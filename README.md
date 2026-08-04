@@ -5,7 +5,7 @@ Herramientas locales de IA centradas en **memoria persistente**, **búsqueda sem
 El repositorio combina tres subsistemas principales: `local-memory/` para memoria libre y duradera en SQLite,  `code-index/` para búsqueda semántica sobre código fuente usando Ollama + Qdrant, y `judgment-memory/` para almacenar y recuperar resultados previos de revisiones/juicios. 
 Los assets de Docker en `docker/` proporcionan los servicios de soporte locales de Ollama y Qdrant utilizados por los componentes semánticos.
 
-# ¿Cómo funciona?
+## ¿Cómo funciona?
 La idea central es buena: el orquestador trabaja por fases. Primero explora/propuesta/spec/diseño/tareas, después implementa, luego verifica y finalmente archiva. 
 Mientras tanto, TonyMem guarda decisiones y contexto entre sesiones, code-index te deja buscar "por significado" dentro del repo, y judgment-memory recuerda revisiones anteriores parecidas para no arrancar siempre desde cero. 
 Es un enfoque bastante más serio que "preguntarle cosas al modelo y ya". 
@@ -176,12 +176,12 @@ copy /tony-ai/plugins/judgment-memory.ts "$env:USERPROFILE/.opencode/plugins/"
 ```
 
 ## Deberías ver algo como:
-📄 opencode.json
-📄 AGENTS.md
-📁 plugins
-   📄 tonymem.ts
-   📄 qdrant.ts
-   📄 judgment-memory.ts
+├── opencode.json
+├── AGENTS.md
+├── plugins/
+│   └── tonymem.ts
+│	└── qdrant.ts
+│	└── udgment-memory.ts
 
 ## 2. Iniciar Ollama y Qdrant con Docker Compose
 ```bash
@@ -209,7 +209,7 @@ ollama pull deepseek-r1:14b
 ollama pull omnicoder:9b
 ollama pull ornith:9b
 ```
-# Modelos pequeños (rápidos)
+## Modelos pequeños (rápidos)
 ```bash
 ollama pull bge-m3
 ollama pull nomic-embed-text
