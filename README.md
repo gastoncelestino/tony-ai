@@ -8,7 +8,6 @@ Los assets de Docker en `docker/` proporcionan los servicios de soporte locales 
 ## ¿Cómo funciona?
 La idea central es buena: el orquestador trabaja por fases. Primero explora/propuesta/spec/diseño/tareas, después implementa, luego verifica y finalmente archiva. 
 Mientras tanto, TonyMem guarda decisiones y contexto entre sesiones, code-index te deja buscar "por significado" dentro del repo, y judgment-memory recuerda revisiones anteriores parecidas para no arrancar siempre desde cero. 
-Es un enfoque bastante más serio que "preguntarle cosas al modelo y ya". 
 
 A nivel técnico, el stack pide Python 3.10+, Bun, Ollama, Qdrant y opcionalmente Docker para levantar los servicios auxiliares. 
 Los modelos por defecto son pesados: qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, y embeddings con bge-m3 y nomic-embed-text. 
@@ -193,10 +192,12 @@ docker compose up -d  # inicia Qdrant (vector DB) en el puerto 6333 y Ollama en 
 docker compose ps
 ```
 
+```bash
 Deberías ver algo como:
 NAME            IMAGE                  COMMAND                  SERVICE             STATUS           PORTS
 tony-ai-qdrant  qdrant/qdrant:latest   "/bin/qdrant --config…"  qdrant              running (healthy)  0.0.0.0:6333->6333/tcp
 tony-ai-ollama  ollama/ollama:latest   "/usr/bin/ollama bind_…" ollama              running (healthy)  0.0.0.0:11434->11434/tcp
+```
 
 ```bash
 docker compose logs -f ollama-pull
