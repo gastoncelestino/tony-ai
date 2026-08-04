@@ -146,15 +146,13 @@ Antes de juzgar, `jd_recall` busca juicios similares anteriores. Después de com
 - La capa de memoria local funciona sin Ollama ni Qdrant. La búsqueda semántica de código y el recall de juicios requieren ambos servicios.
 
 
-## Podes elegir Instalación automática o manual
-
-## Clonar repositorio
+# Clonar repositorio
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
 ```
 
-## 1. Instalación automática (opcional)
+# 1. Instalación automática (opcional)
 ```bash
 ./scripts/setup.sh    # Instalar todo automáticamente
 ./scripts/health.sh   # Verificar estado del sistema
@@ -178,7 +176,7 @@ cd tony-ai
 ```
 
 
-## 1. Instalación manual (opcional)
+# 1. Instalación manual (opcional)
 ## Crear la carpeta .opencode en tu perfil de usuario si no existe
 ```bash
 mkdir "$env:USERPROFILE/.opencode"
