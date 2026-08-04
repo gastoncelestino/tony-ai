@@ -176,12 +176,21 @@ copy /tony-ai/plugins/judgment-memory.ts "$env:USERPROFILE/.opencode/plugins/"
 ```
 
 ## Deberías ver algo como:
+```bash
 ├── opencode.json
 ├── AGENTS.md
 ├── plugins/
 │   └── tonymem.ts
 │	└── qdrant.ts
 │	└── udgment-memory.ts
+
+📄 opencode.json
+📄 AGENTS.md
+📁 plugins
+   📄 tonymem.ts
+   📄 qdrant.ts
+   📄 judgment-memory.ts
+```
 
 ## 2. Iniciar Ollama y Qdrant con Docker Compose
 ```bash
