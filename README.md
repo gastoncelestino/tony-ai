@@ -222,7 +222,7 @@ ollama pull nomic-embed-text
 
 ## 4. Correr el suite de tests
 
-## correr tests de Python + TypeScript. Deberías ver algo como: [PASS] ...  ✅ Todos los tests pasaron
+## correr tests de Python + TypeScript. 
 ```bash
 make test
 ```
