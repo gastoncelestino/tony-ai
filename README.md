@@ -5,6 +5,58 @@ Herramientas locales de IA centradas en **memoria persistente**, **búsqueda sem
 El repositorio combina tres subsistemas principales: `local-memory/` para memoria libre y duradera en SQLite,  `code-index/` para búsqueda semántica sobre código fuente usando Ollama + Qdrant, y `judgment-memory/` para almacenar y recuperar resultados previos de revisiones/juicios. 
 Los assets de Docker en `docker/` proporcionan los servicios de soporte locales de Ollama y Qdrant utilizados por los componentes semánticos.
 
+# ¿Cómo funciona?
+La idea central es buena: el orquestador trabaja por fases. Primero explora/propuesta/spec/diseño/tareas, después implementa, luego verifica y finalmente archiva. 
+Mientras tanto, TonyMem guarda decisiones y contexto entre sesiones, code-index te deja buscar "por significado" dentro del repo, y judgment-memory recuerda revisiones anteriores parecidas para no arrancar siempre desde cero. 
+Es un enfoque bastante más serio que "preguntarle cosas al modelo y ya". 
+
+A nivel técnico, el stack pide Python 3.10+, Bun, Ollama, Qdrant y opcionalmente Docker para levantar los servicios auxiliares. 
+Los modelos por defecto son pesados: qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, y embeddings con bge-m3 y nomic-embed-text. 
+
+# ¿Cómo copiarlo?
+
+Si querés todo el sistema, lo correcto es clonar el repo entero:
+```bash
+git clone https://github.com/gastoncelestino/tony-ai.git
+cd tony-ai
+```
+
+Después levantás los servicios:
+```bash
+cd docker
+cp .env.example .env
+docker compose up -d
+docker compose logs -f ollama-pull
+cd ..
+```
+
+Y luego descargás los modelos:
+```bash
+ollama pull qwen3-coder:30b
+ollama pull omnicoder:9b
+ollama pull deepseek-r1:14b
+ollama pull ornith:9b
+ollama pull bge-m3
+ollama pull nomic-embed-text
+```
+
+Por último, validás el repo:
+```bash
+make test
+make verify-qdrant
+opencode mcp list
+```
+
+Después, el flujo normal sería:
+```bash
+/sdd-init
+/sdd-new "mejorar login"
+/sdd-apply
+/sdd-verify
+/memory-search "manejo de errores HTTP"
+/judgment-history
+```
+
 ## ¿Qué es SDD?
 Spec-Driven Development es un enfoque estructurado para construir cambios en software a través de ocho fases:
 

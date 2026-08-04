@@ -1,9 +1,7 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre docker/ + los tests
 
-.PHONY: test test-python test-ts verify-qdrant docker-up docker-down clean
-
-# ─── Tests ─────────────────────────────────────────────────────────────────────
+.PHONY: test test-python test-ts verify-qdrant docker-up docker-down clean bootstrap health
 
 test: test-python test-ts
 
@@ -23,7 +21,11 @@ verify-qdrant:
 	@cd judgment-memory && bun run scripts/verify-qdrant.ts
 	@echo "✓ Qdrant smoke test passed"
 
-# ─── Docker ───────────────────────────────────────────────────────────────────
+bootstrap:
+	@bash scripts/setup.sh
+
+health:
+	@bash scripts/health.sh
 
 docker-up:
 	@cd docker && docker compose up -d
@@ -31,8 +33,6 @@ docker-up:
 
 docker-down:
 	@cd docker && docker compose down
-
-# ─── Utility ──────────────────────────────────────────────────────────────────
 
 clean:
 	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db

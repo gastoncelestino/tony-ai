@@ -74,6 +74,18 @@ OLLAMA_URL = os.environ.get("TONY_OLLAMA_URL", "http://localhost:11434")
 EMBED_MODEL = os.environ.get("TONY_EMBED_MODEL", "bge-m3")
 QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
 
+# Chunker selector: 'regex' (default, sin dependencias extras) o
+# 'tree-sitter' (opt-in, requiere `pip install tree-sitter tree-sitter-languages`).
+# Si tree-sitter no esta disponible, chunk_lines() cae transparentemente a regex.
+CHUNKER = os.environ.get("TONY_INDEX_CHUNKER", "regex").lower()
+if CHUNKER not in ("regex", "tree-sitter"):
+    sys.stderr.write(
+        f"[code-index] TONY_INDEX_CHUNKER={CHUNKER!r} desconocida; uso 'regex'.\n"
+    )
+    CHUNKER = "regex"
+
+_TS_FALLBACK_WARNED = False
+
 MAX_CHUNK_LINES = int(os.environ.get("TONY_INDEX_MAX_CHUNK_LINES", "260"))
 MIN_CHUNK_LINES = int(os.environ.get("TONY_INDEX_MIN_CHUNK_LINES", "8"))
 CHUNK_OVERLAP_LINES = int(os.environ.get("TONY_INDEX_CHUNK_OVERLAP", "30"))
@@ -132,7 +144,17 @@ class IndexStats:
     chunks_deleted: int = 0
     errors: list = field(default_factory=list)
 
-
+def _ts_warn_once() -> None:
+    """Stderr warning una sola vez por proceso cuando tree-sitter fue
+    pedido pero la libreria no esta instalada."""
+    global _TS_FALLBACK_WARNED
+    if _TS_FALLBACK_WARNED:
+        return
+    _TS_FALLBACK_WARNED = True
+    sys.stderr.write(
+        "[code-index] tree-sitter pedido pero no instalado; fallback a regex. "
+        "Instalalo con: pip install tree-sitter tree-sitter-languages\n"
+    )
 # ---------------------------------------------------------------------------
 # Chunking
 # ---------------------------------------------------------------------------
@@ -154,25 +176,35 @@ def _split_fixed(lines: list, ext: str) -> list:
     return chunks
 
 
-def chunk_lines(lines: list, ext: str) -> list:
-    """Return a list of (start_line, end_line) 0-indexed, inclusive ranges."""
+def chunk_lines(lines: list, ext: str, chunker: Optional[str] = None) -> list:
+    """Lista de rangos (start_line, end_line) 0-indexados inclusivos.
+
+    chunker: 'tree-sitter' o 'regex'. None -> $TONY_INDEX_CHUNKER (default 'regex').
+    Tree-sitter es OPT-IN: si no esta instalado o chupa una excepcion,
+    cae transparentemente al chunker regex actual. Asi nunca degrada a
+    un comportamiento peor al de hoy.
+    """
     n = len(lines)
     if n == 0:
         return []
-    # Try tree-sitter first (if available)
-    parser = _try_load_treesitter()
-    if parser is not None:
-        try:
-            return _chunk_treesitter(lines, ext, parser)
-        except Exception:
-            pass
+    mode = (chunker or CHUNKER).lower()
+    if mode == "tree-sitter":
+        parser = _try_load_treesitter()
+        if parser is not None:
+            try:
+                return _chunk_treesitter(lines, ext, parser)
+            except Exception as exc:  # noqa: BLE001
+                sys.stderr.write(
+                    f"[code-index] tree-sitter fallo ({exc}); fallback regex.\n"
+                )
+        else:
+            _ts_warn_once()
+    # ---- path regex original, sin tocar ----
     pattern = BOUNDARY_PATTERNS.get(ext)
     if not pattern:
         return _split_fixed(lines, ext)
 
     boundaries = [i for i, line in enumerate(lines) if pattern.match(line)]
-    # Too few boundaries (near-empty file of definitions) or too many
-    # (pattern matched something noisy line-by-line) -> fixed windows instead.
     if len(boundaries) < 1 or len(boundaries) > max(3, n // 3):
         return _split_fixed(lines, ext)
 
@@ -180,11 +212,9 @@ def chunk_lines(lines: list, ext: str) -> list:
     for idx, start in enumerate(boundaries):
         end = (boundaries[idx + 1] - 1) if idx + 1 < len(boundaries) else n - 1
         ranges.append((start, end))
-    # Leading preamble before the first boundary (imports, header comments)
     if boundaries[0] > 0:
         ranges.insert(0, (0, boundaries[0] - 1))
 
-    # Merge tiny ranges into the next one, split oversized ones
     merged = []
     pending_start = None
     for start, end in ranges:
@@ -200,9 +230,10 @@ def chunk_lines(lines: list, ext: str) -> list:
                 merged.append((start + sub_start, start + sub_end))
         else:
             merged.append((start, end))
-        if pending_start is not None:
+    if pending_start is not None:            
         merged.append((pending_start, n - 1))
     return merged
+
 
 
 def _chunk_treesitter(lines: list, ext: str, parser) -> list:
@@ -264,10 +295,10 @@ def _chunk_treesitter(lines: list, ext: str, parser) -> list:
     return merged if merged else _split_fixed(lines, ext)
 
 
-def chunk_file(path: str, content: str) -> list:
+def chunk_file(path: str, content: str, chunker: Optional[str] = None) -> list:
     ext = os.path.splitext(path)[1]
     lines = content.split("\n")
-    ranges = chunk_lines(lines, ext)
+    ranges = chunk_lines(lines, ext, chunker=chunker)
     chunks = []
     for start, end in ranges:
         text = "\n".join(lines[start:end + 1]).strip()
@@ -452,8 +483,11 @@ def collection_name(project: str) -> str:
 # Index / reindex
 # ---------------------------------------------------------------------------
 
-def index_repo(root: str, project: str, embed_batch_size: int = 32, base_url_qdrant: str = QDRANT_URL,
-                base_url_ollama: str = OLLAMA_URL, embed_model: str = EMBED_MODEL) -> IndexStats:
+def index_repo(root: str, project: str, embed_batch_size: int = 32,
+               base_url_qdrant: str = QDRANT_URL,
+               base_url_ollama: str = OLLAMA_URL,
+               embed_model: str = EMBED_MODEL,
+               chunker: Optional[str] = None) -> IndexStats:
     """Full incremental index: unchanged files (by content hash) are skipped,
     changed files have their old points deleted and new ones upserted, new
     files are added. Safe to run repeatedly (e.g. as a cron/pre-commit hook).
@@ -483,7 +517,7 @@ def index_repo(root: str, project: str, embed_batch_size: int = 32, base_url_qdr
             stats.files_skipped_unchanged += 1
             continue
 
-        chunks = chunk_file(rel_path, content)
+        chunks = chunk_file(rel_path, content, chunker=chunker)
         if not chunks:
             continue
 
@@ -593,6 +627,10 @@ def _cli() -> None:
     p_index = sub.add_parser("index", help="Full/incremental index of a repo")
     p_index.add_argument("--path", default=".")
     p_index.add_argument("--project", required=True)
+    p_index.add_argument(
+        "--chunker", default=None, choices=["regex", "tree-sitter"],
+        help="Chunker a usar; default $TONY_INDEX_CHUNKER (o 'regex').",
+    )
 
     p_search = sub.add_parser("search", help="Semantic search over an indexed repo")
     p_search.add_argument("--query", required=True)
@@ -607,7 +645,9 @@ def _cli() -> None:
     args = parser.parse_args()
 
     if args.cmd == "index":
-        stats = index_repo(os.path.abspath(args.path), args.project)
+        stats = index_repo(
+            os.path.abspath(args.path), args.project, chunker=args.chunker,
+        )
         print(json.dumps(stats.__dict__, indent=2, ensure_ascii=False))
     elif args.cmd == "search":
         results = search_code(args.query, args.project, limit=args.limit, path_prefix=args.path_prefix)
