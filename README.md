@@ -412,34 +412,31 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 
 ```bash
 /memory-search "manejo de errores HTTP"
-```
 ✅ Combina búsquedas en TonyMem (decisiones, arquitectura, bugs, patrones) + judgment-memory (lecciones de revisiones anteriores)
 ✅ Usa mem_search (de observation store) y jd_recall (de vector DB)
 ✅ Es una interfaz unificada para recuperar contexto histórico
-
+```
 
 ```bash
-/judgment-history — ver resultados de revisiones anteriores
-``` 
+/judgment-history — ver resultados de revisiones anteriores 
 ✅ Lee directamente del SQLite ledger (`judgment-memory.db`). Lista los últimos juicios de Judgment Day para el proyecto actual.
 ✅ No depende de Qdrant/Ollama (offline-first)
 ✅ Útil para revisar decisiones anteriores sin embedding
-
+```
 
 ```bash
 /memory-stats
-```
 ✅ Muestra métricas de uso de memoria (número de observaciones, tipos más comunes, última actividad)
 ✅ Filtrado por proyecto
-
+```
 
 ```bash
-/mem_save_prompt
-``` 
+/mem_save_prompt 
 ✅ Llamado por el hook `chat.message` en `tonymem.ts`
 ✅ Captura prompts crudos con type='prompt-capture'
 ✅ Excluido de búsquedas por defecto (bookkeeping)
 ✅ Se puede filtrar explícitamente si necesitás revisar prompts
+```
 
 Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
 — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por type='prompt-capture'.
