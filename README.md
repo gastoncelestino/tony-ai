@@ -226,6 +226,8 @@ ollama pull nomic-embed-text
 ```bash
 make test
 ```
+
+```bash
 [PASS] chunk_lines handles empty input
 [PASS] content_hash produces correct hash
 [PASS] embed_texts handles batch
@@ -247,6 +249,7 @@ ALL ASSERTIONS PASSED
 ALL TESTS PASSED
  ✨  test_core.py (Python)
 ✅ test_hooks.ts (TypeScript)
+```
 
 Si todos los tests pasan (Passed: 11 / All tests passed), entonces tu instalación de Tony-AI está completa y funciona correctamente.
 
