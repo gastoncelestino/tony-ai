@@ -13,50 +13,6 @@ Es un enfoque bastante más serio que "preguntarle cosas al modelo y ya".
 A nivel técnico, el stack pide Python 3.10+, Bun, Ollama, Qdrant y opcionalmente Docker para levantar los servicios auxiliares. 
 Los modelos por defecto son pesados: qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, y embeddings con bge-m3 y nomic-embed-text. 
 
-# ¿Cómo copiarlo?
-
-Si querés todo el sistema, lo correcto es clonar el repo entero:
-```bash
-git clone https://github.com/gastoncelestino/tony-ai.git
-cd tony-ai
-```
-
-Después levantás los servicios:
-```bash
-cd docker
-cp .env.example .env
-docker compose up -d
-docker compose logs -f ollama-pull
-cd ..
-```
-
-Y luego descargás los modelos:
-```bash
-ollama pull qwen3-coder:30b
-ollama pull omnicoder:9b
-ollama pull deepseek-r1:14b
-ollama pull ornith:9b
-ollama pull bge-m3
-ollama pull nomic-embed-text
-```
-
-Por último, validás el repo:
-```bash
-make test
-make verify-qdrant
-opencode mcp list
-```
-
-Después, el flujo normal sería:
-```bash
-/sdd-init
-/sdd-new "mejorar login"
-/sdd-apply
-/sdd-verify
-/memory-search "manejo de errores HTTP"
-/judgment-history
-```
-
 ## ¿Qué es SDD?
 Spec-Driven Development es un enfoque estructurado para construir cambios en software a través de ocho fases:
 
@@ -174,7 +130,6 @@ Este patrón permite un acceso directo al archivo SQLite en modo WAL, que es el 
 
 ## Judgment Day
 Cuando se activa explícitamente (por keywords como "juzgar" o "dual review"), ejecuta dos jueces de IA independientes:
-
 - `jd-judge-a` (DeepSeek-R1 14B)
 - `jd-judge-b` (Qwen3-Coder 30B) — deliberadamente distinto de `jd-judge-a` para verdadera corroboración
 
@@ -203,40 +158,125 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 | Revisión (juez B) | `ollama/qwen3-coder:30b` 	| `jd-judge-b` — deliberadamente distinto de `jd-judge-a` 																|
 | Ejecución 		| `ollama/ornith:9b` 		| `sdd-archive`, `jd-fix-agent` 																						|
 
-## Prerequisitos
+## Prerequisitos (lo que tenes que instalar para que funcione)
 - **Python 3.10+** para los servidores MCP en Python.
 - **Bun** para los scripts de verificación basados en TypeScript y plugins.
-- **Docker o Podman** si querés los servicios de soporte administrados por el repositorio.
+- **Docker** si querés los servicios de Qdrant + Ollama.
+- **OpenCode CLI** (instalador oficial: https://opencode.ai)
+- **Ollama** (https://ollama.com/download)
 
 ## Requerido para características semánticas
-- **Ollama** corriendo localmente.
 - **Qdrant** corriendo localmente o remotamente.
 - La capa de memoria local funciona sin Ollama ni Qdrant. La búsqueda semántica de código y el recall de juicios requieren ambos servicios.
 
-## 1. Inicio rápido
+## 1. Clonar repositorio
 ```bash
-# 1. Clonar el repositorio
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
 ```
+
+# Crear la carpeta .opencode en tu perfil de usuario si no existe
+```bash
+mkdir "$env:USERPROFILE/.opencode"
+mkdir "$env:USERPROFILE/.opencode/plugins"
+```
+
+# Copiar opencode.json
+```bash
+copy /tony-ai/opencode.json "$env:USERPROFILE/.opencode/opencode.json"
+```
+
+# Copiar AGENTS.md
+```bash
+copy /tony-ai/AGENTS.md "$env:USERPROFILE/.opencode/AGENTS.md"
+```
+
+# Copiar los plugins TypeScript
+```bash
+copy /tony-ai/plugins/tonymem.ts "$env:USERPROFILE/.opencode/plugins/"
+copy /tony-ai/plugins/qdrant.ts "$env:USERPROFILE/.opencode/plugins/"
+copy /tony-ai/plugins/judgment-memory.ts "$env:USERPROFILE/.opencode/plugins/"
+```
+
+# Deberías ver algo como:
+📄 opencode.json
+📄 AGENTS.md
+📁 plugins
+   📄 tonymem.ts
+   📄 qdrant.ts
+   📄 judgment-memory.ts
 
 ## 2. Iniciar Ollama y Qdrant con Docker Compose
 ```bash
 cd docker
 cp .env.example .env   # opcional
-docker compose up -d
+docker compose up -d  # inicia Qdrant (vector DB) en el puerto 6333 y Ollama en el puerto 11434
+docker compose ps
+```bash
+Deberías ver algo como:
+NAME            IMAGE                  COMMAND                  SERVICE             STATUS           PORTS
+tony-ai-qdrant  qdrant/qdrant:latest   "/bin/qdrant --config…"  qdrant              running (healthy)  0.0.0.0:6333->6333/tcp
+tony-ai-ollama  ollama/ollama:latest   "/usr/bin/ollama bind_…" ollama              running (healthy)  0.0.0.0:11434->11434/tcp
+```bash
 docker compose logs -f ollama-pull
-cd ..
 ```
 
-## 3. Correr el suite de tests
+## 3. Descargar modelos de Ollama
+## Modelos grandes (descargan lentamente)
+```bash
+ollama pull qwen3-coder:30b
+ollama pull deepseek-r1:14b
+```
+## Modelos medianos
+```bash
+ollama pull omnicoder:9b
+ollama pull ornith:9b
+```
+# Modelos pequeños (rápidos)
+```bash
+ollama pull bge-m3
+ollama pull nomic-embed-text
+```
+
+## 4. Correr el suite de tests
+## correr tests de Python + TypeScript. Deberías ver algo como: [PASS] ...  ✅ Todos los tests pasaron
 ```bash
 make test
 ```
+[PASS] chunk_lines handles empty input
+[PASS] content_hash produces correct hash
+[PASS] embed_texts handles batch
+[PASS] qdrant_upsert and search roundtrip via mock
+[PASS] point_id deterministic per project+path+start_line
+[PASS] collection name sanitization
+[PASS] qdrant client methods (embed/upsert/search/delete) via mock server
+[PASS] index_repo incremental: unchanged files skipped, changed files re-indexed, deleted files removed
+...
+[PASS] All test_hooks passed
+Total tests: 11
+Passed: 11
+Failed: 0
 
-## 4. Verificar el pipeline real de Qdrant/Ollama
+ALL ASSERTIONS PASSED
+
+[PASS] test_treesitter_chunking
+  tree-sitter chunking produced 4 chunks from nested Python
+ALL TESTS PASSED
+ ✨  test_core.py (Python)
+✅ test_hooks.ts (TypeScript)
+
+Si todos los tests pasan (Passed: 11 / All tests passed), entonces tu instalación de Tony-AI está completa y funciona correctamente.
+
 ```bash
-make verify-qdrant
+make verify-qdrant   # probar el pipeline vectorial real Qdrant
+make docker-up       # iniciar servicios Docker
+make docker-down     # detener servicios Docker
+make clean           # eliminar bases de datos/index SQLite locales
+```
+
+## 5. Verificar el pipeline real de Qdrant/Ollama
+```bash
+opencode mcp list
 ```
 
 ## Correr el indexador de código
@@ -257,25 +297,6 @@ python3 test_ledger.py
 ```bash
 cd local-memory
 python3 server.py
-```
-
-## Descargar modelos requeridos
-```bash
-ollama pull qwen3-coder:30b
-ollama pull omnicoder:9b
-ollama pull deepseek-r1:14b
-ollama pull ornith:9b
-ollama pull bge-m3
-ollama pull nomic-embed-text
-```
-
-## Makefile - Tests
-```bash
-make test            # correr tests de Python + TypeScript
-make verify-qdrant   # probar el pipeline vectorial real
-make docker-up       # iniciar servicios Docker
-make docker-down     # detener servicios Docker
-make clean           # eliminar bases de datos/index SQLite locales
 ```
 
 | Componente 						| Test 											| Qué cubre 																	|
@@ -339,44 +360,88 @@ tony-ai/
 ```
 
 ## Comandos
-|Comando						|	Descripción						|
-|-------------------------------|-----------------------------------|
-|/sdd-init						|Inicializar contexto SDD			|
-|/sdd-explore <task>			|Investigar una idea				|
-|/sdd-status [change]			|Ver estado del cambio actual		|
-|/sdd-apply [change]			|Implementar tareas					|
-|/sdd-verify [change]			|Validar implementación				|
-|/sdd-archive [change]			|Cerrar un cambio					|
-|/sdd-new <description>			|Empezar un nuevo cambio			|
-|/sdd-ff <description>			|Fast-forward propuesta → tareas	|
-|/memory-search <q>				|Buscar en TonyMem					|
-|/memory-stats					|Mostrar estadísticas de memoria	|
-|/judgment-history [project]	|Ver historial de juicios			|
+|			Comando				|			Descripción								|		Fuente			|  Offline 	|
+|-------------------------------|---------------------------------------------------|-----------------------|-----------|
+|/sdd-init						|Inicializar contexto SDD							|TonyMem + config		|	 ✅		|
+|/sdd-explore <task>			|Investigar una idea								|Sub-agente explore		| 	 ❌		|
+|/sdd-status [change]			|Ver estado del cambio actual						|Artifact store			|  	 ✅		|
+|/sdd-apply	[change]			|Implementar tareas									|Sub-agente writer		|	 ❌		|
+|/sdd-verify	[change]		|Validar implementación								|Sub-agente verify		|	 ❌		|
+|/sdd-archive	[change]		|Cerrar un cambio									|SQLite/JSON			|	 ✅		|
+|/sdd-new "feature"				|Nuevo feature con SDD completo						|Sub-agentes			|	 ❌		|
+|/sdd-tasks						|Ver plan de trabajo actual							|Artifact store			|	 ✅		|
+|/sdd-ff						|Fast-forward propuesta → tareas					|Sub-agentes planning	|    ✅		|
+|/memory-search "query"			|Búsqueda semántica en TonyMem + Judgment Memory	|SQLite + Qdrant		|	 ❌		|
+|/judgment-history [project]	|Ver historial de juicios							|SQLite ledger			|	 ✅		|
+|/memory-stats					|Estadísticas de uso de memoria						|SQLite					|	 ✅		|
+|juzgar esto: "feature"			|Activar Judgment Day (revisión adversarial)		|2 jueces + memoria		|	 ❌		|
+
+
+## Luego de instalar todo, Cómo lo utilizo?
+```bash
+/sdd-init — inicializar el entorno
+```
+💡 Tip: La primera vez que uses /sdd-init, vas a necesitar contestar unas preguntas sobre cómo querés trabajar (modo interactivo vs automático, dónde guardar las specs, etc.).
+
 
 ```bash
-/memory-search	"manejo de reintentos HTTP"
+/sdd-new "mejorar login" — crear un nuevo cambio
+/sdd-explore – si necesitás profundizar algo
+/sdd-tasks – para ver el plan de trabajo
+/sdd-apply – para implementar una fase
+/sdd-verify – para evaluar resultados
+/sdd-archive – para cerrar y archivar un cambio
 ```
-Busca en TonyMem (decisiones, arquitectura, bugs, patrones) y en judgment-memory (lecciones de revisiones anteriores). Combina `mem_search`
-y `jd_recall` en una sola interfaz.
+
+```bash
+/memory-search "manejo de errores HTTP"
+```
+✅ Combina búsquedas en TonyMem (decisiones, arquitectura, bugs, patrones) + judgment-memory (lecciones de revisiones anteriores)
+✅ Usa mem_search (de observation store) y jd_recall (de vector DB)
+✅ Es una interfaz unificada para recuperar contexto histórico
+
+
+```bash
+/judgment-history — ver resultados de revisiones anteriores
+``` 
+✅ Lee directamente del SQLite ledger (`judgment-memory.db`). Lista los últimos juicios de Judgment Day para el proyecto actual.
+✅ No depende de Qdrant/Ollama (offline-first)
+✅ Útil para revisar decisiones anteriores sin embedding
 
 
 ```bash
 /memory-stats
 ```
-Muestra estadísticas de uso de memoria por proyecto: número de observaciones, tipos más comunes, última actividad.
+✅ Muestra métricas de uso de memoria (número de observaciones, tipos más comunes, última actividad)
+✅ Filtrado por proyecto
 
-```bash
-/judgment-history
-```
-Lista los últimos juicios de Judgment Day para el proyecto actual. Lee directamente del SQLite ledger (`judgment-memory.db`), sin depender de Qdrant/Ollama.
 
 ```bash
 /mem_save_prompt
 ``` 
-Llamado por el hook `chat.message` en `tonymem.ts`: guarda el prompt crudo del usuario con `type='prompt-capture'`. 
+✅ Llamado por el hook `chat.message` en `tonymem.ts`
+✅ Captura prompts crudos con type='prompt-capture'
+✅ Excluido de búsquedas por defecto (bookkeeping)
+✅ Se puede filtrar explícitamente si necesitás revisar prompts
 
 Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
 — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por type='prompt-capture'.
+
+## Offline y Online
+|Comando						|	Fuente de datos					|	¿Depende de RED?	|
+|-------------------------------|-----------------------------------|-----------------------|
+|/memory-search					|	TonyMem (SQLite) + Qdrant		|			Sí			|
+|/memory-stats					|	TonyMem (SQLite)				|			No			|
+|/judgment-history				|	SQLite ledger					|			No			|
+|/mem_save_prompt				|	Hook interno de tonymem.ts		|	No (auto-guardado)	|
+
+💡 Todo funciona offline excepto /memory-search y /jd_recall, que usan embeddings locales de Ollama.
+
+## 💾 Persistencia de Prompts
+Hook chat.message → auto-guarda con type='prompt-capture'
+Incluido en mem_context por defecto
+Excluido de mem_search (bookkeeping)
+Filtrar explícitamente: mem_search(query="...", type='prompt-capture')
 
 ## Principios de diseño
 - **Local-first**: el almacenamiento es SQLite y está pensado para quedarse en tu máquina.
@@ -401,19 +466,8 @@ Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/to
 - `docker/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/docker/README.md
 - `config/tony-memory.yaml`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/config/tony-memory.yaml
 
-
-## Cómo Usarlo
-Una vez corriendo con OpenCode, podes usar comandos como:
-```bash
-/sdd-init — inicializar el entorno
-/sdd-new "mejorar login" — crear un nuevo cambio
-/memory-search "manejo de errores HTTP" — buscar decisiones anteriores
-/judgment-history — ver resultados de revisiones anteriores
-``` 
-💡 Tip: La primera vez que uses /sdd-init, vas a necesitar contestar unas preguntas sobre cómo querés trabajar (modo interactivo vs automático, dónde guardar las specs, etc.).
-
 ## Agradecimientos
-Toda la definición de SDD, orchestator, algunos prompts y commands, se basan en un repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
+Toda la definición de SDD, orchestator, algunos prompts y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
 Se trató de reutilizar el código que ya está probado y funciona correctamente, se agregaron componentes como `Code Indexer` (RAG semántico), `TonyMem` una base de datos SQLite, `Judgment Day` SQLite y Qdrant para juicios y Ollama con modelos locales.
 Seguramente van a existir algunos skills, commands, plugins, prompts que son distintos, la idea fue adaptar lo que ya funciona y que corra con modelos locales.
 
