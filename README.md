@@ -495,9 +495,8 @@ Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/to
 
 
 ## Agradecimientos
-Toda la definición de SDD, orchestator, algunos prompts y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
+Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
 Se trató de reutilizar el código que ya está probado y funciona correctamente, se agregaron componentes como `Code Indexer` (RAG semántico), `TonyMem` (base de datos SQLite), `Judgment Day` (SQLite y Qdrant para juicios y Ollama con modelos locales).
-Seguramente van a existir algunos skills, commands, plugins, prompts que son distintos, la idea fue adaptar lo que ya funcionaba con modelos locales.
 
 La intención es copiar y pegar este repositorio en tu proyecto y que funcione en OpenCode. Sin instalacion, sin correr ningun comando, intentando tener un control de los archivos y directorios.
 Se trató de documentar lo más posible, por si querés modificar algo de tu interés.
