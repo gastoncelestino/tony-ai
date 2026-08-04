@@ -152,30 +152,30 @@ git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
 ```
 
-# Crear la carpeta .opencode en tu perfil de usuario si no existe
+## Crear la carpeta .opencode en tu perfil de usuario si no existe
 ```bash
 mkdir "$env:USERPROFILE/.opencode"
 mkdir "$env:USERPROFILE/.opencode/plugins"
 ```
 
-# Copiar opencode.json
+## Copiar opencode.json
 ```bash
 copy /tony-ai/opencode.json "$env:USERPROFILE/.opencode/opencode.json"
 ```
 
-# Copiar AGENTS.md
+## Copiar AGENTS.md
 ```bash
 copy /tony-ai/AGENTS.md "$env:USERPROFILE/.opencode/AGENTS.md"
 ```
 
-# Copiar los plugins TypeScript
+## Copiar los plugins TypeScript
 ```bash
 copy /tony-ai/plugins/tonymem.ts "$env:USERPROFILE/.opencode/plugins/"
 copy /tony-ai/plugins/qdrant.ts "$env:USERPROFILE/.opencode/plugins/"
 copy /tony-ai/plugins/judgment-memory.ts "$env:USERPROFILE/.opencode/plugins/"
 ```
 
-# Deberías ver algo como:
+## Deberías ver algo como:
 📄 opencode.json
 📄 AGENTS.md
 📁 plugins
@@ -216,6 +216,7 @@ ollama pull nomic-embed-text
 ```
 
 ## 4. Correr el suite de tests
+
 ## correr tests de Python + TypeScript. Deberías ver algo como: [PASS] ...  ✅ Todos los tests pasaron
 ```bash
 make test
