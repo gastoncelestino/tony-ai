@@ -97,6 +97,12 @@ git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
 ```
 
+# Requisitos
+1. Docker + Docker Compose
+2. Bun (para hooks y tests)
+3. OpenCode CLI configurado
+4. Ollama corriendo localmente
+
 # 1. Instalación automática (opcional)
 ```bash
 ./scripts/setup.sh    # Instalar todo automáticamente
@@ -104,21 +110,59 @@ cd tony-ai
 ```
 
 ## setup.sh — Instalador automático:
-```bash
 1. Verifica dependencias (Docker, Ollama, Bun)
 2. Descarga modelos faltantes
 3. Configura .env
 4. Inicia servicios
 5. Descarga modelo de embeddings
-```
 
 ## health.sh — Verificación de salud:
-```bash
 1. Servicios Docker activos
 2. Conectividad Ollama/Qdrant
 3. Funcionalidad de embeddings
 4. Integridad de bases de datos
+
+
+# Comandos Principales
+## SDD (Spec-Driven Development)
+```bash
+/sdd-init → # Inicializar contexto SDD
+/sdd-new <description> → # Nuevo change con planificación automática
+/sdd-explore <task> → # Investigar una idea
+/sdd-propose → # Crear propuesta PRD
+/sdd-spec → # Especificación técnica detallada
+/sdd-design → # Diseño técnico y estructuras de datos
+/sdd-tasks → # Generar tareas de implementación
+/sdd-apply → # Implementar tareas pendientes
+/sdd-verify → # Validar implementación contra specs
+/sdd-archive → # Cerrar change y persistir estado final
 ```
+
+## Memoria y Revisión
+```bash
+/memory-search → # "query" → Buscar decisiones anteriores
+/memory-stats → # Estadísticas de memoria por proyecto
+/judgment-history → # Ver histórico de juicios adrede
+juzgar esto → # Activar Judgment Day (revisión adversarial)
+```
+
+# Desarrollo
+```bash
+make test            # Tests completos (Python + TypeScript)
+make test-python     # Solo tests Python
+make test-ts         # Solo tests TypeScript
+make verify-qdrant   # Smoke test pipeline real
+make health          # Verificar servicios
+make clean           # Borrar bases SQLite locals
+```
+
+# Documentación
+| Componente | Status | Detalle |
+|----------|--------|---------|
+| Sistema Tony-AI | [active] | Sistema operativo (ver [INSTALL.md](https://github.com/gastoncelestino/tony-ai/blob/main/INSTALL.md)) |
+| Sistema Tony-AI | [active] | Arquitectura (ver [ARCHITECTURE.md](https://github.com/gastoncelestino/tony-ai/blob/main/ARCHITECTURE.md)) |
+| Sistema Tony-AI | [active] | AGENTS (ver [AGENTS.md](https://github.com/gastoncelestino/tony-ai/blob/main/AGENTS.md)) |
+
 
 ## Fuentes
 Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/tony-ai/contents
@@ -132,9 +176,9 @@ Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/to
 
 ## Agradecimientos
 Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
-Se trató de reutilizar el código que ya está probado y funciona correctamente, se agregaron componentes como `Code Indexer` (RAG semántico), `TonyMem` (base de datos SQLite), `Judgment Day` (SQLite y Qdrant para juicios y Ollama con modelos locales).
+Se trató de reutilizar el código que ya está probado y funciona correctamente, se agregaron componentes como `Code Indexer` (RAG semántico), `TonyMem` (base de datos SQLite), `Judgment Day` (SQLite, Qdrant para juicios y Ollama con modelos locales).
 
-La intención es copiar y pegar este repositorio en tu proyecto y que funcione en OpenCode. Sin instalacion, sin correr ningun comando, intentando tener un control de los archivos y directorios.
+La intención es descargar este repositorio en la carpeta globsl .opencode/ -> correr un único instalador /scripts/setup.sh -> tener control de los archivos.
 Se trató de documentar lo más posible, por si querés modificar algo de tu interés.
 
 Muchas gracias
