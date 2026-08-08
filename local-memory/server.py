@@ -46,6 +46,11 @@ def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    # Concurrent MCP server processes may write the same SQLite file (e.g.
+    # two OpenCode sessions saving the same topic_key). busy_timeout makes
+    # the losing writer WAIT for the lock instead of dying with SQLITE_BUSY;
+    # combined with the ON CONFLICT upsert in mem_save, saves are race-safe.
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -117,26 +122,33 @@ def mem_save(args: dict) -> dict:
 
     conn = connect()
     try:
+        # The UPSERT is the atomic operation: a concurrent save of the same
+        # (project, topic_key) can never crash on the unique index again
+        # (the old SELECT-then-INSERT/UPDATE raced and the loser died with
+        # UNIQUE constraint failed). The existence check below only picks the
+        # "created"/"updated" label for the reply — it never decides writes,
+        # so a label race under concurrency is harmless.
+        existed = False
         if topic_key:
             row = conn.execute(
                 "SELECT id FROM observations WHERE project=? AND topic_key=?",
                 (project, topic_key),
             ).fetchone()
-            if row:
-                conn.execute(
-                    "UPDATE observations SET title=?, content=?, type=?, scope=?, updated_at=? WHERE id=?",
-                    (title, content, type_, scope, ts, row["id"]),
-                )
-                conn.commit()
-                return {"id": row["id"], "action": "updated", "topic_key": topic_key}
+            existed = row is not None
 
         cur = conn.execute(
             "INSERT INTO observations (project, scope, title, topic_key, type, content, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?)",
+            "VALUES (?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(project, topic_key) WHERE topic_key IS NOT NULL "
+            "DO UPDATE SET title=excluded.title, content=excluded.content, "
+            "              type=excluded.type, scope=excluded.scope, updated_at=excluded.updated_at "
+            "RETURNING id",
             (project, scope, title, topic_key, type_, content, ts, ts),
         )
+        result_row = cur.fetchone()
         conn.commit()
-        return {"id": cur.lastrowid, "action": "created", "topic_key": topic_key}
+        action = "updated" if existed else "created"
+        return {"id": result_row["id"], "action": action, "topic_key": topic_key}
     finally:
         conn.close()
 
