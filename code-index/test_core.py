@@ -15,6 +15,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -100,6 +101,9 @@ class MockHandler(BaseHTTPRequestHandler):
         self._send(200, {"result": True})
 
     def do_GET(self):
+        if self.path == "/api/version":
+            self._send(200, {"version": "0.0.0"})
+            return
         coll = self.path.split("/")[-1]
         if coll in QDRANT_STATE["collections"]:
             self._send(200, {"result": {"points_count": len(QDRANT_STATE["collections"][coll])}})
@@ -157,6 +161,16 @@ def run():
         print(status)
         assert status["collection_exists"] is True
         assert status["files_indexed"] == 1  # only a.py left after b.py deletion
+
+        print("--- fail-fast health check: dead Ollama port fails in seconds, not 120s ---")
+        start = time.monotonic()
+        try:
+            core.embed_texts(["x"], base_url="http://127.0.0.1:1")
+            raise AssertionError("expected RuntimeError for unreachable Ollama")
+        except RuntimeError as exc:
+            assert "health check" in str(exc), exc
+        elapsed = time.monotonic() - start
+        assert elapsed < 5, f"fail-fast took {elapsed:.1f}s, expected < 5s"
 
         print("\nALL ASSERTIONS PASSED")
     finally:

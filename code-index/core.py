@@ -30,6 +30,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -73,6 +74,12 @@ def _try_load_treesitter():
 OLLAMA_URL = os.environ.get("TONY_OLLAMA_URL", "http://localhost:11434")
 EMBED_MODEL = os.environ.get("TONY_EMBED_MODEL", "bge-m3")
 QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
+
+# Fail-fast health probe: when Ollama is down, fail in ~3s with a clear
+# message instead of letting the real embedding call block an agent turn
+# for up to its 120s timeout. Re-probed at most once per TTL per URL.
+OLLAMA_HEALTH_TIMEOUT = float(os.environ.get("TONY_OLLAMA_HEALTH_TIMEOUT", "3"))
+OLLAMA_HEALTH_TTL = float(os.environ.get("TONY_OLLAMA_HEALTH_TTL", "5"))
 
 # Chunker selector: 'regex' (default, sin dependencias extras) o
 # 'tree-sitter' (opt-in, requiere `pip install tree-sitter tree-sitter-languages`).
@@ -368,6 +375,36 @@ def manifest_connect(root: str) -> sqlite3.Connection:
 # Ollama embeddings client (stdlib only)
 # ---------------------------------------------------------------------------
 
+_ollama_health_at: dict = {}  # base_url -> monotonic time of last good probe
+
+
+def _ensure_ollama_alive(base_url: str = OLLAMA_URL) -> None:
+    """Fail fast when Ollama is down: probe /api/version with a short
+    timeout before the real (long) embedding call. Any HTTP response — even
+    a 404 — proves a server is listening, so the port won't hang and the
+    embedding call itself reports the real problem. Only re-probed every
+    OLLAMA_HEALTH_TTL seconds per URL, so steady-state indexing pays one
+    cheap GET per interval, not one per batch.
+    """
+    now = time.monotonic()
+    if now - _ollama_health_at.get(base_url, 0.0) < OLLAMA_HEALTH_TTL:
+        return
+    try:
+        req = urllib.request.Request(f"{base_url}/api/version", method="GET")
+        with urllib.request.urlopen(req, timeout=OLLAMA_HEALTH_TIMEOUT) as resp:
+            resp.read()
+        _ollama_health_at[base_url] = now
+    except urllib.error.HTTPError:
+        # Any HTTP response means something is listening; let the embedding
+        # call surface the concrete failure instead.
+        _ollama_health_at[base_url] = now
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"Could not reach Ollama at {base_url} (health check): {exc}. "
+            f"Is `ollama serve` running and has `ollama pull {EMBED_MODEL}` been run?"
+        ) from exc
+
+
 def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_URL) -> list:
     """Embed a batch of texts via Ollama's /api/embed. Returns a list of
     float vectors, same order as input. Raises RuntimeError with a clear
@@ -376,6 +413,7 @@ def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_UR
     """
     if not texts:
         return []
+    _ensure_ollama_alive(base_url)
     payload = json.dumps({"model": model, "input": texts}).encode("utf-8")
     req = urllib.request.Request(
         f"{base_url}/api/embed",
