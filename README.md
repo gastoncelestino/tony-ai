@@ -36,7 +36,7 @@ Spec-Driven Development es un enfoque estructurado para construir cambios en sof
 - **Assets de agentes (`commands/`, `prompts/`, `skills/`, `plugins/`)**: definiciones de comandos, prompts SDD, skills e integraciones de plugins usadas por la capa de orquestación.
 
 
-## Arquitectura
+## Arquitectura [ARCHITECTURE.md](https://github.com/gastoncelestino/tony-ai/blob/main/ARCHITECTURE.md)
 ```text
                          ┌──────────────────────┐
                          │     OpenCode / SDD   │
@@ -125,8 +125,9 @@ cd tony-ai
 5. Pipeline de embeddings funcional
 
 
-# 2. Comandos Principales 
-## 2.1 SDD (Spec-Driven Development)
+## Comandos Principales
+
+## Comandos OpenCode (slash commands)
 ```bash
 /sdd-init                      # Inicializar contexto SDD
 /sdd-new <description>         # Nuevo change con planificación automática
@@ -144,15 +145,7 @@ cd tony-ai
 juzgar esto                    # Activar Judgment Day (revisión adversarial)
 ```
 
-## 2.2 Memoria y Revisión
-```bash
-/memory-search "query"         # Buscar decisiones anteriores
-/memory-stats                  # Estadísticas de memoria por proyecto
-/judgment-history              # Ver histórico de juicios
-juzgar esto                    # Activar Judgment Day (revisión adversarial)
-```
-
-# 2.3 Desarrollo (terminal)
+## Comandos de desarrollo (terminal)
 ```bash
 make test            # Tests completos (Python + TypeScript)
 make test-python     # Solo tests Python
@@ -163,24 +156,6 @@ make clean           # Borrar bases SQLite locales
 make docker-up       # Iniciar servicios Docker
 make docker-down     # Detener servicios Docker
 ```
-
-# Documentación
-| Componente | Status | Detalle |
-|----------|--------|---------|
-| Sistema Tony-AI | [active] | Sistema operativo (ver [INSTALL.md](https://github.com/gastoncelestino/tony-ai/blob/main/INSTALL.md)) |
-| Sistema Tony-AI | [active] | Arquitectura (ver [ARCHITECTURE.md](https://github.com/gastoncelestino/tony-ai/blob/main/ARCHITECTURE.md)) |
-| Sistema Tony-AI | [active] | AGENTS (ver [AGENTS.md](https://github.com/gastoncelestino/tony-ai/blob/main/AGENTS.md)) |
-
-
-## Fuentes
-- Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/tony-ai/contents
-- `AGENTS.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/AGENTS.md
-- `code-index/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/code-index/README.md
-- `judgment-memory/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/judgment-memory/README.md
-- `local-memory/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/local-memory/README.md
-- `docker/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/docker/README.md
-- `config/tony-memory.yaml`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/config/tony-memory.yaml
-
 
 ## Agradecimientos
 Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
