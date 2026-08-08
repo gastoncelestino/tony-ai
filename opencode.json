@@ -1,7 +1,7 @@
 {
   "agent": {
-    "gentle-orchestrator": {
-      "description": "Gentle AI SDD Orchestrator - coordinates sub-agents, never does work inline",
+    "tony-orchestrator": {
+      "description": "Tony AI SDD Orchestrator - coordinates sub-agents, never does work inline",
       "mode": "primary",
       "model": "ollama/qwen3-coder:30b",
       "permission": {
