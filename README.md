@@ -90,6 +90,13 @@ flowchart TD
     DCP -.->|"plugin global"| OC["OpenCode"]
 ```
 
+# Requisitos
+1. Python 3.10+
+2. Bun
+3. OpenCode CLI (https://opencode.ai)
+4. Ollama (https://ollama.com/download)
+5. Docker (opcional, para Qdrant + Ollama como servicios)   
+
 
 # Clonar repositorio
 ```bash
@@ -97,63 +104,64 @@ git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
 ```
 
-# Requisitos
-1. Docker + Docker Compose
-2. Bun (para hooks y tests)
-3. OpenCode CLI configurado
-4. Ollama corriendo localmente
-
-# 1. Instalación automática (opcional)
+# 1. Instalación automática (recomendada) [INSTALL.md](https://github.com/gastoncelestino/tony-ai/blob/main/INSTALL.md)
 ```bash
-./scripts/setup.sh    # Instalar todo automáticamente
-./scripts/health.sh   # Verificar estado del sistema
+./scripts/setup.sh    # Verifica dependencias, descarga TODOS los modelos, configura .env
+./scripts/health.sh   # Verifica estado del sistema
 ```
 
-## setup.sh — Instalador automático:
-1. Verifica dependencias (Docker, Ollama, Bun)
-2. Descarga modelos faltantes
-3. Configura .env
-4. Inicia servicios
-5. Descarga modelo de embeddings
+`setup.sh` hace:
+1. Verifica dependencias (Python, Bun, OpenCode CLI, Docker)
+2. Descarga modelos de Ollama (qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text)
+3. Configura `.env.example`
+4. Regenera `opencode.json` con rutas portables
+5. Inicia servicios si usás Docker
 
-## health.sh — Verificación de salud:
-1. Servicios Docker activos
-2. Conectividad Ollama/Qdrant
-3. Funcionalidad de embeddings
-4. Integridad de bases de datos
+`health.sh` verifica:
+1. OpenCode config válida
+2. Los 3 MCP servers arrancan
+3. Ollama responde y tiene los modelos
+4. Qdrant responde
+5. Pipeline de embeddings funcional
 
 
-# Comandos Principales
-## SDD (Spec-Driven Development)
+# 2. Comandos Principales 
+## 2.1 SDD (Spec-Driven Development)
 ```bash
-/sdd-init → # Inicializar contexto SDD
-/sdd-new <description> → # Nuevo change con planificación automática
-/sdd-explore <task> → # Investigar una idea
-/sdd-propose → # Crear propuesta PRD
-/sdd-spec → # Especificación técnica detallada
-/sdd-design → # Diseño técnico y estructuras de datos
-/sdd-tasks → # Generar tareas de implementación
-/sdd-apply → # Implementar tareas pendientes
-/sdd-verify → # Validar implementación contra specs
-/sdd-archive → # Cerrar change y persistir estado final
+/sdd-init                      # Inicializar contexto SDD
+/sdd-new <description>         # Nuevo change con planificación automática
+/sdd-explore <task>            # Investigar una idea
+/sdd-propose                   # Crear propuesta PRD
+/sdd-spec                      # Especificación técnica detallada
+/sdd-design                    # Diseño técnico y estructuras de datos
+/sdd-tasks                     # Generar tareas de implementación
+/sdd-apply                     # Implementar tareas pendientes
+/sdd-verify                    # Validar implementación contra specs
+/sdd-archive                   # Cerrar change y persistir estado final
+/memory-search "query"         # Buscar decisiones anteriores
+/memory-stats                  # Estadísticas de memoria por proyecto
+/judgment-history              # Ver histórico de juicios
+juzgar esto                    # Activar Judgment Day (revisión adversarial)
 ```
 
-## Memoria y Revisión
+## 2.2 Memoria y Revisión
 ```bash
-/memory-search → # "query" → Buscar decisiones anteriores
-/memory-stats → # Estadísticas de memoria por proyecto
-/judgment-history → # Ver histórico de juicios adrede
-juzgar esto → # Activar Judgment Day (revisión adversarial)
+/memory-search "query"         # Buscar decisiones anteriores
+/memory-stats                  # Estadísticas de memoria por proyecto
+/judgment-history              # Ver histórico de juicios
+juzgar esto                    # Activar Judgment Day (revisión adversarial)
 ```
 
-# Desarrollo
+# 2.3 Desarrollo (terminal)
 ```bash
 make test            # Tests completos (Python + TypeScript)
 make test-python     # Solo tests Python
 make test-ts         # Solo tests TypeScript
 make verify-qdrant   # Smoke test pipeline real
 make health          # Verificar servicios
-make clean           # Borrar bases SQLite locals
+make clean           # Borrar bases SQLite locales
+make docker-up       # Iniciar servicios Docker
+make docker-down     # Detener servicios Docker
 ```
 
 # Documentación
@@ -165,7 +173,7 @@ make clean           # Borrar bases SQLite locals
 
 
 ## Fuentes
-Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/tony-ai/contents
+- Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/tony-ai/contents
 - `AGENTS.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/AGENTS.md
 - `code-index/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/code-index/README.md
 - `judgment-memory/README.md`: https://raw.githubusercontent.com/gastoncelestino/tony-ai/main/judgment-memory/README.md
@@ -178,7 +186,8 @@ Contenido raíz del repositorio: https://api.github.com/repos/gastoncelestino/to
 Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
 Se trató de reutilizar el código que ya está probado y funciona correctamente, se agregaron componentes como `Code Indexer` (RAG semántico), `TonyMem` (base de datos SQLite), `Judgment Day` (SQLite, Qdrant para juicios y Ollama con modelos locales).
 
-La intención es descargar este repositorio en la carpeta globsl .opencode/ -> correr un único instalador /scripts/setup.sh -> tener control de los archivos.
+La intención es descargar este repositorio en la carpeta global .opencode/ → correr un único instalador /scripts/setup.sh y correr health.sh para verificar la instalación → tener mas control de los archivos para una contínua mejora.  
+
 Se trató de documentar lo más posible, por si querés modificar algo de tu interés.
 
 Muchas gracias

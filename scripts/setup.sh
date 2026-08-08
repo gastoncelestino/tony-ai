@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/setup.sh — bootstrap idempotente para tony-ai.
-# Valida Python/Bun/Ollama/Qdrant, baja modelos de embedding y regenera
-# opencode.json con rutas relativas via {env:TONY_REPO_ROOT}.
+# Valida Python/Bun/OpenCode/Docker/Ollama/Qdrant, baja TODOS los modelos,
+# y regenera opencode.json con rutas relativas via {env:TONY_REPO_ROOT}.
 #
 # Uso:  ./scripts/setup.sh        (o `make bootstrap`)
 # Re-correr es seguro: ollama pull es idempotente y opencode.json solo
@@ -45,7 +45,15 @@ else
   bad "bun no esta instalado (https://bun.sh)"
 fi
 
-# 3. Docker (warning, no error)
+# 3. OpenCode CLI
+hdr "OpenCode CLI"
+if command -v opencode >/dev/null 2>&1; then
+  ok "opencode $(opencode --version 2>/dev/null || echo 'instalado')"
+else
+  bad "opencode CLI no esta en PATH (https://opencode.ai)"
+fi
+
+# 4. Docker (warning, no error)
 hdr "Docker"
 if command -v docker >/dev/null 2>&1; then
   ok "docker $(docker --version | awk '{print $3}' | sed 's/,//')"
@@ -53,12 +61,13 @@ else
   printf "  \033[33mwarn\033[0m docker no encontrado - asume Ollama/Qdrant nativos\n"
 fi
 
-# 4. Ollama + pull de modelos
+# 5. Ollama + pull de modelos
 hdr "Ollama (${OLLAMA_URL})"
 if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
   ok "Ollama respondiendo en ${OLLAMA_URL}"
   if command -v ollama >/dev/null 2>&1; then
-    for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}"; do
+    for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}" \
+             qwen3-coder:30b omnicoder:9b deepseek-r1:14b ornith:9b; do
       printf "  . ollama pull %s ...\n" "${m}"
       if ollama pull "${m}" >/dev/null 2>&1; then
         ok "modelo ${m} listo"
@@ -67,7 +76,8 @@ if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
       fi
     done
   else
-    for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}"; do
+    for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}" \
+             qwen3-coder:30b omnicoder:9b deepseek-r1:14b ornith:9b; do
       if curl -sf -m 30 "${OLLAMA_URL}/api/show" \
            -H "Content-Type: application/json" \
            -d "{\"name\":\"${m}\"}" >/dev/null 2>&1; then
@@ -81,7 +91,7 @@ else
   bad "Ollama no responde en ${OLLAMA_URL}"
 fi
 
-# 5. Qdrant
+# 6. Qdrant
 hdr "Qdrant (${QDRANT_URL})"
 if curl -sf -m 5 "${QDRANT_URL}/readyz" >/dev/null 2>&1; then
   ok "Qdrant /readyz = 200"
@@ -94,11 +104,23 @@ else
   bad "Qdrant no responde en ${QDRANT_URL} (docker run -p 6333:6333 qdrant/qdrant)"
 fi
 
-# 6. Regenerar opencode.json idempotentemente
+# 7. tree-sitter (opcional, solo si TONY_INDEX_CHUNKER=tree-sitter)
+hdr "tree-sitter (opcional)"
+if [[ "${TONY_INDEX_CHUNKER:-regex}" == "tree-sitter" ]]; then
+  printf "  . pip install -r requirements-optional.txt ...\n"
+  if python3 -m pip install -r "${REPO_ROOT}/requirements-optional.txt" --quiet 2>/dev/null; then
+    ok "tree-sitter instalado"
+  else
+    bad "pip install tree-sitter fallo"
+  fi
+else
+  printf "  \033[33minfo\033[0m  tree-sitter no requerido (TONY_INDEX_CHUNKER=regex)\n"
+fi
+
+# 8. Regenerar opencode.json idempotentemente
 hdr "opencode.json (TONY_REPO_ROOT)"
 OPENCODE_JSON="${REPO_ROOT}/opencode.json"
 if [[ -f "${OPENCODE_JSON}" ]]; then
-  # Backup unico por maquina
   [[ -f "${OPENCODE_JSON}.bak" ]] || cp "${OPENCODE_JSON}" "${OPENCODE_JSON}.bak"
 
 python3 - "${OPENCODE_JSON}" "${REPO_ROOT}" <<'PY'
@@ -120,7 +142,6 @@ for name, sp in subpath.items():
     entry = mcp[name]
     if entry.get("type") != "local":
         continue
-    # Normalizar command a ["python3", "{env:TONY_REPO_ROOT}/<subpath>"]
     entry["command"] = ["python3", "{env:TONY_REPO_ROOT}/" + sp]
     env = entry.setdefault("environment", {})
     env.setdefault("TONY_REPO_ROOT", "{env:TONY_REPO_ROOT}")
@@ -147,7 +168,7 @@ else
   bad "no se encontro ${OPENCODE_JSON}"
 fi
 
-# 7. .env.example
+# 9. .env.example
 hdr ".env"
 cat > "${REPO_ROOT}/.env.example" <<'ENVEOF'
 # Tony-AI bootstrap env. Copia a .env o exporta en tu shell.
@@ -163,13 +184,19 @@ TONY_QDRANT_URL=http://localhost:6333
 JUDGMENT_EMBED_MODEL=nomic-embed-text
 CODE_EMBED_MODEL=bge-m3
 
-# Chunker de code-index: "regex" (default, sin deps extra) o "tree-sitter"
-# (mas robusto en archivos densos; requiere
-#   pip install tree-sitter tree-sitter-languages).
+# Modelos principales (descargados por setup.sh).
+# Qwen3-Coder 30B: planificacion y proposicion
+# OmniCoder 9B: implementacion
+# DeepSeek-R1 14B: revision y Judgment Day juez A
+# Ornith 9B: archive y jd-fix-agent
+
+# Chunker de code-index: "regex" (default, stdlib-only) o "tree-sitter"
+# (opt-in, requiere pip install tree-sitter tree-sitter-languages).
 TONY_INDEX_CHUNKER=regex
 ENVEOF
 ok ".env.example escrito - copia a .env y ajusta TONY_REPO_ROOT"
 
+# 10. Resumen y post-install
 hdr "Resumen"
 echo "  Pasados: ${PASS}"
 echo "  Fallos:  ${FAIL}"
@@ -179,8 +206,20 @@ if [[ "${FAIL}" -gt 0 ]]; then
   echo "y 'make health' para verificar todo end-to-end."
   exit 1
 fi
+
 echo ""
 echo "Tony-AI bootstrap completo."
-echo "  export TONY_REPO_ROOT=\"${REPO_ROOT}\""
+
+SHELL_NAME="$(basename "${SHELL:-}")"
+case "${SHELL_NAME}" in
+  bash|zsh|fish)
+    echo "  Agregá esto a tu ~/.${SHELL_NAME}rc si no lo tenés:"
+    echo "    export TONY_REPO_ROOT=\"${REPO_ROOT}\""
+    ;;
+  *)
+    echo "  export TONY_REPO_ROOT=\"${REPO_ROOT}\""
+    ;;
+esac
+
 echo "  make test     # test_core.py + test_ledger.py + test_hooks.ts"
 echo "  make health   # OpenCode/MCP/Ollama/Qdrant/embeddings check unificado"

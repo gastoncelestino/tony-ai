@@ -7,6 +7,7 @@
 #   MCP          los 3 servers arrancan y responden 'initialize' JSON-RPC.
 #   Ollama       /api/tags responde y los modelos de embedding estan pull-eados.
 #   Qdrant       /readyz 200 y /collections responde.
+#   Disk         directorios .tonymem/ existen y son escribibles.
 #   embeddings   verify-qdrant.ts pasa (roundtrip embed+upsert+search).
 
 set -uo pipefail
@@ -20,7 +21,7 @@ QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
 EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
 CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 
-declare -A STATUS=([OpenCode]=0 [MCP]=0 [Ollama]=0 [Qdrant]=0 [embeddings]=0)
+declare -A STATUS=([OpenCode]=0 [MCP]=0 [Ollama]=0 [Qdrant]=0 [Disk]=0 [embeddings]=0)
 declare -a MSGS=()
 
 emit() {
@@ -87,7 +88,24 @@ else
   emit Qdrant 0 "no responde en ${QDRANT_URL}"
 fi
 
-# 5. embeddings: subshell reusando verify-qdrant.ts (sin duplicar logica)
+# 5. Disk: directorios locales existen y son escribibles
+DISK_OK=1
+DISK_MSG="todos los directorios .tonymem/ son escribibles"
+for d in "${REPO_ROOT}/local-memory/.tonymem" \
+         "${REPO_ROOT}/code-index/.codeindex" \
+         "${REPO_ROOT}/judgment-memory/.tonymem"; do
+  if [[ ! -d "$d" ]]; then
+    if ! mkdir -p "$d" 2>/dev/null; then
+      DISK_OK=0; DISK_MSG="no pude crear $d"; break
+    fi
+  fi
+  if [[ ! -w "$d" ]]; then
+    DISK_OK=0; DISK_MSG="$d no es escribible"; break
+  fi
+done
+emit Disk "${DISK_OK}" "${DISK_MSG}"
+
+# 6. embeddings: subshell reusando verify-qdrant.ts (sin duplicar logica)
 EMB_OK=1
 EMB_MSG="verify-qdrant.ts paso"
 if [[ "${STATUS[Ollama]}" -eq 1 && "${STATUS[Qdrant]}" -eq 1 ]]; then
@@ -108,7 +126,7 @@ for m in "${MSGS[@]}"; do echo -e "$m"; done
 echo ""
 
 CRIT=0
-for k in OpenCode MCP Ollama Qdrant embeddings; do
+for k in OpenCode MCP Ollama Qdrant Disk embeddings; do
   [[ "${STATUS[$k]}" -eq 0 ]] && CRIT=1
 done
 exit "${CRIT}"
