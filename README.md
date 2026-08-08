@@ -99,6 +99,8 @@ flowchart TD
 
 
 ## Clonar repositorio
+> **Nota:** el repo es privado. Necesitás acceso concedido por el owner; sin ese permiso `git clone` fallará con un error de autenticación.
+
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai

@@ -12,6 +12,8 @@
 - La capa de memoria local funciona sin Ollama ni Qdrant. La búsqueda semántica de código y el recall de juicios requieren ambos servicios.
 
 # 1. Clonar repositorio
+> El repo es privado: necesitás acceso concedido por el owner antes de clonar.
+
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
