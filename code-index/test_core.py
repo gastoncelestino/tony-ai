@@ -159,6 +159,8 @@ def run():
         assert status["files_indexed"] == 1  # only a.py left after b.py deletion
 
         print("\nALL ASSERTIONS PASSED")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def test_treesitter_chunking():
