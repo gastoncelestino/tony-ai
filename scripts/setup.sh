@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # scripts/setup.sh — bootstrap idempotente para tony-ai.
-# Valida Python/Bun/OpenCode/Docker/Ollama/Qdrant, baja TODOS los modelos,
+# Valida Python/Bun/OpenCode/Docker, levanta Ollama+Qdrant via Docker si no
+# hay nada corriendo (respeta instalacion nativa), baja TODOS los modelos,
 # y regenera opencode.json con rutas relativas via {env:TONY_REPO_ROOT}.
 #
 # Uso:  ./scripts/setup.sh        (o `make bootstrap`)
@@ -55,10 +56,46 @@ fi
 
 # 4. Docker (warning, no error)
 hdr "Docker"
+DOCKER_AVAILABLE=0
 if command -v docker >/dev/null 2>&1; then
   ok "docker $(docker --version | awk '{print $3}' | sed 's/,//')"
+  DOCKER_AVAILABLE=1
 else
   printf "  \033[33mwarn\033[0m docker no encontrado - asume Ollama/Qdrant nativos\n"
+fi
+
+# 4b. Servicios de soporte: auto-levantar Docker solo si no hay nada corriendo
+#     (respeta a quien ya tiene Ollama/Qdrant nativos o levantados a mano).
+hdr "Servicios de soporte (Ollama + Qdrant)"
+OLLAMA_UP=0; QDRANT_UP=0
+curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1 && OLLAMA_UP=1
+curl -sf -m 5 "${QDRANT_URL}/readyz" >/dev/null 2>&1 && QDRANT_UP=1
+
+if [[ "${OLLAMA_UP}" -eq 1 && "${QDRANT_UP}" -eq 1 ]]; then
+  ok "Ollama y Qdrant ya responden - no se levanta nada (modo nativo/ya activo)"
+elif [[ "${DOCKER_AVAILABLE}" -eq 1 ]]; then
+  if [[ -f "${REPO_ROOT}/docker/docker-compose.yml" ]]; then
+    printf "  . docker compose up -d ollama qdrant ...\n"
+    if docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" up -d ollama qdrant >/dev/null 2>&1; then
+      wait_for() {
+        local url="$1" name="$2" timeout="${3:-60}" elapsed=0
+        while [[ "${elapsed}" -lt "${timeout}" ]]; do
+          curl -sf -m 3 "${url}" >/dev/null 2>&1 && return 0
+          sleep 3; elapsed=$((elapsed+3))
+        done
+        return 1
+      }
+      printf "  . esperando que Ollama/Qdrant arranquen (hasta 60s) ...\n"
+      wait_for "${OLLAMA_URL}/api/tags" "Ollama" 60 && ok "Ollama arriba via Docker" || bad "Ollama no respondio tras 60s"
+      wait_for "${QDRANT_URL}/readyz"   "Qdrant" 60 && ok "Qdrant arriba via Docker" || bad "Qdrant no respondio tras 60s"
+    else
+      bad "docker compose up fallo - revisa docker/README.md o correlo manual: cd docker && docker compose up -d"
+    fi
+  else
+    bad "no se encontro docker/docker-compose.yml - no se pueden levantar los servicios"
+  fi
+else
+  bad "Ollama/Qdrant no responden y Docker no esta disponible - levantalos nativamente (ollama serve + docker run qdrant/qdrant) o instala Docker"
 fi
 
 # 5. Ollama + pull de modelos
@@ -170,11 +207,11 @@ fi
 
 # 9. .env.example
 hdr ".env"
-cat > "${REPO_ROOT}/.env.example" <<'ENVEOF'
+cat > "${REPO_ROOT}/.env.example" <<ENVEOF
 # Tony-AI bootstrap env. Copia a .env o exporta en tu shell.
 
 # Requerida por todos los MCP servers - apunta a la raiz del repo clonado.
-TONY_REPO_ROOT=/abs/path/to/tony-ai
+TONY_REPO_ROOT=${REPO_ROOT}
 
 # Endpoints de servicios (coinciden con docker/docker-compose.yml).
 TONY_OLLAMA_URL=http://localhost:11434
@@ -194,7 +231,7 @@ CODE_EMBED_MODEL=bge-m3
 # (opt-in, requiere pip install tree-sitter tree-sitter-languages).
 TONY_INDEX_CHUNKER=regex
 ENVEOF
-ok ".env.example escrito - copia a .env y ajusta TONY_REPO_ROOT"
+ok ".env.example escrito con TONY_REPO_ROOT=${REPO_ROOT} - copia a .env"
 
 # 10. Resumen y post-install
 hdr "Resumen"

@@ -1,11 +1,10 @@
 # TonyMem (local-memory)
-Memoria local persistente para el orquestador SDD de OpenCode —
-observaciones con `topic_key` que hacen *upsert*, scoping por proyecto,
-búsqueda full-text, expuesto como tools MCP. 
 
-- **Storage**: SQLite local (memory.db) con tabla observations
-- **MCP Server (local-memory/server.py)**: 8 herramientas (mem_save, mem_search, mem_get_observation, mem_update, mem_context, mem_session_summary, mem_suggest_topic_key, mem_save_prompt)
-- **Plugin de OpenCode (plugins/tonymem.ts)**: Hooks que auto-guardan sesiones y capturan prompts
+Memoria local persistente para el orquestador SDD de OpenCode — observaciones con `topic_key` que hacen *upsert*, scoping por proyecto, búsqueda full-text, expuesto como tools MCP.
+
+- **Storage**: SQLite local (`memory.db`) con tabla `observations`
+- **MCP Server (`local-memory/server.py`)**: 8 herramientas (`mem_save`, `mem_search`, `mem_get_observation`, `mem_update`, `mem_context`, `mem_session_summary`, `mem_suggest_topic_key`, `mem_save_prompt`)
+- **Plugin de OpenCode (`plugins/tonymem.ts`)**: Hooks que auto-guardan sesiones y capturan prompts
 - **Arquitectura**: Comparte el archivo SQLite directamente (modo WAL) entre el MCP server y el plugin
 - **Uso**: Recordar decisiones, bugs, patrones, configuraciones entre sesiones
 - **100% tuyo**: un solo archivo Python (`server.py`, stdlib puro — nada de `pip install`) + un `memory.db` de SQLite que se crea solo.
@@ -13,14 +12,16 @@ búsqueda full-text, expuesto como tools MCP.
 - **Sin instalador**: copiás la carpeta `local-memory/` donde quieras y apuntás OpenCode a `server.py`. Listo.
 
 ## Requisitos
-Solo Python 3.10+ (ya lo tenés si usás NixOS/WSL). No hace falta `pip`
-ni ningún paquete adicional — `sqlite3` viene en la librería estándar.
+
+Solo Python 3.10+ (ya lo tenés si usás Linux, WSL o macOS). No hace falta `pip` ni ningún paquete adicional — `sqlite3` viene en la librería estándar.
 
 ## Instalación (copiar y usar)
+
 1. Copiá la carpeta `local-memory/` a donde prefieras, por ejemplo:
    ```
    ~/tools/local-memory/
    ```
+
 2. Abrí (o creá) `~/.config/opencode/opencode.json` y agregá:
 
    ```jsonc
@@ -29,26 +30,25 @@ ni ningún paquete adicional — `sqlite3` viene en la librería estándar.
      "mcp": {
        "tonymem": {
          "type": "local",
-         "command": ["python3", "/home/gas/tools/local-memory/server.py"],
+         "command": ["python3", "/ruta/a/tu/carpeta/local-memory/server.py"],
          "enabled": true
        }
      }
    }
    ```
 
-   Reemplazá la ruta por la real. Si querés una base de datos distinta
-   por proyecto en vez de una global, agregá:
+   Reemplazá la ruta por la real. Si querés una base de datos distinta por proyecto en vez de una global, agregá:
 
    ```jsonc
    "environment": { "LOCAL_MEMORY_DB": "{cwd}/.local-memory/memory.db" }
    ```
 
-3. Reiniciá OpenCode. Verificá con `opencode mcp list` que `tonymem`
-   aparece conectado.
+3. Reiniciá OpenCode. Verificá con `opencode mcp list` que `tonymem` aparece conectado.
 
 Eso es todo — no hay paso de build, no hay migración, no hay setup wizard.
 
 ## Tools que expone
+
 | Tool | Uso |
 |------|-----|
 | `mem_save` | Guarda contenido. Si pasás `topic_key`, hace upsert por `(project, topic_key)` — volver a guardar actualiza, no duplica. |
@@ -60,13 +60,10 @@ Eso es todo — no hay paso de build, no hay migración, no hay setup wizard.
 | `mem_suggest_topic_key` | Sugiere un `topic_key` slug sin colisiones para un título dado. No guarda nada. |
 | `mem_save_prompt` | Guarda el último prompt crudo del usuario por sesión (`type='prompt-capture'`), separado del resto para no ensuciar `mem_search`. |
 
-Esto cubre exactamente lo que el AGENTS.md del orquestador espera:
-`mem_search(query, project)` → `mem_get_observation(id)` como patrón de
-dos pasos, y `mem_save` con `topic_key` siguiendo la convención
-`sdd/{change-name}/{artifact-type}` (proposal, spec, design, tasks,
-apply-progress, verify-report, archive-report).
+Esto cubre exactamente lo que el `AGENTS.md` del orquestador espera: `mem_search(query, project)` → `mem_get_observation(id)` como patrón de dos pasos, y `mem_save` con `topic_key` siguiendo la convención `sdd/{change-name}/{artifact-type}` (proposal, spec, design, tasks, apply-progress, verify-report, archive-report).
 
 ## Cómo probarlo sin OpenCode
+
 ```bash
 cd local-memory
 printf '%s\n' \
@@ -77,18 +74,15 @@ printf '%s\n' \
 ```
 
 ## Diseño deliberadamente mínimo
+
 `tonymem` implementa **solo el contrato que el orquestador SDD realmente usa** sin:
+
 - servidor HTTP, sync, cloud, ni cuentas
 - dependencias externas o build step (Go, npm, etc.)
 - telemetría de ningún tipo
 
-Si en algún momento querés más (por ejemplo un `mem_context` con las
-últimas N observaciones, o pines), se agregan como funciones nuevas en
-`TOOLS` siguiendo el mismo patrón — el archivo es intencionalmente
-chico para que se pueda leer entero en un par de minutos.
+Si en algún momento quieres más (por ejemplo un `mem_context` con las últimas N observaciones, o pines), se agregan como funciones nuevas en `TOOLS` siguiendo el mismo patrón — el archivo es intencionalmente chico para que se pueda leer entero en un par de minutos.
 
 ## Dónde vive la base de datos
-Por defecto: junto a `server.py`, como `memory.db` (+ archivos WAL de
-SQLite). Se puede mover con la variable de entorno `LOCAL_MEMORY_DB`.
-Podés respaldarla como cualquier archivo (`cp memory.db backup.db`) o
-versionarla con `sqlite3 memory.db .dump > memory.sql`.
+
+Por defecto: junto a `server.py`, como `memory.db` (+ archivos WAL de SQLite). Se puede mover con la variable de entorno `LOCAL_MEMORY_DB`. Podés respaldarla como cualquier archivo (`cp memory.db backup.db`) o versionarla con `sqlite3 memory.db .dump > memory.sql`.
