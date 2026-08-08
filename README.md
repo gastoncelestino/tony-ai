@@ -90,7 +90,7 @@ flowchart TD
     DCP -.->|"plugin global"| OC["OpenCode"]
 ```
 
-# Requisitos
+## Requisitos
 1. Python 3.10+
 2. Bun
 3. OpenCode CLI (https://opencode.ai)
@@ -98,7 +98,7 @@ flowchart TD
 5. Docker (opcional, para Qdrant + Ollama como servicios)   
 
 
-# Clonar repositorio
+## Clonar repositorio
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
