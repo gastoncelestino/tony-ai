@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Tony-AI runtime artifacts (DBs / indexados locales)
+local-memory/.tonymem/
+local-memory/memory.db
+code-index/.codeindex/
+code-index/manifest.db
+judgment-memory/.tonymem/
+judgment-memory/judgment-memory.db
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store

@@ -170,11 +170,11 @@ fi
 
 # 9. .env.example
 hdr ".env"
-cat > "${REPO_ROOT}/.env.example" <<'ENVEOF'
+cat > "${REPO_ROOT}/.env.example" <<ENVEOF
 # Tony-AI bootstrap env. Copia a .env o exporta en tu shell.
 
 # Requerida por todos los MCP servers - apunta a la raiz del repo clonado.
-TONY_REPO_ROOT=/abs/path/to/tony-ai
+TONY_REPO_ROOT=${REPO_ROOT}
 
 # Endpoints de servicios (coinciden con docker/docker-compose.yml).
 TONY_OLLAMA_URL=http://localhost:11434
@@ -194,7 +194,7 @@ CODE_EMBED_MODEL=bge-m3
 # (opt-in, requiere pip install tree-sitter tree-sitter-languages).
 TONY_INDEX_CHUNKER=regex
 ENVEOF
-ok ".env.example escrito - copia a .env y ajusta TONY_REPO_ROOT"
+ok ".env.example escrito con TONY_REPO_ROOT=${REPO_ROOT} - copia a .env"
 
 # 10. Resumen y post-install
 hdr "Resumen"
