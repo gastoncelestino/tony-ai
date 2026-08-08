@@ -76,7 +76,7 @@ echo 'export TONY_REPO_ROOT="'"$(pwd)"'"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## 3.3 Deberías ver algo como:
+## eberías ver algo como:
 ```bash
 📄 .env
 📄 AGENTS.md
