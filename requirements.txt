@@ -1,0 +1,3 @@
+# Tony-AI Python dependencies
+# Filosofía: stdlib-only. No hay dependencias externas obligatorias.
+# code-index/core.py y judgment-memory/ledger.py usan solo módulos built-in.

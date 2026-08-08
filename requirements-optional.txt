@@ -1,0 +1,6 @@
+# Tony-AI Python optional dependencies
+# Instalá estas si querés usar TONY_INDEX_CHUNKER=tree-sitter para
+# chunking semántico avanzado en code-index.
+
+tree-sitter>=0.20
+tree-sitter-languages>=1.10
