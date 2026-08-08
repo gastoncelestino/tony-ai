@@ -290,8 +290,8 @@ def _chunk_treesitter(lines: list, ext: str, parser) -> list:
                 merged.append((start + sub_start, start + sub_end))
         else:
             merged.append((start, end))
-    if pending_start is not None:
-        merged.append((pending_start, len(lines) - 1))
+        if pending_start is not None:
+            merged.append((pending_start, len(lines) - 1))
     return merged if merged else _split_fixed(lines, ext)
 
 
