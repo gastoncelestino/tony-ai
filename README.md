@@ -106,16 +106,17 @@ cd tony-ai
 
 # 1. Instalación automática (recomendada) [INSTALL.md](https://github.com/gastoncelestino/tony-ai/blob/main/INSTALL.md)
 ```bash
+make docker-up     # Opcional: levanta Ollama + Qdrant en Docker (o `ollama serve` si lo tenés nativo)
 ./scripts/setup.sh    # Verifica dependencias, descarga TODOS los modelos, configura .env
 ./scripts/health.sh   # Verifica estado del sistema
 ```
 
 `setup.sh` hace:
 1. Verifica dependencias (Python, Bun, OpenCode CLI, Docker)
-2. Descarga modelos de Ollama (qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text)
-3. Configura `.env.example`
-4. Regenera `opencode.json` con rutas portables
-5. Inicia servicios si usás Docker
+2. Verifica que Ollama y Qdrant ya estén corriendo (no los levanta — usá `make docker-up` o `ollama serve` antes)
+3. Descarga los modelos de Ollama (requiere Ollama respondiendo): qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text
+4. Configura `.env.example`
+5. Regenera `opencode.json` con rutas portables
 
 `health.sh` verifica:
 1. OpenCode config válida

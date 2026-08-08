@@ -278,18 +278,18 @@ def _chunk_treesitter(lines: list, ext: str, parser) -> list:
     merged = []
     pending_start = None
     for start, end in ranges:
-    if pending_start is not None:
-        start = pending_start
-        pending_start = None
-    length = end - start + 1
-    if length < MIN_CHUNK_LINES and (start, end) != ranges[-1]:
-        pending_start = start
-        continue
-    if length > MAX_CHUNK_LINES:
-        for sub_start, sub_end in _split_fixed(lines[start:end + 1], ext):
-            merged.append((start + sub_start, start + sub_end))
-    else:
-        merged.append((start, end))
+        if pending_start is not None:
+            start = pending_start
+            pending_start = None
+        length = end - start + 1
+        if length < MIN_CHUNK_LINES and (start, end) != ranges[-1]:
+            pending_start = start
+            continue
+        if length > MAX_CHUNK_LINES:
+            for sub_start, sub_end in _split_fixed(lines[start:end + 1], ext):
+                merged.append((start + sub_start, start + sub_end))
+        else:
+            merged.append((start, end))
     if pending_start is not None:
         merged.append((pending_start, len(lines) - 1))
     return merged if merged else _split_fixed(lines, ext)
