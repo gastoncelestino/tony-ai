@@ -7,6 +7,7 @@ test: test-python test-ts
 
 test-python:
 	@echo "▶ Running Python tests..."
+	@cd local-memory && python3 test_server.py
 	@cd code-index && python3 test_core.py
 	@cd judgment-memory && python3 test_ledger.py
 	@echo "✓ Python tests passed"
