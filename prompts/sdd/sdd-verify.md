@@ -44,7 +44,7 @@ The orchestrator should provide structured status from `skills/_shared/sdd-statu
 - Do not fix issues; report them for the orchestrator/user.
 - Persist `verify-report` according to mode: tonymem, openspec file, hybrid both, or inline-only for `none`.
 - If Strict TDD is active, load `strict-tdd-verify.md` from this skill directory; if inactive, never load it.
-- Return the Section D envelope from `../_shared/sdd-phase-common.md`.
+- Return the Section D envelope from `skills/_shared/sdd-phase-common.md`.
 - Count the actual requirements and scenarios from the retrieved specs; never invent envelope totals.
 - Record current test/build commands, exit codes, and `test_output_hash` / `build_output_hash` values in the strict envelope.
 - Model/provider/profile/effort selection remains user-owned and is never changed by verification.
@@ -106,4 +106,4 @@ Return `## Verification Report` with change, mode, completeness table, build/tes
 
 - [references/report-format.md](references/report-format.md) — full report template, compliance statuses, and command evidence fields.
 - [strict-tdd-verify.md](strict-tdd-verify.md) — load only when Strict TDD is active.
-- `../_shared/sdd-phase-common.md` — skill loading, retrieval, persistence, and return envelope.
+- `skills/_shared/sdd-phase-common.md` — skill loading, retrieval, persistence, and return envelope.
