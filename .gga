@@ -31,7 +31,9 @@ TIMEOUT="300"
 OPENCODE_VARIANT="high"
 
 # OpenCode provider: optional agent profile
-# OPENCODE_AGENT="gga-reviewer"
+# Apunta al agente gga-reviewer definido en opencode.json — responde directo
+# al prompt de review en lugar de delegar como hace tony-orchestrator.
+OPENCODE_AGENT="gga-reviewer"
 
 # Base branch for --pr-mode (auto-detects main/master/develop if empty)
 PR_BASE_BRANCH="main"
