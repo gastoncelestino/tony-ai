@@ -161,23 +161,6 @@ make docker-down     # Detener servicios Docker
 
 [GGA](https://github.com/Gentleman-Programming/gentleman-guardian-angel) valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
 
-### Instalación de gga (una sola vez, fuera del repo)
-
-```bash
-# Opción A — Homebrew (recomendado)
-brew install gentleman-programming/tap/gga
-
-# Opción B — Manual: clonar y correr el installer
-git clone https://github.com/Gentleman-Programming/gentleman-guardian-angel.git
-cd gentleman-guardian-angel
-./install.sh
-```
-
-Si instalaste a mano en Windows (Git Bash/WSL) copiando archivos a `~/.local/bin/gga` y `~/.local/share/gga/lib/`, asegurate de convertir los CRLF:
-
-```bash
-dos2unix ~/.local/bin/gga ~/.local/share/gga/lib/providers.sh ~/.local/share/gga/lib/cache.sh ~/.local/share/gga/lib/pr_mode.sh
-```
 
 ### Activar gga en este repo
 
@@ -206,6 +189,7 @@ gga run --no-cache   # ignorar cache y revisar todo
 | `EXCLUDE_PATTERNS` | tests + mocks | Los tests validan, no se validan contra sí mismos |
 | `OPENCODE_AGENT` | `gga-reviewer` | Agente read-only en `opencode.json` que responde directo (no delega como `tony-orchestrator`) |
 | `OPENCODE_VARIANT` | `high` | Mejor calidad de revisión |
+
 
 ## Agradecimientos
 Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
