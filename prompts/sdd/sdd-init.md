@@ -36,7 +36,7 @@ Run this phase when the orchestrator/user asks to initialize SDD in a project. Y
 
 - Detect the real stack, conventions, architecture, testing tools, and persistence mode; never guess.
 - In `tonymem` mode, do **not** create `openspec/`.
-- In `openspec` mode, follow `../_shared/openspec-convention.md` and write file artifacts.
+- In `openspec` mode, follow `skills/_shared/openspec-convention.md` and write file artifacts.
 - In `hybrid` mode, write both openspec files and tonymem observations.
 - Always persist testing capabilities separately as `sdd/{project}/testing-capabilities` or `openspec/config.yaml` `testing:`.
 - Always build `.atl/skill-registry.md`; also save `skill-registry` to tonymem when available.
@@ -72,5 +72,5 @@ Return `status`, `executive_summary`, `artifacts`, `next_recommended`, and `risk
 ## References
 
 - [references/init-details.md](references/init-details.md) — detection checklist, tonymem payloads, config skeleton, and output templates.
-- `../_shared/tonymem-convention.md` — tonymem artifact naming.
-- `../_shared/openspec-convention.md` — openspec layout and rules.
+- `skills/_shared/tonymem-convention.md` — tonymem artifact naming.
+- `skills/_shared/openspec-convention.md` — openspec layout and rules.
