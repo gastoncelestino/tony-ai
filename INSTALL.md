@@ -121,7 +121,7 @@ ollama pull nomic-embed-text
 ## 3.5 Instalar GGA (opcional — code review antes de commit)
 
 GGA valida los archivos staged contra `AGENTS.md` en cada commit. Es una
-herramienta externa que se instala una sola vez en el sistema.
+herramienta externa que se instala una sola vez.
 
 Necesitás 4 archivos del repo
 [gentleman-guardian-angel](https://github.com/Gentleman-Programming/gentleman-guardian-angel):
