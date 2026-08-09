@@ -214,7 +214,27 @@ def run():
         assert match is not None, res
         assert match["lifecycle_status"] == "needs_review", match
 
-        # ── 13. MCP framing ───────────────────────────────────────────────
+        # ── 13. mem_review: mark_proven + search ranking ──────────────────
+        print("--- mem_review: proven + ranking ---")
+        id2 = server.mem_save({"title": "Proven pattern", "content": "always use opaque tokens", "project": "demo", "type": "pattern"})["id"]
+
+        # mark_proven sets lifecycle_status
+        server.mem_review({"action": "mark_proven", "ids": [id2]})
+        row = server.mem_get_observation({"id": id2})
+        assert row["lifecycle_status"] == "proven", row
+
+        # mem_search ranks proven first
+        res = server.mem_search({"query": "tokens", "project": "demo"})
+        assert len(res["results"]) >= 2, res
+        first_id = res["results"][0]["id"]
+        assert first_id == id2, f"proven should rank first, got {first_id}: {res['results']}"
+
+        # list with status filter
+        proven_list = server.mem_review({"action": "list", "project": "demo", "status": "proven"})
+        assert proven_list["count"] == 1, proven_list
+        assert proven_list["results"][0]["id"] == id2, proven_list
+
+        # ── 14. MCP framing ───────────────────────────────────────────────
         print("--- MCP framing ---")
         init = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
         assert init["result"]["protocolVersion"] == "2024-11-05", init
