@@ -160,12 +160,10 @@ make validate-config # Validar opencode.json + prompts + skills
 ```
 
 ## Code Review automático con GGA (Gentleman Guardian Angel)
-
-[GGA](https://github.com/Gentleman-Programming/gentleman-guardian-angel) valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
+`GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
 
 
 ### Activar gga
-
 El repo ya incluye `.gga` (config) y el agente `gga-reviewer` en `opencode.json`. Solo falta instalar el hook:
 
 ```bash
