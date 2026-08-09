@@ -235,11 +235,17 @@ function checkPermissions(): void {
 
   const allowedTools = new Set(["bash", "edit", "read", "write", "task", "question"])
   const agents = (config.agent ?? {}) as Record<string, { permission?: { task?: Record<string, string> } }>
+  const agentNames = new Set(Object.keys(agents))
   for (const [agentName, agentConfig] of Object.entries(agents)) {
     if (agentConfig.permission?.task && typeof agentConfig.permission.task === "object") {
       const taskPerms = agentConfig.permission.task
       for (const perm of Object.keys(taskPerms)) {
-        if (perm !== "*" && !allowedTools.has(perm)) {
+        if (perm === "*") continue
+        // Allow references to other agents (sub-agent delegation)
+        if (agentNames.has(perm)) continue
+        // Allow known sub-agent names that may not be in this config (extensibility)
+        if (perm.startsWith("sdd-") || perm.startsWith("review-") || perm.startsWith("jd-") || perm === "explore" || perm === "general") continue
+        if (!allowedTools.has(perm)) {
           warn(`agent.${agentName} has unusual task permission: ${perm}`)
         }
       }
@@ -346,13 +352,15 @@ function main(): void {
   checkPromptConsistency()
 
   console.log("\n=== Summary ===")
-  if (errors === 0 && warnings === 0) {
-    console.log("\x1b[32m✓ All checks passed!\x1b[0m")
+  if (errors === 0) {
+    if (warnings === 0) {
+      console.log("\x1b[32m✓ All checks passed!\x1b[0m")
+    } else {
+      console.log(`\x1b[32m✓ All checks passed (${warnings} warning(s))\x1b[0m`)
+    }
     process.exit(0)
   } else {
-    if (errors > 0) {
-      console.log(`\x1b[31m✗ ${errors} error(s) found\x1b[0m`)
-    }
+    console.log(`\x1b[31m✗ ${errors} error(s) found\x1b[0m`)
     if (warnings > 0) {
       console.log(`\x1b[33m⚠ ${warnings} warning(s) found\x1b[0m`)
     }
