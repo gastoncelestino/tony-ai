@@ -363,8 +363,9 @@ def mem_review(args: dict) -> dict:
 
     Actions:
       - list: return observations with a given lifecycle status (default: needs_review).
-      - mark_reviewed: move observations from needs_review -> active by id list.
+      - mark_reviewed: move observations to active by id list.
       - mark_proven: mark observations as proven (verified solution) by id list.
+      - mark_stale: mark observations as needs_review by id list.
     """
     action = args.get("action", "list")
     project = args.get("project", "default")
@@ -398,7 +399,7 @@ def mem_review(args: dict) -> dict:
             placeholders = ",".join("?" * len(ids))
             cur = conn.execute(
                 f"UPDATE observations SET lifecycle_status='active', updated_at=? "
-                f"WHERE id IN ({placeholders}) AND lifecycle_status='needs_review'",
+                f"WHERE id IN ({placeholders})",
                 [now(), *ids],
             )
             conn.commit()
@@ -413,6 +414,21 @@ def mem_review(args: dict) -> dict:
             placeholders = ",".join("?" * len(ids))
             cur = conn.execute(
                 f"UPDATE observations SET lifecycle_status='proven', updated_at=? "
+                f"WHERE id IN ({placeholders})",
+                [now(), *ids],
+            )
+            conn.commit()
+            return {"updated": cur.rowcount}
+
+        if action == "mark_stale":
+            ids = args.get("ids")
+            if not ids:
+                return {"error": "ids required for mark_stale"}
+            if isinstance(ids, int):
+                ids = [ids]
+            placeholders = ",".join("?" * len(ids))
+            cur = conn.execute(
+                f"UPDATE observations SET lifecycle_status='needs_review', updated_at=? "
                 f"WHERE id IN ({placeholders})",
                 [now(), *ids],
             )
@@ -532,14 +548,14 @@ TOOLS = {
         "handler": mem_save_prompt,
     },
     "mem_review": {
-        "description": "Memory lifecycle management. Actions: list (filter by lifecycle status), mark_reviewed (needs_review -> active), mark_proven (mark as verified solution).",
+        "description": "Memory lifecycle management. Actions: list (filter by lifecycle status), mark_reviewed (to active), mark_proven (to proven), mark_stale (to needs_review).",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["list", "mark_reviewed", "mark_proven"], "description": "list: return items by status filter; mark_reviewed: set ids to active; mark_proven: set ids to proven"},
+                "action": {"type": "string", "enum": ["list", "mark_reviewed", "mark_proven", "mark_stale"], "description": "list: return items by status filter; mark_reviewed: set ids to active; mark_proven: set ids to proven; mark_stale: set ids to needs_review"},
                 "project": {"type": "string", "description": "Project filter for list, default 'default'"},
                 "status": {"type": "string", "enum": ["active", "proven", "needs_review"], "description": "Lifecycle status filter for list (default: needs_review)"},
-                "ids": {"type": "array", "items": {"type": "number"}, "description": "Observation ids to update (mark_reviewed / mark_proven)"},
+                "ids": {"type": "array", "items": {"type": "number"}, "description": "Observation ids to update (mark_reviewed / mark_proven / mark_stale)"},
             },
             "required": ["action"],
         },

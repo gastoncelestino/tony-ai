@@ -162,7 +162,7 @@ This is NOT optional. If you skip this, the next session starts blind.
 ### MEMORY LIFECYCLE (mandatory)
 
 Saved memories can become stale as the codebase evolves. TonyMem uses a simple
-two-state lifecycle to prevent outdated memories from being trusted as current
+three-state lifecycle to prevent outdated memories from being trusted as current
 facts.
 
 States:
@@ -187,6 +187,7 @@ Rules:
 6. After a solution emerges from a Q&A exchange and is verified (tests pass
    or user confirms), call `mem_review` with `action: mark_proven` and the
    observation `ids`. Proven memories rank first in `mem_search`.
+7. To mark a memory as stale (e.g. you detected the code changed and the decision no longer applies), call `mem_review` with `action: mark_stale` and the observation `ids`.
 
 ### AFTER COMPACTION
 
