@@ -96,7 +96,7 @@ flowchart TD
 - **OpenCode CLI** (instalador oficial: https://opencode.ai)
 - **Ollama** (https://ollama.com/download)
 - **Docker** (opcional, para correr Qdrant + Ollama como servicios)
-- **Gga** (https://github.com/Gentleman-Programming/gentleman-guardian-angel) 
+- **GGA** (opcional, para code review antes de commit — https://github.com/Gentleman-Programming/gentleman-guardian-angel)
 
 
 ## Clonar repositorio
