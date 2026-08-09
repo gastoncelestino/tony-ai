@@ -4,7 +4,8 @@
 // Mock del Plugin context (simula sessionID, directory, hooks registration)
 // Mock de Qdrant/Ollama (HTTP server en memoria, mismo patrón que test_ledger.py)
 
-import { test, expect, beforeAll, afterAll, mkdirSync, rmSync, writeFileSync } from "bun:test"
+import { test, expect, beforeAll, afterAll } from "bun:test"
+import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "os"
 import { join } from "path"
 import { spawn } from "bun"
