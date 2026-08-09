@@ -1,11 +1,12 @@
 # Tony-AI - Instalación detallada
 
-# 0. Prerequisitos
+# 0. Requisitos
 - **Python 3.10+** para los servidores MCP en Python.
 - **Bun** para los scripts de verificación basados en TypeScript y plugins.
 - **OpenCode CLI** (instalador oficial: https://opencode.ai)
 - **Ollama** (https://ollama.com/download)
 - **Docker** (opcional, para correr Qdrant + Ollama como servicios)
+- **Gga** (https://github.com/Gentleman-Programming/gentleman-guardian-angel)
 
 ## Para características semánticas (code-index y judgment-memory)
 - **Qdrant** corriendo localmente o remotamente.
@@ -115,6 +116,41 @@ ollama pull ornith:9b
 ```bash
 ollama pull bge-m3
 ollama pull nomic-embed-text
+```
+
+## 3.5 Instalar GGA (opcional — code review antes de commit)
+
+GGA valida los archivos staged contra `AGENTS.md` en cada commit. Es una
+herramienta externa que se instala una sola vez en el sistema.
+
+Necesitás 4 archivos del repo
+[gentleman-guardian-angel](https://github.com/Gentleman-Programming/gentleman-guardian-angel):
+
+```bash
+# Crear directorios destino
+mkdir -p ~/.local/bin
+mkdir -p ~/.local/share/gga/lib
+
+# Copiar los 4 archivos (cambiá la ruta al repo descargado)
+cp ~/gentleman-guardian-angel/bin/gga            ~/.local/bin/gga
+cp ~/gentleman-guardian-angel/lib/providers.sh  ~/.local/share/gga/lib/providers.sh
+cp ~/gentleman-guardian-angel/lib/cache.sh      ~/.local/share/gga/lib/cache.sh
+cp ~/gentleman-guardian-angel/lib/pr_mode.sh    ~/.local/share/gga/lib/pr_mode.sh
+
+# Permisos de ejecución
+chmod +x ~/.local/bin/gga ~/.local/share/gga/lib/*.sh
+
+# Si venís de Windows (CRLF), convertir a LF:
+dos2unix ~/.local/bin/gga ~/.local/share/gga/lib/providers.sh ~/.local/share/gga/lib/cache.sh ~/.local/share/gga/lib/pr_mode.sh
+
+# Verificar
+gga --version
+```
+
+Si `~/.local/bin` no está en tu PATH:
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 # 4. Verificar instalación

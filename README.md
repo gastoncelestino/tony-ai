@@ -91,11 +91,12 @@ flowchart TD
 ```
 
 ## Requisitos
-1. Python 3.10+
-2. Bun
-3. OpenCode CLI (https://opencode.ai)
-4. Ollama (https://ollama.com/download)
-5. Docker (opcional, para Qdrant + Ollama como servicios)   
+- **Python 3.10+** para los servidores MCP en Python.
+- **Bun** para los scripts de verificación basados en TypeScript y plugins.
+- **OpenCode CLI** (instalador oficial: https://opencode.ai)
+- **Ollama** (https://ollama.com/download)
+- **Docker** (opcional, para correr Qdrant + Ollama como servicios)
+- **Gga** (https://github.com/Gentleman-Programming/gentleman-guardian-angel) 
 
 
 ## Clonar repositorio
@@ -162,7 +163,7 @@ make docker-down     # Detener servicios Docker
 [GGA](https://github.com/Gentleman-Programming/gentleman-guardian-angel) valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
 
 
-### Activar gga en este repo
+### Activar gga
 
 El repo ya incluye `.gga` (config) y el agente `gga-reviewer` en `opencode.json`. Solo falta instalar el hook:
 
