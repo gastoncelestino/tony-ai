@@ -1,0 +1,37 @@
+# Gentleman Guardian Angel Configuration — tony-ai
+# https://github.com/gastoncelestino/tony-ai
+
+# AI Provider (required)
+# tony-ai usa OpenCode como orquestador, asi que es el provider natural.
+# Alternativas validas: ollama:qwen3-coder:30b, ollama:deepseek-r1:14b
+PROVIDER="opencode"
+
+# File patterns to include in review (comma-separated)
+# tony-ai tiene Python (MCP servers + tests) y TypeScript (plugins + hooks).
+FILE_PATTERNS="*.py,*.ts"
+
+# File patterns to exclude from review (comma-separated)
+# Los tests no se revisan contra AGENTS.md (son los que validan, no el codigo).
+# __mocks__ son fixtures, no codigo de produccion.
+EXCLUDE_PATTERNS="test_core.py,test_ledger.py,test_hooks.ts,__mocks__/*"
+
+# File containing code review rules
+# tony-ai ya tiene AGENTS.md (protocolo del orquestador SDD + convenciones).
+RULES_FILE="AGENTS.md"
+
+# Strict mode: fail if AI response is ambiguous
+STRICT_MODE="true"
+
+# Timeout in seconds for AI provider response
+# Los changesets de tony-ai pueden ser grandes (server.py ~19KB, core.py ~25KB).
+TIMEOUT="300"
+
+# OpenCode provider: optional reasoning effort / variant
+# high da mejor calidad de revision para detectar bugs como los de indentacion.
+OPENCODE_VARIANT="high"
+
+# OpenCode provider: optional agent profile
+# OPENCODE_AGENT="gga-reviewer"
+
+# Base branch for --pr-mode (auto-detects main/master/develop if empty)
+PR_BASE_BRANCH="main"
