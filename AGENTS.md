@@ -159,6 +159,31 @@ Before ending a session or saying "done" / "that's it" (or the equivalent in the
 
 This is NOT optional. If you skip this, the next session starts blind.
 
+### MEMORY LIFECYCLE (mandatory)
+
+Saved memories can become stale as the codebase evolves. TonyMem uses a simple
+two-state lifecycle to prevent outdated memories from being trusted as current
+facts.
+
+States:
+- `active` — current, verified memory (default for new saves)
+- `needs_review` — stale memory that must be re-verified before use
+
+Rules:
+1. `mem_search` results include `lifecycle_status`. When a result shows
+   `needs_review`, do NOT treat it as a confirmed fact. Verify it against the
+   current codebase/state before acting on it.
+2. If you suspect a memory is outdated, call `mem_review` with `action: list`
+   to see all stale memories for the current project.
+3. After verifying a stale memory against current evidence, call
+   `mem_review` with `action: mark_reviewed` and the observation `ids` to
+   move it back to `active`.
+4. If a stale memory is no longer relevant, you can mark it reviewed without
+   changing its content — the point is to acknowledge you checked it.
+5. When saving updated knowledge, use `mem_save` with the same `topic_key`
+   to overwrite the stale content in place, then mark the old observation
+   reviewed if needed.
+
 ### AFTER COMPACTION
 
 If you see a compaction message or "FIRST ACTION REQUIRED":

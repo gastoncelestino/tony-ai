@@ -67,7 +67,8 @@ def init_db() -> None:
             type       TEXT NOT NULL DEFAULT 'manual',
             content    TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            lifecycle_status TEXT NOT NULL DEFAULT 'active'
         );
 
         CREATE UNIQUE INDEX IF NOT EXISTS idx_project_topic
@@ -96,7 +97,14 @@ def init_db() -> None:
         """
     )
     conn.commit()
-    conn.close()
+    # Migration: add lifecycle_status to existing DBs that predate it.
+    try:
+        conn.execute("ALTER TABLE observations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists
+    finally:
+        conn.close()
 
 
 def fts_query(query: str, match_mode: str = "all") -> str:
@@ -166,6 +174,7 @@ def mem_search(args: dict) -> dict:
     try:
         sql = (
             "SELECT o.id, o.project, o.title, o.topic_key, o.type, o.scope, "
+            "       o.lifecycle_status, "
             "       snippet(observations_fts, 1, '[', ']', '...', 12) AS snippet, "
             "       o.created_at, o.updated_at "
             "FROM observations_fts f "
@@ -349,6 +358,49 @@ def mem_save_prompt(args: dict) -> dict:
     )
 
 
+def mem_review(args: dict) -> dict:
+    """Memory lifecycle management.
+
+    Actions:
+      - list: return observations marked needs_review (optionally filtered by project).
+      - mark_reviewed: move observations from needs_review -> active by id list.
+    """
+    action = args.get("action", "list")
+    project = args.get("project", "default")
+
+    conn = connect()
+    try:
+        if action == "list":
+            rows = conn.execute(
+                "SELECT id, project, title, topic_key, type, scope, lifecycle_status, "
+                "       created_at, updated_at "
+                "FROM observations "
+                "WHERE lifecycle_status = 'needs_review' AND project = ? "
+                "ORDER BY updated_at DESC",
+                (project,),
+            ).fetchall()
+            return {"results": [dict(r) for r in rows], "count": len(rows)}
+
+        if action == "mark_reviewed":
+            ids = args.get("ids")
+            if not ids:
+                return {"error": "ids required for mark_reviewed"}
+            if isinstance(ids, int):
+                ids = [ids]
+            placeholders = ",".join("?" * len(ids))
+            cur = conn.execute(
+                f"UPDATE observations SET lifecycle_status='active', updated_at=? "
+                f"WHERE id IN ({placeholders}) AND lifecycle_status='needs_review'",
+                [now(), *ids],
+            )
+            conn.commit()
+            return {"updated": cur.rowcount}
+
+        return {"error": f"unknown action: {action}"}
+    finally:
+        conn.close()
+
+
 TOOLS = {
     "mem_save": {
         "description": "Save or upsert a piece of persistent memory. Pass topic_key to upsert (saving again with the same project+topic_key updates instead of duplicating).",
@@ -455,6 +507,19 @@ TOOLS = {
             "required": ["content"],
         },
         "handler": mem_save_prompt,
+    },
+    "mem_review": {
+        "description": "Memory lifecycle management. Actions: list (observations needs_review), mark_reviewed (move needs_review -> active by ids).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["list", "mark_reviewed"], "description": "list: return needs_review items; mark_reviewed: set ids to active"},
+                "project": {"type": "string", "description": "Project filter for list, default 'default'"},
+                "ids": {"type": "array", "items": {"type": "number"}, "description": "Observation ids to mark as reviewed (mark_reviewed only)"},
+            },
+            "required": ["action"],
+        },
+        "handler": mem_review,
     },
 }
 

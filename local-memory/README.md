@@ -3,7 +3,7 @@
 Memoria local persistente para el orquestador SDD de OpenCode — observaciones con `topic_key` que hacen *upsert*, scoping por proyecto, búsqueda full-text, expuesto como tools MCP.
 
 - **Storage**: SQLite local (`memory.db`) con tabla `observations`
-- **MCP Server (`local-memory/server.py`)**: 8 herramientas (`mem_save`, `mem_search`, `mem_get_observation`, `mem_update`, `mem_context`, `mem_session_summary`, `mem_suggest_topic_key`, `mem_save_prompt`)
+- **MCP Server (`local-memory/server.py`)**: 9 herramientas (`mem_save`, `mem_search`, `mem_get_observation`, `mem_update`, `mem_context`, `mem_session_summary`, `mem_suggest_topic_key`, `mem_save_prompt`, `mem_review`)
 - **Plugin de OpenCode (`plugins/tonymem.ts`)**: Hooks que auto-guardan sesiones y capturan prompts
 - **Arquitectura**: Comparte el archivo SQLite directamente (modo WAL) entre el MCP server y el plugin
 - **Uso**: Recordar decisiones, bugs, patrones, configuraciones entre sesiones
@@ -59,8 +59,25 @@ Eso es todo — no hay paso de build, no hay migración, no hay setup wizard.
 | `mem_session_summary` | Guarda el cierre de sesión (Goal/Instructions/Discoveries/Accomplished/Next Steps/Relevant Files). Upsert por `(project, session_id)`. |
 | `mem_suggest_topic_key` | Sugiere un `topic_key` slug sin colisiones para un título dado. No guarda nada. |
 | `mem_save_prompt` | Guarda el último prompt crudo del usuario por sesión (`type='prompt-capture'`), separado del resto para no ensuciar `mem_search`. |
+| `mem_review` | Gestión del lifecycle de memorias. `list` devuelve observaciones `needs_review`; `mark_reviewed` las marca como `active` por id. |
 
 Esto cubre exactamente lo que el `AGENTS.md` del orquestador espera: `mem_search(query, project)` → `mem_get_observation(id)` como patrón de dos pasos, y `mem_save` con `topic_key` siguiendo la convención `sdd/{change-name}/{artifact-type}` (proposal, spec, design, tasks, apply-progress, verify-report, archive-report).
+
+## Ciclo de vida de memorias
+
+Las observaciones pueden quedar desactualizadas con el tiempo. TonyMem usa un lifecycle simple:
+
+| Estado | Significado |
+|--------|-------------|
+| `active` | Memoria verificada y vigente (default) |
+| `needs_review` | Memoria stale que debe re-verificarse antes de confiar |
+
+**Workflow:**
+1. `mem_search` devuelve `lifecycle_status` en cada resultado
+2. Si ves `needs_review`, no la uses como hecho confirmado sin verificar
+3. Llamá `mem_review` con `action: list` para ver memorias stale del proyecto
+4. Verificá contra el código/estado actual, luego `mem_review` con `action: mark_reviewed` y los ids para marcarlas como `active`
+5. Si una memoria ya no es relevante, podés marcarla como reviewed sin modificar el contenido
 
 ## Cómo probarlo sin OpenCode
 
