@@ -164,35 +164,6 @@ make test            # Ejecutar todos los tests
 ## 5.1 Correr tests de Python + TypeScript. 
 ```bash
 make test   # Ejecutar todos los tests
-```
-
-```bash
-[PASS] chunk_lines handles empty input
-[PASS] content_hash produces correct hash
-[PASS] embed_texts handles batch
-[PASS] qdrant_upsert and search roundtrip via mock
-[PASS] point_id deterministic per project+path+start_line
-[PASS] collection name sanitization
-[PASS] qdrant client methods (embed/upsert/search/delete) via mock server
-[PASS] index_repo incremental: unchanged files skipped, changed files re-indexed, deleted files removed
-...
-[PASS] All test_hooks passed
-Total tests: 11
-Passed: 11
-Failed: 0
-
-ALL ASSERTIONS PASSED
-
-[PASS] test_treesitter_chunking
-  tree-sitter chunking produced 4 chunks from nested Python
-ALL TESTS PASSED
- ✨  test_core.py (Python)
-✅ test_hooks.ts (TypeScript)
-```
-
-Si todos los tests pasan (Passed: 11 / All tests passed), entonces tu instalación de Tony-AI está completa y funciona correctamente.
-
-```bash
 make verify-qdrant   # probar el pipeline vectorial real Qdrant
 make docker-up       # iniciar servicios Docker
 make docker-down     # detener servicios Docker
@@ -200,12 +171,23 @@ make health          # OpenCode/MCP/Ollama/Qdrant/embeddings check
 make clean           # eliminar bases de datos/index SQLite locales
 ```
 
-## 5.2 Verificar el pipeline real de Qdrant/Ollama
+## 5.2 Correr test validate-config.ts
+```bash
+make validate-config # Ejecuta `scripts/validate-config.ts`, que verifica:
+- JSON válido en `opencode.json`
+- Referencias `{file:...}` existentes
+- Archivos en `skills/_shared/` accesibles
+- Agentes referenciados definidos en `opencode.json`
+- Sin restos de `gentle-ai` / `Gentle AI` / `gentle-orchestrator`
+- Estructura de directorios mínima (`skills/`, `skills/_shared/`, `prompts/sdd/`)
+```
+
+## 5.3 Verificar el pipeline real de Qdrant/Ollama
 ```bash
 opencode mcp list
 ```
 
-## 5.3 Correr el indexador de código
+## 5.4 Correr el indexador de código
 ```bash
 cd code-index
 python3 core.py index --path /ruta/al/repo --project mi-proyecto
@@ -213,13 +195,13 @@ python3 core.py search --query "manejo de reintentos HTTP" --project mi-proyecto
 python3 core.py status --path /ruta/al/repo --project mi-proyecto
 ```
 
-## 5.4 Correr tests de judgment-memory
+## 5.5 Correr tests de judgment-memory
 ```bash
 cd judgment-memory
 python3 test_ledger.py
 ```
 
-## 5.5 Correr local-memory manualmente
+## 5.6 Correr local-memory manualmente
 ```bash
 cd local-memory
 python3 server.py
