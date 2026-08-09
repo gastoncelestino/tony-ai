@@ -156,7 +156,17 @@ make health          # Verificar servicios
 make clean           # Borrar bases SQLite locales
 make docker-up       # Iniciar servicios Docker
 make docker-down     # Detener servicios Docker
+make validate-config # Validar opencode.json + prompts + skills
 ```
+
+`make validate-config` ejecuta `scripts/validate-config.ts`, que verifica:
+- JSON válido en `opencode.json`
+- Referencias `{file:...}` existentes
+- Archivos en `skills/_shared/` accesibles
+- Agentes referenciados definidos en `opencode.json`
+- Sin restos de `gentle-ai` / `Gentle AI` / `gentle-orchestrator`
+- Estructura de directorios mínima (`skills/`, `skills/_shared/`, `prompts/sdd/`)
+
 
 ## Code Review automático con GGA (Gentleman Guardian Angel)
 
