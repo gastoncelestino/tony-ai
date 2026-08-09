@@ -173,7 +173,7 @@ def run():
         res = server.mem_search({"query": "asked about", "project": "demo", "type": "prompt-capture"})
         assert len(res["results"]) >= 1, res  # visible only when explicitly asked
 
-        # ── 12. mem_review: lifecycle (needs_review / mark_reviewed) ──────
+        # ── 12. mem_review: lifecycle (mark_stale → list → mark_reviewed) ────
         print("--- mem_review: lifecycle ---")
         # default lifecycle_status is active
         row = server.mem_get_observation({"id": id1})
@@ -183,11 +183,11 @@ def run():
         stale = server.mem_review({"action": "list", "project": "demo"})
         assert stale["count"] == 0, stale
 
-        # mark one memory as needs_review directly via SQL
-        conn = server.connect()
-        conn.execute("UPDATE observations SET lifecycle_status='needs_review' WHERE id=?", (id1,))
-        conn.commit()
-        conn.close()
+        # mark_stale moves it to needs_review via tool (no SQL direct)
+        updated = server.mem_review({"action": "mark_stale", "ids": [id1]})
+        assert updated["updated"] == 1, updated
+        row = server.mem_get_observation({"id": id1})
+        assert row["lifecycle_status"] == "needs_review", row
 
         # list now returns it
         stale = server.mem_review({"action": "list", "project": "demo"})
@@ -202,6 +202,10 @@ def run():
 
         # mark_reviewed with no ids errors
         err = server.mem_review({"action": "mark_reviewed"})
+        assert "error" in err, err
+
+        # mark_stale with no ids errors
+        err = server.mem_review({"action": "mark_stale"})
         assert "error" in err, err
 
         # mem_search includes lifecycle_status in results
@@ -234,7 +238,31 @@ def run():
         assert proven_list["count"] == 1, proven_list
         assert proven_list["results"][0]["id"] == id2, proven_list
 
-        # ── 14. MCP framing ───────────────────────────────────────────────
+        # ── 14. mem_review: full cycle mark_stale → mark_reviewed → mark_proven
+        print("--- mem_review: full cycle ---")
+        id3 = server.mem_save({"title": "Cycle test", "content": "test full lifecycle", "project": "demo", "type": "pattern"})["id"]
+        
+        # active → stale
+        server.mem_review({"action": "mark_stale", "ids": [id3]})
+        assert server.mem_get_observation({"id": id3})["lifecycle_status"] == "needs_review"
+        
+        # stale → active
+        server.mem_review({"action": "mark_reviewed", "ids": [id3]})
+        assert server.mem_get_observation({"id": id3})["lifecycle_status"] == "active"
+        
+        # active → proven (direct, no guard)
+        server.mem_review({"action": "mark_proven", "ids": [id3]})
+        assert server.mem_get_observation({"id": id3})["lifecycle_status"] == "proven"
+        
+        # proven → stale (direct, no guard)
+        server.mem_review({"action": "mark_stale", "ids": [id3]})
+        assert server.mem_get_observation({"id": id3})["lifecycle_status"] == "needs_review"
+        
+        # stale → proven (direct, no guard)
+        server.mem_review({"action": "mark_proven", "ids": [id3]})
+        assert server.mem_get_observation({"id": id3})["lifecycle_status"] == "proven"
+
+        # ── 15. MCP framing ───────────────────────────────────────────────
         print("--- MCP framing ---")
         init = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
         assert init["result"]["protocolVersion"] == "2024-11-05", init
