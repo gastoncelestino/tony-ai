@@ -59,13 +59,13 @@ Eso es todo — no hay paso de build, no hay migración, no hay setup wizard.
 | `mem_session_summary` | Guarda el cierre de sesión (Goal/Instructions/Discoveries/Accomplished/Next Steps/Relevant Files). Upsert por `(project, session_id)`. |
 | `mem_suggest_topic_key` | Sugiere un `topic_key` slug sin colisiones para un título dado. No guarda nada. |
 | `mem_save_prompt` | Guarda el último prompt crudo del usuario por sesión (`type='prompt-capture'`), separado del resto para no ensuciar `mem_search`. |
-| `mem_review` | Gestión del lifecycle de memorias. `list` (con filtro opcional `status`), `mark_reviewed` (needs_review → active), `mark_proven` (marcar como solución verificada). |
+| `mem_review` | Gestión del lifecycle de memorias. `list` (con filtro opcional `status`), `mark_reviewed` (→ active), `mark_proven` (→ proven), `mark_stale` (→ needs_review). |
 
 Esto cubre exactamente lo que el `AGENTS.md` del orquestador espera: `mem_search(query, project)` → `mem_get_observation(id)` como patrón de dos pasos, y `mem_save` con `topic_key` siguiendo la convención `sdd/{change-name}/{artifact-type}` (proposal, spec, design, tasks, apply-progress, verify-report, archive-report).
 
 ## Ciclo de vida de memorias
 
-Las observaciones pueden quedar desactualizadas con el tiempo. TonyMem usa un lifecycle simple:
+Las observaciones pueden quedar desactualizadas con el tiempo. TonyMem usa un lifecycle de 3 estados:
 
 | Estado | Significado |
 |--------|-------------|
@@ -80,6 +80,7 @@ Las observaciones pueden quedar desactualizadas con el tiempo. TonyMem usa un li
 4. Verificá contra el código/estado actual, luego `mem_review` con `action: mark_reviewed` y los ids para marcarlas como `active`.
 5. Después de una solución que emerge de Q&A y se verifica (tests pasan o usuario confirma), llamá `mem_review` con `action: mark_proven` y los ids. La próxima sesión la recupera primero.
 6. Si una memoria ya no es relevante, podés marcarla como reviewed sin modificar el contenido.
+7. Para marcar una memoria como stale (ej. detectaste que el código cambió y la decisión ya no aplica): `mem_review` con `action: mark_stale` y los ids.
 
 ## Cómo probarlo sin OpenCode
 
