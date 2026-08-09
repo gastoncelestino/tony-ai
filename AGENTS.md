@@ -166,7 +166,8 @@ two-state lifecycle to prevent outdated memories from being trusted as current
 facts.
 
 States:
-- `active` — current, verified memory (default for new saves)
+- `active` — current, verified memory (default)
+- `proven` — solution verified through repeated Q&A; prioritize in search
 - `needs_review` — stale memory that must be re-verified before use
 
 Rules:
@@ -183,6 +184,9 @@ Rules:
 5. When saving updated knowledge, use `mem_save` with the same `topic_key`
    to overwrite the stale content in place, then mark the old observation
    reviewed if needed.
+6. After a solution emerges from a Q&A exchange and is verified (tests pass
+   or user confirms), call `mem_review` with `action: mark_proven` and the
+   observation `ids`. Proven memories rank first in `mem_search`.
 
 ### AFTER COMPACTION
 

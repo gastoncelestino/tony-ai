@@ -59,7 +59,7 @@ Eso es todo — no hay paso de build, no hay migración, no hay setup wizard.
 | `mem_session_summary` | Guarda el cierre de sesión (Goal/Instructions/Discoveries/Accomplished/Next Steps/Relevant Files). Upsert por `(project, session_id)`. |
 | `mem_suggest_topic_key` | Sugiere un `topic_key` slug sin colisiones para un título dado. No guarda nada. |
 | `mem_save_prompt` | Guarda el último prompt crudo del usuario por sesión (`type='prompt-capture'`), separado del resto para no ensuciar `mem_search`. |
-| `mem_review` | Gestión del lifecycle de memorias. `list` devuelve observaciones `needs_review`; `mark_reviewed` las marca como `active` por id. |
+| `mem_review` | Gestión del lifecycle de memorias. `list` (con filtro opcional `status`), `mark_reviewed` (needs_review → active), `mark_proven` (marcar como solución verificada). |
 
 Esto cubre exactamente lo que el `AGENTS.md` del orquestador espera: `mem_search(query, project)` → `mem_get_observation(id)` como patrón de dos pasos, y `mem_save` con `topic_key` siguiendo la convención `sdd/{change-name}/{artifact-type}` (proposal, spec, design, tasks, apply-progress, verify-report, archive-report).
 
@@ -70,14 +70,16 @@ Las observaciones pueden quedar desactualizadas con el tiempo. TonyMem usa un li
 | Estado | Significado |
 |--------|-------------|
 | `active` | Memoria verificada y vigente (default) |
+| `proven` | Solución verificada que emergió de Q&A repetida. Rankeada primero en `mem_search`. |
 | `needs_review` | Memoria stale que debe re-verificarse antes de confiar |
 
 **Workflow:**
-1. `mem_search` devuelve `lifecycle_status` en cada resultado
-2. Si ves `needs_review`, no la uses como hecho confirmado sin verificar
-3. Llamá `mem_review` con `action: list` para ver memorias stale del proyecto
-4. Verificá contra el código/estado actual, luego `mem_review` con `action: mark_reviewed` y los ids para marcarlas como `active`
-5. Si una memoria ya no es relevante, podés marcarla como reviewed sin modificar el contenido
+1. `mem_search` devuelve `lifecycle_status` en cada resultado; `proven` aparece primero.
+2. Si ves `needs_review`, no la uses como hecho confirmado sin verificar.
+3. Llamá `mem_review` con `action: list` para ver memorias stale del proyecto, o `status: proven` para ver las soluciones verificadas.
+4. Verificá contra el código/estado actual, luego `mem_review` con `action: mark_reviewed` y los ids para marcarlas como `active`.
+5. Después de una solución que emerge de Q&A y se verifica (tests pasan o usuario confirma), llamá `mem_review` con `action: mark_proven` y los ids. La próxima sesión la recupera primero.
+6. Si una memoria ya no es relevante, podés marcarla como reviewed sin modificar el contenido.
 
 ## Cómo probarlo sin OpenCode
 

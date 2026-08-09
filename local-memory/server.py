@@ -198,7 +198,7 @@ def mem_search(args: dict) -> dict:
             sql += " AND o.scope = ?"
             params.append(scope)
 
-        sql += " ORDER BY rank LIMIT ?"
+        sql += " ORDER BY CASE o.lifecycle_status WHEN 'proven' THEN 0 ELSE 1 END, rank LIMIT ?"
         params.append(limit)
 
         rows = conn.execute(sql, params).fetchall()
@@ -362,22 +362,30 @@ def mem_review(args: dict) -> dict:
     """Memory lifecycle management.
 
     Actions:
-      - list: return observations marked needs_review (optionally filtered by project).
+      - list: return observations with a given lifecycle status (default: needs_review).
       - mark_reviewed: move observations from needs_review -> active by id list.
+      - mark_proven: mark observations as proven (verified solution) by id list.
     """
     action = args.get("action", "list")
     project = args.get("project", "default")
+    status_filter = args.get("status")
 
     conn = connect()
     try:
         if action == "list":
+            if status_filter:
+                where_status = "lifecycle_status = ?"
+                status_params = (status_filter,)
+            else:
+                where_status = "lifecycle_status = 'needs_review'"
+                status_params = ()
             rows = conn.execute(
                 "SELECT id, project, title, topic_key, type, scope, lifecycle_status, "
                 "       created_at, updated_at "
-                "FROM observations "
-                "WHERE lifecycle_status = 'needs_review' AND project = ? "
+                f"FROM observations "
+                f"WHERE {where_status} AND project = ? "
                 "ORDER BY updated_at DESC",
-                (project,),
+                (*status_params, project),
             ).fetchall()
             return {"results": [dict(r) for r in rows], "count": len(rows)}
 
@@ -391,6 +399,21 @@ def mem_review(args: dict) -> dict:
             cur = conn.execute(
                 f"UPDATE observations SET lifecycle_status='active', updated_at=? "
                 f"WHERE id IN ({placeholders}) AND lifecycle_status='needs_review'",
+                [now(), *ids],
+            )
+            conn.commit()
+            return {"updated": cur.rowcount}
+
+        if action == "mark_proven":
+            ids = args.get("ids")
+            if not ids:
+                return {"error": "ids required for mark_proven"}
+            if isinstance(ids, int):
+                ids = [ids]
+            placeholders = ",".join("?" * len(ids))
+            cur = conn.execute(
+                f"UPDATE observations SET lifecycle_status='proven', updated_at=? "
+                f"WHERE id IN ({placeholders})",
                 [now(), *ids],
             )
             conn.commit()
@@ -509,13 +532,14 @@ TOOLS = {
         "handler": mem_save_prompt,
     },
     "mem_review": {
-        "description": "Memory lifecycle management. Actions: list (observations needs_review), mark_reviewed (move needs_review -> active by ids).",
+        "description": "Memory lifecycle management. Actions: list (filter by lifecycle status), mark_reviewed (needs_review -> active), mark_proven (mark as verified solution).",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["list", "mark_reviewed"], "description": "list: return needs_review items; mark_reviewed: set ids to active"},
+                "action": {"type": "string", "enum": ["list", "mark_reviewed", "mark_proven"], "description": "list: return items by status filter; mark_reviewed: set ids to active; mark_proven: set ids to proven"},
                 "project": {"type": "string", "description": "Project filter for list, default 'default'"},
-                "ids": {"type": "array", "items": {"type": "number"}, "description": "Observation ids to mark as reviewed (mark_reviewed only)"},
+                "status": {"type": "string", "enum": ["active", "proven", "needs_review"], "description": "Lifecycle status filter for list (default: needs_review)"},
+                "ids": {"type": "array", "items": {"type": "number"}, "description": "Observation ids to update (mark_reviewed / mark_proven)"},
             },
             "required": ["action"],
         },
