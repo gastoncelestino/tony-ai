@@ -173,7 +173,48 @@ def run():
         res = server.mem_search({"query": "asked about", "project": "demo", "type": "prompt-capture"})
         assert len(res["results"]) >= 1, res  # visible only when explicitly asked
 
-        # ── 12. MCP framing ───────────────────────────────────────────────
+        # ── 12. mem_review: lifecycle (needs_review / mark_reviewed) ──────
+        print("--- mem_review: lifecycle ---")
+        # default lifecycle_status is active
+        row = server.mem_get_observation({"id": id1})
+        assert row.get("lifecycle_status") == "active", row
+
+        # list returns empty when nothing is stale
+        stale = server.mem_review({"action": "list", "project": "demo"})
+        assert stale["count"] == 0, stale
+
+        # mark one memory as needs_review directly via SQL
+        conn = server.connect()
+        conn.execute("UPDATE observations SET lifecycle_status='needs_review' WHERE id=?", (id1,))
+        conn.commit()
+        conn.close()
+
+        # list now returns it
+        stale = server.mem_review({"action": "list", "project": "demo"})
+        assert stale["count"] == 1, stale
+        assert stale["results"][0]["id"] == id1, stale
+
+        # mark_reviewed moves it back to active
+        updated = server.mem_review({"action": "mark_reviewed", "ids": [id1]})
+        assert updated["updated"] == 1, updated
+        stale = server.mem_review({"action": "list", "project": "demo"})
+        assert stale["count"] == 0, stale
+
+        # mark_reviewed with no ids errors
+        err = server.mem_review({"action": "mark_reviewed"})
+        assert "error" in err, err
+
+        # mem_search includes lifecycle_status in results
+        conn = server.connect()
+        conn.execute("UPDATE observations SET lifecycle_status='needs_review' WHERE id=?", (id1,))
+        conn.commit()
+        conn.close()
+        res = server.mem_search({"query": "Auth", "project": "demo"})
+        match = next((r for r in res["results"] if r["id"] == id1), None)
+        assert match is not None, res
+        assert match["lifecycle_status"] == "needs_review", match
+
+        # ── 13. MCP framing ───────────────────────────────────────────────
         print("--- MCP framing ---")
         init = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
         assert init["result"]["protocolVersion"] == "2024-11-05", init
