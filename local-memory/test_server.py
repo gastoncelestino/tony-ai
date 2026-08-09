@@ -208,11 +208,8 @@ def run():
         err = server.mem_review({"action": "mark_stale"})
         assert "error" in err, err
 
-        # mem_search includes lifecycle_status in results
-        conn = server.connect()
-        conn.execute("UPDATE observations SET lifecycle_status='needs_review' WHERE id=?", (id1,))
-        conn.commit()
-        conn.close()
+        # mem_search includes lifecycle_status in results (use mark_stale tool, not SQL)
+        server.mem_review({"action": "mark_stale", "ids": [id1]})
         res = server.mem_search({"query": "Auth", "project": "demo"})
         match = next((r for r in res["results"] if r["id"] == id1), None)
         assert match is not None, res
