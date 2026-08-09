@@ -1,7 +1,7 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre docker/ + los tests
 
-.PHONY: test test-python test-ts verify-qdrant docker-up docker-down clean bootstrap health
+.PHONY: test test-python test-ts verify-qdrant docker-up docker-down clean bootstrap health validate-config
 
 test: test-python test-ts
 
@@ -38,3 +38,8 @@ docker-down:
 clean:
 	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db
 	@echo "✓ Cleaned local databases"
+
+validate-config:
+	@echo "▶ Validating configuration..."
+	@bun run scripts/validate-config.ts
+	@echo "✓ Configuration valid"
