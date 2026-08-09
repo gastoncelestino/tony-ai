@@ -1,11 +1,12 @@
 # Tony-AI - Instalación detallada
 
-# 0. Prerequisitos
+# 0. Requisitos
 - **Python 3.10+** para los servidores MCP en Python.
 - **Bun** para los scripts de verificación basados en TypeScript y plugins.
 - **OpenCode CLI** (instalador oficial: https://opencode.ai)
 - **Ollama** (https://ollama.com/download)
 - **Docker** (opcional, para correr Qdrant + Ollama como servicios)
+- **Gga** (https://github.com/Gentleman-Programming/gentleman-guardian-angel)
 
 ## Para características semánticas (code-index y judgment-memory)
 - **Qdrant** corriendo localmente o remotamente.
