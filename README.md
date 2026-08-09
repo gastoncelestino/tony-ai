@@ -159,15 +159,6 @@ make docker-down     # Detener servicios Docker
 make validate-config # Validar opencode.json + prompts + skills
 ```
 
-`make validate-config` ejecuta `scripts/validate-config.ts`, que verifica:
-- JSON válido en `opencode.json`
-- Referencias `{file:...}` existentes
-- Archivos en `skills/_shared/` accesibles
-- Agentes referenciados definidos en `opencode.json`
-- Sin restos de `gentle-ai` / `Gentle AI` / `gentle-orchestrator`
-- Estructura de directorios mínima (`skills/`, `skills/_shared/`, `prompts/sdd/`)
-
-
 ## Code Review automático con GGA (Gentleman Guardian Angel)
 
 [GGA](https://github.com/Gentleman-Programming/gentleman-guardian-angel) valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.

@@ -64,11 +64,7 @@ tony-ai/
 ├── README.md                          # Introducción y quickstart
 ├── opencode.json                      # Config de agentes, MCP servers, permisos
 ├── AGENTS.md                          # Reglas de orquestación, idioma, memoria
-<<<<<<< ours
 ├── ARCHITECTURE.md                    # Documentación técnica para entender el proyecto
-=======
-├── ARCHITECTURE.md                    # Este archivo
->>>>>>> theirs
 ├── INSTALL.md                         # Guía de instalación detallada
 ├── Makefile                           # Wrappers de tests, bootstrap, health, docker
 ├── requirements.txt                   # Filosofía stdlib-only
