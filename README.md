@@ -159,11 +159,8 @@ make docker-down     # Detener servicios Docker
 make validate-config # Validar opencode.json + prompts + skills
 ```
 
-## Code Review automático con GGA (Gentleman Guardian Angel)
+## Code Review automático
 `GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
-
-
-### Activar gga
 El repo ya incluye `.gga` (config) y el agente `gga-reviewer` en `opencode.json`. Solo falta instalar el hook:
 
 ```bash
@@ -179,23 +176,12 @@ gga run --pr-mode    # revisar todos los cambios del PR vs main
 gga run --no-cache   # ignorar cache y revisar todo
 ```
 
-### Configuración (`tony-ai/.gga`)
-
-| Campo | Valor | Por qué |
-|-------|-------|---------|
-| `PROVIDER` | `opencode` | tony-ai ya usa OpenCode como orquestador |
-| `RULES_FILE` | `AGENTS.md` | Las coding standards del repo |
-| `FILE_PATTERNS` | `*.py,*.ts` | MCP servers (Python) + plugins/hooks (TypeScript) |
-| `EXCLUDE_PATTERNS` | tests + mocks | Los tests validan, no se validan contra sí mismos |
-| `OPENCODE_AGENT` | `gga-reviewer` | Agente read-only en `opencode.json` que responde directo (no delega como `tony-orchestrator`) |
-| `OPENCODE_VARIANT` | `high` | Mejor calidad de revisión |
-
-
 ## Agradecimientos
-Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.
+Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.  
+
 Se trató de reutilizar el código que ya está probado y funciona correctamente, se agregaron componentes como `Code Indexer` (RAG semántico), `TonyMem` (base de datos SQLite), `Judgment Day` (SQLite, Qdrant para juicios y Ollama con modelos locales).
 
-La intención es descargar este repositorio en la carpeta global .opencode/ → correr un único instalador /scripts/setup.sh y correr health.sh para verificar la instalación → tener mas control de los archivos para una contínua mejora.  
+La intención es descargar este repositorio en la carpeta global `~/.opencode/` → correr un único instalador `scripts/setup.sh`, verificar la instalación `scripts/health.sh` → tener mas control de los archivos para una mejora contínua.
 
 Se trató de documentar lo más posible, por si querés modificar algo de tu interés.
 
