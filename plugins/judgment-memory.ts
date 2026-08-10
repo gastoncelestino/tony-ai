@@ -383,5 +383,7 @@ export {
   upsertJudgment,
   extractProjectName,
   JD_TRIGGER_RE,
-  JD_TERMINAL_RE
+  JD_TERMINAL_RE,
+  JUDGMENT_MEMORY_TOOLS,
+  RECALL_SCORE_THRESHOLD
 }

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, existsSync } from "node:fs"
+import { readFileSync, readdirSync, existsSync, statSync } from "node:fs"
 import { resolve } from "node:path"
 
 const ROOT = resolve(process.cwd())
@@ -337,12 +337,30 @@ function checkPromptsDirectory(): void {
   ok(`Found ${promptFiles.length} prompt files in prompts/sdd/`)
 }
 
+function checkScripts(): void {
+  const scripts = ["scripts/setup.sh", "scripts/health.sh"]
+  for (const script of scripts) {
+    const fullPath = resolve(ROOT, script)
+    if (!existsSync(fullPath)) {
+      fail(`${script} not found`)
+    } else {
+      const mode = statSync(fullPath).mode
+      if ((mode & 0o111) === 0) {
+        warn(`${script} exists but is not executable`)
+      } else {
+        ok(`${script} exists and executable`)
+      }
+    }
+  }
+}
+
 function main(): void {
   console.log("\n=== Tony-AI Configuration Validator ===\n")
 
   checkJsonSyntax()
   checkSkillsDirectory()
   checkPromptsDirectory()
+  checkScripts()
   checkDefaultAgent()
   checkPermissions()
   checkMcpServers()

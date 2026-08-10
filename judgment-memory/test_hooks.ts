@@ -1,6 +1,5 @@
 // test_hooks.ts — Tests de runtime para hooks de plugins/judgment-memory.ts
 // Requiere: bun test hooks estos usando un mock del OpenCode plugin context
-//
 // Mock del Plugin context (simula sessionID, directory, hooks registration)
 // Mock de Qdrant/Ollama (HTTP server en memoria, mismo patrón que test_ledger.py)
 
@@ -9,6 +8,15 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "os"
 import { join } from "path"
 import { spawn } from "bun"
+
+// Importar la implementación real para testear contra ella
+import {
+  parsePassiveRecord,
+  JD_TRIGGER_RE,
+  JD_TERMINAL_RE,
+  JUDGMENT_MEMORY_TOOLS,
+  RECALL_SCORE_THRESHOLD
+} from "../plugins/judgment-memory"
 
 // ─── Mock del OpenCode plugin context ────────────────────────────────────────
 
@@ -54,7 +62,7 @@ function startMockServer(port: number): MockServer {
   return { port, url: `http://localhost:${port}`, close: () => server.stop() }
 }
 
-// ─── Test runner ─────────────────────────────────────────────────────────────
+// ─── Test runner ──────────────────────────────────────────────────────────────
 
 async function runTestCase(name: string, fn: (ctx: any) => Promise<void>) {
   const tmpDir = join(tmpdir(), `tonya-test-${Date.now()}`)
@@ -70,9 +78,7 @@ async function runTestCase(name: string, fn: (ctx: any) => Promise<void>) {
   }
 }
 
-// ─── Tests de parsePassiveRecord ─────────────────────────────────────────────
-
-import { parsePassiveRecord } from "../plugins/judgment-memory"
+// ─── Tests de parsePassiveRecord (importada del plugin real) ─────────────────
 
 test("parsePassiveRecord: APPROVED con lesson", () => {
   const result = parsePassiveRecord(
@@ -102,16 +108,16 @@ test("parsePassiveRecord: sin terminal line retorna null", () => {
   expect(result).toBeNull()
 })
 
-test("parsePassiveRecord: task fallback a primera línea", () => {
+test("parsePassiveRecord: task fallback a primera línea no-terminal", () => {
   const result = parsePassiveRecord(
-    "JUDGMENT: APPROVED ✅",
+    "Just a regular task description\nJUDGMENT: APPROVED ✅",
     "sess-4", "myproj"
   )
-  expect(result?.task).toContain("JUDGMENT")
+  expect(result?.task).toBe("Just a regular task description")
   expect(result?.final).toBe("approve")
 })
 
-test("parsePassiveRecord: target con formato alternativo", () => {
+test("parsePassiveRecord: target con formato alternativo 'Issue:'", () => {
   const result = parsePassiveRecord(
     "Issue: memory leak\nJUDGMENT: APPROVED ✅\nLearned: cleanup event listeners",
     "sess-5", "myproj"
@@ -120,52 +126,79 @@ test("parsePassiveRecord: target con formato alternativo", () => {
   expect(result?.lesson).toBe("cleanup event listeners")
 })
 
-// ─── Tests de JD_TRIGGER_RE ──────────────────────────────────────────────────
-
-test("JD_TRIGGER_RE: detecta keywords", () => {
-  // Importamos el regex desde el plugin (requiere que esté exportado)
-  const text1 = "Let's do judgment day on this"
-  const text2 = "Run a dual review"
-  const text3 = "adversarial review needed"
-  const text4 = "juzgar este caso"
-  const text5 = "no trigger keywords here"
-  // Nota: JD_TRIGGER_RE está exportado desde judgment-memory.ts
-  expect(/\\b(judgment\\s*day|dual\\s*review|adversarial\\s*review|juzgar)\\b/i.test(text1)).toBe(true)
-  expect(/\\b(judgment\\s*day|dual\\s*review|adversarial\\s*review|juzgar)\\b/i.test(text2)).toBe(true)
-  expect(/\\b(judgment\\s*day|dual\\s*review|adversarial\\s*review|juzgar)\\b/i.test(text3)).toBe(true)
-  expect(/\\b(judgment\\s*day|dual\\s*review|adversarial\\s*review|juzgar)\\b/i.test(text4)).toBe(true)
-  expect(/\\b(judgment\\s*day|dual\\s*review|adversarial\\s*review|juzgar)\\b/i.test(text5)).toBe(false)
+test("parsePassiveRecord: task fallback cuando no hay target patterns", () => {
+  const result = parsePassiveRecord(
+    "Random first line\nSecond line\nJUDGMENT: ESCALATED ⚠️",
+    "sess-6", "myproj"
+  )
+  expect(result?.task).toBe("Random first line")
+  expect(result?.final).toBe("escalated")
 })
 
-// ─── Tests de JD_TERMINAL_RE ─────────────────────────────────────────────────
+// ─── Tests de JD_TRIGGER_RE (importada del plugin real) ────────────────────────
 
-test("JD_TERMINAL_RE: detecta APPROVED/ESCALATED", () => {
-  expect(/JUDGMENT:\\s*(APPROVED|ESCALATED)/i.test("JUDGMENT: APPROVED ✅")).toBe(true)
-  expect(/JUDGMENT:\\s*(APPROVED|ESCALATED)/i.test("JUDGMENT: ESCALATED ⚠️")).toBe(true)
-  expect(/JUDGMENT:\\s*(APPROVED|ESCALATED)/i.test("JUDGMENT: rejected ❌")).toBe(false)
-  expect(/JUDGMENT:\\s*(APPROVED|ESCALATED)/i.test("judgment: approved")).toBe(true) // case insensitive
+test("JD_TRIGGER_RE: detecta 'judgment day'", () => {
+  expect(JD_TRIGGER_RE.test("Let's do judgment day on this")).toBe(true)
 })
 
-// ─── Tests de upsertJudgment ─────────────────────────────────────────────────
+test("JD_TRIGGER_RE: detecta 'dual review'", () => {
+  expect(JD_TRIGGER_RE.test("Run a dual review")).toBe(true)
+})
 
-test("upsertJudgment: inserta si no existe", async () => {
-  // Este test requiere un DB temporal — se testea indirectamente via runTestCase
-  // La lógica de upsert está en judgment-memory.ts y usa bun:sqlite
-  // Para test de runtime, necesitamos mocks de Bun.Database
-  expect(true).toBe(true) // placeholder — se valida en test_hooks_integration
+test("JD_TRIGGER_RE: detecta 'adversarial review'", () => {
+  expect(JD_TRIGGER_RE.test("adversarial review needed")).toBe(true)
+})
+
+test("JD_TRIGGER_RE: detecta 'juzgar'", () => {
+  expect(JD_TRIGGER_RE.test("juzgar este caso")).toBe(true)
+})
+
+test("JD_TRIGGER_RE: no detecta sin keywords", () => {
+  expect(JD_TRIGGER_RE.test("no trigger keywords here")).toBe(false)
+})
+
+test("JD_TRIGGER_RE: case insensitive", () => {
+  expect(JD_TRIGGER_RE.test("JUDGMENT DAY")).toBe(true)
+  expect(JD_TRIGGER_RE.test("Juzgar")).toBe(true)
+})
+
+// ─── Tests de JD_TERMINAL_RE (importada del plugin real) ──────────────────────
+
+test("JD_TERMINAL_RE: detecta APPROVED", () => {
+  expect(JD_TERMINAL_RE.test("JUDGMENT: APPROVED ✅")).toBe(true)
+})
+
+test("JD_TERMINAL_RE: detecta ESCALATED", () => {
+  expect(JD_TERMINAL_RE.test("JUDGMENT: ESCALATED ⚠️")).toBe(true)
+})
+
+test("JD_TERMINAL_RE: rechaza 'rejected'", () => {
+  expect(JD_TERMINAL_RE.test("JUDGMENT: rejected ❌")).toBe(false)
+})
+
+test("JD_TERMINAL_RE: case insensitive", () => {
+  expect(JD_TERMINAL_RE.test("judgment: approved")).toBe(true)
+})
+
+// ─── Tests de JUDGMENT_MEMORY_TOOLS ───────────────────────────────────────────
+
+test("JUDGMENT_MEMORY_TOOLS: contiene las 4 tools esperadas", () => {
+  expect(JUDGMENT_MEMORY_TOOLS.has("jd_recall")).toBe(true)
+  expect(JUDGMENT_MEMORY_TOOLS.has("jd_record")).toBe(true)
+  expect(JUDGMENT_MEMORY_TOOLS.has("jd_history")).toBe(true)
+  expect(JUDGMENT_MEMORY_TOOLS.has("jd_stats")).toBe(true)
+  expect(JUDGMENT_MEMORY_TOOLS.size).toBe(4)
 })
 
 // ─── Tests de hooks (requieren mock del plugin system) ───────────────────────
 
 test("chat.message hook: activa recall con keywords", async () => {
   await runTestCase("recall-with-keywords", async (ctx) => {
-    // Mock de la salida del hook
     const hooks = {
       "chat.message": async (input: any, output: any) => {
         const content = output.parts?.filter((p: any) => p.type === "text")
           .map((p: any) => p.text ?? "").join("\n").trim()
-        if (content && /\\b(judgment\\s*day|dual\\s*review|adversarial\\s*review|juzgar)\\b/i.test(content)) {
-          // Simula que encuentra resultados
+        if (content && JD_TRIGGER_RE.test(content)) {
           return { triggered: true, content }
         }
         return { triggered: false }
@@ -188,7 +221,7 @@ test("chat.message hook: no activa recall sin keywords", async () => {
       "chat.message": async (input: any, output: any) => {
         const content = output.parts?.filter((p: any) => p.type === "text")
           .map((p: any) => p.text ?? "").join("\n").trim()
-        if (content && /\\b(judgment\\s*day|dual\\s*review|adversarial\\s*review|juzgar)\\b/i.test(content)) {
+        if (content && JD_TRIGGER_RE.test(content)) {
           return { triggered: true, content }
         }
         return { triggered: false }
@@ -207,8 +240,6 @@ test("chat.message hook: no activa recall sin keywords", async () => {
 
 test("tool.execute.after hook: captura pasiva con JUDGMENT: APPROVED", async () => {
   await runTestCase("passive-capture-approved", async (ctx) => {
-    const JD_TERMINAL_RE = /JUDGMENT:\\s*(APPROVED|ESCALATED)/i
-    
     const hooks = {
       "tool.execute.after": async (input: any, output: any) => {
         if (input.tool !== "Task" || !output) return { captured: false }
@@ -233,8 +264,6 @@ test("tool.execute.after hook: captura pasiva con JUDGMENT: APPROVED", async () 
 
 test("tool.execute.after hook: ignora tools de judgment-memory", async () => {
   await runTestCase("ignore-jm-tools", async (ctx) => {
-    const JUDGMENT_MEMORY_TOOLS = new Set(["jd_recall", "jd_record", "jd_history", "jd_stats"])
-    
     const hooks = {
       "tool.execute.after": async (input: any, output: any) => {
         if (JUDGMENT_MEMORY_TOOLS.has(input.tool.toLowerCase())) return { ignored: true }
@@ -309,12 +338,11 @@ test("integración: recall → captura pasiva → verificación", async () => {
       
       // 2. JD_TRIGGER_RE detecta keywords
       const triggerText = "Let's do judgment day on this"
-      expect(/\b(judgment\s*day|dual\s+review|adversarial\s+review|juzgar)\b/i.test(triggerText))
-        .toBe(true)
+      expect(JD_TRIGGER_RE.test(triggerText)).toBe(true)
       
       // 3. JD_TERMINAL_RE detecta el Output Contract
       const terminalLine = "JUDGMENT: ESCALATED ⚠️"
-      expect(/JUDGMENT:\s*(APPROVED|ESCALATED)/i.test(terminalLine)).toBe(true)
+      expect(JD_TERMINAL_RE.test(terminalLine)).toBe(true)
     })
   } finally {
     mockServer.close()
@@ -323,20 +351,13 @@ test("integración: recall → captura pasiva → verificación", async () => {
 
 // ─── Test: RECALL_SCORE_THRESHOLD configurable ───────────────────────────────
 
-test("RECALL_SCORE_THRESHOLD: respeta threshold configurable", async () => {
-  await runTestCase("recall-threshold", async (ctx) => {
-    // Simula que el threshold viene de env var
-    const threshold = process.env.TONY_RECALL_SCORE_THRESHOLD 
-      ? parseFloat(process.env.TONY_RECALL_SCORE_THRESHOLD) 
-      : 0.5
-    
-    const hits = [
-      { score: 0.3, payload: { test: "low" } },
-      { score: 0.6, payload: { test: "medium" } },
-      { score: 0.8, payload: { test: "high" } }
-    ]
-    
-    const filtered = hits.filter(h => (h.score ?? 0) > threshold)
-    expect(filtered.length).toBe(2) // 0.6 y 0.8 pasan el threshold 0.5
-  })
+test("RECALL_SCORE_THRESHOLD: respeta threshold configurable (default 0.5)", () => {
+  const hits = [
+    { score: 0.3, payload: { test: "low" } },
+    { score: 0.6, payload: { test: "medium" } },
+    { score: 0.8, payload: { test: "high" } }
+  ]
+  
+  const filtered = hits.filter(h => (h.score ?? 0) > RECALL_SCORE_THRESHOLD)
+  expect(filtered.length).toBe(2) // 0.6 y 0.8 pasan el threshold 0.5
 })
