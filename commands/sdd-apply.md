@@ -37,20 +37,19 @@ If all gates pass, launch the hidden `sdd-apply` sub-agent with:
 Return a structured orchestration result with: status, executive_summary, artifacts, next_recommended, risks, and skill_resolution.
 
 POST-APPLY REVIEW ROUTING:
-After apply returns, rerun native status. If `nextRecommended: review`, the parent orchestrator runs `tony-ai review start --cwd <repo>`. The facade derives repository scope, lineage, tier, lenses, and correction budget from live Git. The apply executor never launches review.
+After apply returns, rerun native status. If `nextRecommended: review`, the parent orchestrator runs the review workflow via OpenCode's native review agents (`review-readability`, `review-reliability`, `review-resilience`, `review-risk`, `review-refuter`) — no external binary required. The review agents derive repository scope, lineage, tier, lenses, and correction budget from live Git. The apply executor never launches review.
 
-### Authority-First Terminal Procedure
+### Authority-First Terminal Procedure (Native)
 
-Use only the compact facade; it appends and reads back native authority before materializing existing compatibility artifacts.
+Use only the compact facade via OpenCode native agents; it appends and reads back native authority before materializing existing compatibility artifacts.
 
 | Order | Operation | Required result | Terminal mirrors |
 |---|---|---|---|
-| 01 | `tony-ai review start` | target, tier, lenses, and budget bound | blocked |
-| 02 | `tony-ai review finalize` | results, evidence, native transitions, and receipt bound | blocked |
-| 03 | `tony-ai review validate --gate <gate> --cwd <repo>` | authority, receipt, and live Git checked | blocked |
+| 01 | `review-readability` / `review-reliability` / `review-resilience` / `review-risk` (per risk) | target, tier, lenses, and budget bound | blocked |
+| 02 | `review-refuter` (inferential batch) | results, evidence, native transitions, and receipt bound | blocked |
+| 03 | Validate receipt via `mem_review` / `mem_search` against `AGENTS.md` | authority, receipt, and live Git checked | blocked |
 | 04 | `reconcile-terminal-mirrors` | existing mirrors reconciled | allowed |
 
 After ambiguous output, rerun the same facade operation; native discovery resumes committed authority without another budget. Malformed or ambiguous lineage remains invalid.
 
 Reuse a valid receipt; later commit/push/PR/release events only validate it.
-
