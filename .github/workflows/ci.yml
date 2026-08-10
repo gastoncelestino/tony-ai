@@ -37,6 +37,11 @@ jobs:
           cd ../judgment-memory && python3 test_ledger.py
         shell: bash
 
+      - name: Run Kernel tests
+        run: |
+          python3 -m kernel.test_state_machine
+        shell: bash
+
       - name: Run TypeScript tests
         run: |
           cd judgment-memory && bun test ./test_hooks.ts
