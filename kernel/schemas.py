@@ -225,11 +225,11 @@ class Evidence:
 @dataclass(frozen=True, slots=True)
 class ExecutionRecord:
     command: str
-    args: tuple[str, ...] = field(default_factory=tuple)
     exit_code: int
     stdout: str
     stderr: str
     duration_ms: int
+    args: tuple[str, ...] = field(default_factory=tuple)
     timestamp: datetime = field(default_factory=datetime.now)
     working_dir: Optional[str] = None
     env: dict = field(default_factory=dict)
@@ -275,3 +275,278 @@ class Claim:
         # Simple: if any valid evidence supports, consider supported
         # In reality, would need more sophisticated logic
         return ClaimStatus.SUPPORTED
+# ============================================================================
+# Task Ledger Schemas
+# ============================================================================
+
+class TaskStatus(str, Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+    SKIPPED = "skipped"
+
+
+@dataclass(frozen=True, slots=True)
+class Task:
+    id: str
+    description: str
+    phase: Phase
+    status: TaskStatus = TaskStatus.PENDING
+    dependencies: tuple[str, ...] = field(default_factory=tuple)
+    files: tuple[str, ...] = field(default_factory=tuple)
+    evidence: tuple[Evidence, ...] = field(default_factory=tuple)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    assigned_agent: Optional[str] = None
+    metadata: dict = field(default_factory=dict)
+
+    def is_ready(self, all_tasks: dict[str, "Task"]) -> bool:
+        for dep_id in self.dependencies:
+            dep = all_tasks.get(dep_id)
+            if not dep or dep.status != TaskStatus.COMPLETED:
+                return False
+        return True
+
+    def can_start(self, all_tasks: dict[str, "Task"]) -> bool:
+        return self.status == TaskStatus.PENDING and self.is_ready(all_tasks)
+
+
+@dataclass(frozen=True, slots=True)
+class TaskLedger:
+    tasks: dict[str, Task] = field(default_factory=dict)
+
+    def add_task(self, task: Task) -> "TaskLedger":
+        return TaskLedger(tasks={**self.tasks, task.id: task})
+
+    def get_task(self, task_id: str) -> Optional[Task]:
+        return self.tasks.get(task_id)
+
+    def get_pending(self) -> tuple[Task, ...]:
+        return tuple(t for t in self.tasks.values() if t.status == TaskStatus.PENDING)
+
+    def get_in_progress(self) -> tuple[Task, ...]:
+        return tuple(t for t in self.tasks.values() if t.status == TaskStatus.IN_PROGRESS)
+
+    def get_completed(self) -> tuple[Task, ...]:
+        return tuple(t for t in self.tasks.values() if t.status == TaskStatus.COMPLETED)
+
+    def get_failed(self) -> tuple[Task, ...]:
+        return tuple(t for t in self.tasks.values() if t.status == TaskStatus.FAILED)
+
+    def get_blocked(self) -> tuple[Task, ...]:
+        return tuple(t for t in self.tasks.values() if t.status == TaskStatus.BLOCKED)
+
+    def get_next_ready(self) -> Optional[Task]:
+        pending = self.get_pending()
+        for task in pending:
+            if task.can_start(self.tasks):
+                return task
+        return None
+
+    def start_task(self, task_id: str) -> "TaskLedger":
+        task = self.tasks.get(task_id)
+        if not task or task.status != TaskStatus.PENDING:
+            return self
+        updated = Task(
+            id=task.id,
+            description=task.description,
+            phase=task.phase,
+            status=TaskStatus.IN_PROGRESS,
+            dependencies=task.dependencies,
+            files=task.files,
+            evidence=task.evidence,
+            started_at=datetime.now(),
+            completed_at=task.completed_at,
+            assigned_agent=task.assigned_agent,
+            metadata=task.metadata,
+        )
+        return TaskLedger(tasks={**self.tasks, task_id: updated})
+
+    def complete_task(self, task_id: str, evidence: tuple[Evidence, ...] = ()) -> "TaskLedger":
+        task = self.tasks.get(task_id)
+        if not task or task.status != TaskStatus.IN_PROGRESS:
+            return self
+        updated = Task(
+            id=task.id,
+            description=task.description,
+            phase=task.phase,
+            status=TaskStatus.COMPLETED,
+            dependencies=task.dependencies,
+            files=task.files,
+            evidence=evidence,
+            started_at=task.started_at,
+            completed_at=datetime.now(),
+            assigned_agent=task.assigned_agent,
+            metadata=task.metadata,
+        )
+        return TaskLedger(tasks={**self.tasks, task_id: updated})
+
+    def fail_task(self, task_id: str, error: str) -> "TaskLedger":
+        task = self.tasks.get(task_id)
+        if not task or task.status not in (TaskStatus.PENDING, TaskStatus.IN_PROGRESS):
+            return self
+        updated = Task(
+            id=task.id,
+            description=task.description,
+            phase=task.phase,
+            status=TaskStatus.FAILED,
+            dependencies=task.dependencies,
+            files=task.files,
+            evidence=task.evidence,
+            started_at=task.started_at,
+            completed_at=datetime.now(),
+            assigned_agent=task.assigned_agent,
+            metadata={**task.metadata, "error": error},
+        )
+        return TaskLedger(tasks={**self.tasks, task_id: updated})
+
+    def get_stats(self) -> dict:
+        total = len(self.tasks)
+        completed = len(self.get_completed())
+        pending = len(self.get_pending())
+        in_progress = len(self.get_in_progress())
+        failed = len(self.get_failed())
+        return {
+            "total": total,
+            "completed": completed,
+            "pending": pending,
+            "in_progress": in_progress,
+            "failed": failed,
+            "completion_rate": completed / total if total > 0 else 0.0,
+        }
+
+    def all_completed(self) -> bool:
+        return all(t.status == TaskStatus.COMPLETED for t in self.tasks.values())
+
+
+# ============================================================================
+# Artifact Gate Schemas
+# ============================================================================
+
+class ArtifactGateResult(str, Enum):
+    PASS = "pass"
+    FAIL = "fail"
+    WARNING = "warning"
+    SKIPPED = "skipped"
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactValidationResult:
+    artifact_kind: str
+    result: str
+    message: str
+    details: dict = field(default_factory=dict)
+    checked_at: datetime = field(default_factory=datetime.now)
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactGateResult:
+    artifact_kind: str
+    passed: bool
+    message: str
+    details: dict = field(default_factory=dict)
+    required: bool = True
+
+
+# ============================================================================
+# Retry Budget Schemas
+# ============================================================================
+
+class RetryAction(str, Enum):
+    IMPLEMENT = "implement"
+    TARGETED_FIX = "targeted_fix"
+    HUMAN_REQUIRED = "human_required"
+
+
+@dataclass
+class AttemptRecord:
+    """Record of a single attempt."""
+    attempt_number: int
+    action: str
+    phase: str
+    task_id: Optional[str] = None
+    started_at: datetime = field(default_factory=datetime.now)
+    completed_at: Optional[datetime] = None
+    success: bool = False
+    error: Optional[str] = None
+    evidence: dict = field(default_factory=dict)
+
+
+@dataclass
+class RetryBudget:
+    """
+    Tracks retry attempts per task/phase.
+    Max 3 attempts: implement → targeted fix → targeted fix → human required.
+    """
+    max_attempts: int = 3
+    attempts: Dict[str, List[dict]] = field(default_factory=dict)
+    
+    def get_key(self, phase: str, task_id: Optional[str] = None) -> str:
+        return f"{phase}:{task_id or 'phase'}"
+    
+    def get_attempts(self, phase: str, task_id: Optional[str] = None) -> list:
+        key = self.get_key(phase, task_id)
+        return self.attempts.get(key, [])
+    
+    def record_attempt(self, phase: str, task_id: Optional[str], success: bool, 
+                       error: Optional[str] = None, evidence: dict = None) -> dict:
+        key = f"{phase}:{task_id or 'phase'}"
+        attempts = self.attempts.get(key, [])
+        attempt_num = len(attempts) + 1
+        
+        record = {
+            "attempt_number": len(self.attempts.get(key, [])) + 1,
+            "phase": phase,
+            "task_id": task_id,
+            "success": success,
+            "error": None,
+            "evidence": evidence or {},
+            "timestamp": __import__('datetime').datetime.now().isoformat(),
+        }
+        
+        if key not in self.attempts:
+            self.attempts[key] = []
+        self.attempts[key].append(record)
+        
+        return {
+            "attempt": len(self.attempts[key]),
+            "action": "human_required" if len(self.attempts[key]) >= 3 else ("targeted_fix" if len(self.attempts[key]) > 1 else "implement"),
+            "max_reached": len(self.attempts[key]) >= 3,
+            "next_action": "human_required" if len(self.attempts[key]) >= 3 else ("targeted_fix" if len(self.attempts[key]) > 0 else "implement"),
+        }
+    
+    def get_status(self, phase: str, task_id: Optional[str] = None) -> dict:
+        key = f"{phase}:{task_id or 'phase'}"
+        attempts = self.attempts.get(key, [])
+        attempt_num = len(attempts)
+        
+        return {
+            "attempts_used": len(self.attempts.get(key, [])),
+            "max_attempts": 3,
+            "remaining": max(0, 3 - len(self.attempts.get(key, []))),
+            "exhausted": len(self.attempts.get(key, [])) >= 3,
+            "next_action": "human_required" if len(self.attempts.get(key, [])) >= 3 else ("targeted_fix" if len(self.attempts[key]) > 0 else "implement"),
+            "last_attempt": self.attempts.get(key, [])[-1] if self.attempts.get(key) else None,
+        }
+    
+    def is_exhausted(self, phase: str, task_id: Optional[str] = None) -> bool:
+        key = f"{phase}:{task_id or 'phase'}"
+        return len(self.attempts.get(key, [])) >= 3
+    
+    def get_next_action(self, phase: str, task_id: Optional[str] = None) -> str:
+        key = f"{phase}:{task_id or 'phase'}"
+        attempts = len(self.attempts.get(key, []))
+        
+        if attempts >= 3:
+            return "human_required"
+        elif attempts == 0:
+            return "implement"
+        else:
+            return "targeted_fix"
+    
+    def reset(self, phase: str, task_id: Optional[str] = None) -> None:
+        key = f"{phase}:{task_id or 'phase'}"
+        if key in self.attempts:
+            del self.attempts[key]
