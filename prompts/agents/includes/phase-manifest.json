@@ -9,7 +9,6 @@
       "description": "Implementation phase - writes code from tasks",
       "includes": [
         "tonymem-topic-key-format.md",
-        "trigger-rules.md",
         "strict-tdd-forwarding.md",
         "apply-progress-continuity.md"
       ],
@@ -22,12 +21,7 @@
     },
     "sdd-verify": {
       "description": "Validation phase - validates implementation against specs",
-      "includes": [
-        "trigger-rules.md",
-        "review-lens-selection.md",
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
-      ],
+      "includes": [],
       "skills": [
         "sdd-phase-common.md",
         "review-ledger-contract.md"
@@ -60,7 +54,6 @@
     "sdd-tasks": {
       "description": "Task planning phase - breaks specs/design into implementable tasks",
       "includes": [
-        "sdd-workflow.md",
         "review-workload-guard.md",
         "delivery-strategy.md",
         "chain-strategy.md"
@@ -75,7 +68,6 @@
     "sdd-archive": {
       "description": "Archive phase - closes change and persists final state",
       "includes": [
-        "trigger-rules.md",
         "sdd-workflow.md"
       ],
       "skills": [
@@ -129,9 +121,7 @@
   "review_phases": {
     "review-readability": {
       "includes": [
-        "review-lens-selection.md",
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
+        "review-contract-full.md"
       ],
       "skills": [
         "sdd-phase-common.md",
@@ -140,9 +130,7 @@
     },
     "review-reliability": {
       "includes": [
-        "review-lens-selection.md",
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
+        "review-contract-full.md"
       ],
       "skills": [
         "sdd-phase-common.md",
@@ -151,9 +139,7 @@
     },
     "review-resilience": {
       "includes": [
-        "review-lens-selection.md",
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
+        "review-contract-full.md"
       ],
       "skills": [
         "sdd-phase-common.md",
@@ -162,9 +148,7 @@
     },
     "review-risk": {
       "includes": [
-        "review-lens-selection.md",
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
+        "review-contract-full.md"
       ],
       "skills": [
         "sdd-phase-common.md",
@@ -173,8 +157,7 @@
     },
     "review-refuter": {
       "includes": [
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
+        "review-contract-full.md"
       ],
       "skills": [
         "sdd-phase-common.md",
@@ -183,7 +166,6 @@
     },
     "jd-fix-agent": {
       "includes": [
-        "trigger-rules.md",
         "strict-tdd-forwarding.md"
       ],
       "skills": [
@@ -192,9 +174,7 @@
     },
     "jd-judge-a": {
       "includes": [
-        "review-lens-selection.md",
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
+        "review-contract-full.md"
       ],
       "skills": [
         "sdd-phase-common.md",
@@ -203,9 +183,7 @@
     },
     "jd-judge-b": {
       "includes": [
-        "review-lens-selection.md",
-        "review-execution-contract.md",
-        "authority-first-terminal-procedure.md"
+        "review-contract-full.md"
       ],
       "skills": [
         "sdd-phase-common.md",
