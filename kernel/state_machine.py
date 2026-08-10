@@ -7,7 +7,7 @@ Enforces valid phase transitions and tracks phase state.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Callable
 
 from .schemas import (
     Phase,
@@ -52,9 +52,14 @@ class PhaseController:
     """
     change_state: ChangeState
 
-    def can_transition(self, to_phase: Phase) -> tuple[bool, str, tuple[str, ...]]:
+    def can_transition(self, to_phase: Phase, artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> tuple[bool, str, tuple[str, ...]]:
         """
         Check if transition to `to_phase` is allowed.
+
+        Args:
+            to_phase: The target phase.
+            artifact_store: Optional callable that given an artifact kind returns the ArtifactRef
+                           from the real store (disk/OpenSpec/TonyMem). If None, validates in-memory.
 
         Returns:
             (allowed, reason, missing_artifacts)
@@ -73,7 +78,7 @@ class PhaseController:
         # Check required artifacts for this transition
         required = REQUIRED_ARTIFACTS_FOR_TRANSITION.get((from_phase, to_phase), ())
         if required:
-            missing = self._check_artifacts_exist(required)
+            missing = self._check_artifacts_exist(required, artifact_store)
             if missing:
                 return False, f"Missing required artifacts for {from_phase.value} → {to_phase.value}", missing
 
@@ -84,16 +89,28 @@ class PhaseController:
 
         return True, f"Transition allowed: {from_phase.value} → {to_phase.value}", ()
 
-    def _check_artifacts_exist(self, required: tuple[str, ...]) -> tuple[str, ...]:
-        """Check if required artifacts exist in tonymem/openspec."""
-        # This is a stub - actual implementation would query tonymem/openspec
-        # For now, we assume artifacts exist if they're in the change state
-        existing = set()
-        for phase_state in self.change_state.phases.values():
-            for artifact in phase_state.artifacts:
-                existing.add(artifact.kind)
-
-        return tuple(r for r in required if r not in existing)
+    def _check_artifacts_exist(self, required: tuple[str, ...], artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> tuple[str, ...]:
+        """Check if required artifacts exist in the real store (disk/OpenSpec/TonyMem) or in-memory."""
+        missing = []
+        for kind in required:
+            if artifact_store is not None:
+                ref = artifact_store(kind)
+                if ref is None:
+                    missing.append(kind)
+                    continue
+                if not ref.hash or not ref.validated:
+                    missing.append(kind)
+            else:
+                existing = set()
+                for phase_state in self.change_state.phases.values():
+                    for artifact in phase_state.artifacts:
+                        if artifact.kind == kind:
+                            existing.add(artifact.kind)
+                            if artifact.hash and artifact.validated:
+                                break
+                if kind not in existing:
+                    missing.append(kind)
+        return tuple(missing)
 
     def transition(self, to_phase: Phase, artifacts: tuple[ArtifactRef, ...] = ()) -> ChangeState:
         """
@@ -146,22 +163,18 @@ class PhaseController:
         Mark a phase as completed with its artifacts.
         Updates internal state and returns new ChangeState.
         """
-        if phase not in self.change_state.phases:
-            raise PhaseNotFoundError(f"Phase {phase.value} not found in change state")
-
-        current_state = self.change_state.get_phase_state(phase)
-        if current_state.status == PhaseStatus.COMPLETED:
-            # Already completed - just update artifacts
-            updated_phases = dict(self.change_state.phases)
+        updated_phases = dict(self.change_state.phases)
+        
+        if phase not in updated_phases:
             updated_phases[phase] = PhaseState(
                 phase=phase,
                 status=PhaseStatus.COMPLETED,
                 artifacts=artifacts,
-                started_at=current_state.started_at,
+                started_at=datetime.now(),
                 completed_at=datetime.now(),
             )
         else:
-            updated_phases = dict(self.change_state.phases)
+            current_state = updated_phases[phase]
             updated_phases[phase] = PhaseState(
                 phase=phase,
                 status=PhaseStatus.COMPLETED,
@@ -169,11 +182,11 @@ class PhaseController:
                 started_at=current_state.started_at,
                 completed_at=datetime.now(),
             )
-
+        
         new_state = ChangeState(
             change_id=self.change_state.change_id,
             project=self.change_state.project,
-            current_phase=self.change_state.current_phase,
+            current_phase=phase,
             phases=updated_phases,
             created_at=self.change_state.created_at,
             updated_at=datetime.now(),

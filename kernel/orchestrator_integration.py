@@ -30,6 +30,7 @@ from .evidence_ledger import EvidenceLedger
 from .task_ledger import TaskLedger
 from .artifact_gate import ArtifactGate
 from .retry_budget import RetryBudget
+from .phase_checksum import PhaseChecksumRegistry, get_global_registry
 
 
 class OrchestrationDecision(str, Enum):
@@ -60,6 +61,7 @@ class OrchestrationResult:
     retry_status: Optional[dict] = None
     next_action: Optional[str] = None
     metadata: dict = field(default_factory=dict)
+    artifact_validation: dict = field(default_factory=dict)
 
 
 class KernelOrchestrator:
@@ -85,6 +87,7 @@ class KernelOrchestrator:
         self.task_ledger = TaskLedger()
         self.artifact_gate = ArtifactGate()
         self.retry_budget = RetryBudget()
+        self.checksum_registry = get_global_registry()
         
         # Tracking
         self.delegation_log: List[dict] = []
@@ -209,6 +212,10 @@ class KernelOrchestrator:
             tuple(artifact_refs)
         )
         
+        # Recreate controller and gate with updated state
+        self.controller = PhaseController(self.change_state)
+        self.gate = PhaseGate(self.controller)
+        
         # Record phase checksum
         self._record_phase_checksum(phase, artifact_refs)
         
@@ -221,17 +228,38 @@ class KernelOrchestrator:
     
     def _record_phase_checksum(self, phase: str, artifacts: list) -> None:
         """Record checksum of phase artifacts for drift detection."""
-        import hashlib
-        content = ""
-        for art in sorted(artifacts, key=lambda a: a.kind):
-            if art.hash:
-                content += f"{art.kind}:{art.hash}"
-        self.phase_checksums[phase] = hashlib.sha256(content.encode()).hexdigest()[:16]
+        artifact_refs = []
+        for art in artifacts:
+            if isinstance(art, dict):
+                artifact_refs.append(ArtifactRef(
+                    kind=art.get("kind", ""),
+                    path=art.get("path", ""),
+                    store=art.get("store", "tonymem"),
+                    hash=art.get("hash"),
+                    validated=art.get("validated", False),
+                ))
+            else:
+                artifact_refs.append(art)
+        self.checksum_registry.record_phase(phase, artifact_refs, recorded_by="kernel")
     
-    def verify_phase_checksum(self, phase: str) -> bool:
+    def verify_phase_checksum(self, phase: str, artifacts: list = None) -> dict:
         """Verify phase artifacts haven't been modified since completion."""
-        # In a real implementation, would re-fetch artifacts and compare checksums
-        return True  # Placeholder
+        if artifacts is None:
+            artifacts = []
+        artifact_refs = []
+        for art in artifacts:
+            if isinstance(art, dict):
+                artifact_refs.append(ArtifactRef(
+                    kind=art.get("kind", ""),
+                    path=art.get("path", ""),
+                    store=art.get("store", "tonymem"),
+                    hash=art.get("hash"),
+                    validated=art.get("validated", False),
+                ))
+            else:
+                artifact_refs.append(art)
+        result = self.checksum_registry.verify_phase(phase, artifact_refs)
+        return result
     
     def add_task(self, task_id: str, description: str, phase: str, 
                  dependencies: tuple = (), files: tuple = ()) -> None:
@@ -267,7 +295,7 @@ class KernelOrchestrator:
         return True
     
     def complete_task(self, task_id: str, evidence: list = None) -> OrchestrationResult:
-        """Complete a task with evidence."""
+        """Complete a task with evidence. Evidence must be valid."""
         if task_id not in self.task_ledger.tasks:
             return OrchestrationResult(
                 decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
@@ -283,15 +311,60 @@ class KernelOrchestrator:
                 current_phase=self.change_state.current_phase.value,
             )
         
-        # Record evidence
         evidence_objs = evidence or []
-        self.task_ledger = self.task_ledger.complete_task(task_id, tuple(evidence_objs))
+        validated_evidence = []
+        invalid_evidence = []
+        for ev in evidence_objs:
+            if isinstance(ev, Evidence):
+                status = ev.validate()
+                if status == EvidenceStatus.VALID:
+                    validated_evidence.append(ev)
+                else:
+                    invalid_evidence.append((ev, status))
+            elif isinstance(ev, dict):
+                try:
+                    ev_obj = Evidence(
+                        type=EvidenceType(ev.get("type", "manual")),
+                        claim=ev.get("claim", ""),
+                        command=ev.get("command"),
+                        exit_code=ev.get("exit_code"),
+                        stdout=ev.get("stdout"),
+                        stderr=ev.get("stderr"),
+                        file_path=ev.get("file_path"),
+                    )
+                    status = ev_obj.validate()
+                    if status == EvidenceStatus.VALID:
+                        validated_evidence.append(ev_obj)
+                    else:
+                        invalid_evidence.append((ev_obj, status))
+                except Exception:
+                    invalid_evidence.append((ev, "invalid_format"))
+            else:
+                invalid_evidence.append((ev, "unknown_type"))
+        
+        if invalid_evidence:
+            reasons = [f"{type(ev).__name__}: {status}" for ev, status in invalid_evidence[:3]]
+            return OrchestrationResult(
+                decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
+                reason=f"Invalid evidence for task {task_id}: {', '.join(reasons)}",
+                current_phase=self.change_state.current_phase.value,
+                missing_evidence=tuple(str(e) for e, _ in invalid_evidence[:5]),
+            )
+        
+        if not validated_evidence:
+            return OrchestrationResult(
+                decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
+                reason=f"No valid evidence provided for task {task_id}",
+                current_phase=self.change_state.current_phase.value,
+            )
+        
+        self.task_ledger = self.task_ledger.complete_task(task_id, tuple(validated_evidence))
         
         return OrchestrationResult(
             decision=OrchestrationDecision.PROCEED,
-            reason=f"Task {task_id} completed",
+            reason=f"Task {task_id} completed with {len(validated_evidence)} evidence items",
             current_phase=self.change_state.current_phase.value,
-            metadata={"task_id": task_id},
+            metadata={"task_id": task_id, "evidence_count": len(validated_evidence)},
         )
     
     def get_next_task(self) -> Optional[dict]:

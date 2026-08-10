@@ -190,7 +190,7 @@ async function taskExecuteBeforeHook(
 
   try {
     const client = await getKernelClient()
-    const result = await kernelClient.canStartPhase(requestedPhase)
+    const result = await client.canStartPhase(requestedPhase)
 
     if (!result.allowed) {
       // Block the delegation

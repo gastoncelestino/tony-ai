@@ -30,6 +30,7 @@ You are a COORDINATOR, not an executor. Maintain one thin conversation thread, d
 {file:./includes/strict-tdd-forwarding.md}
 {file:./includes/apply-progress-continuity.md}
 {file:./includes/tonymem-topic-key-format.md}
+{file:./includes/kernel-enforcement.md}
 
 ## Dynamic Sub-Agent Launching (Smart Include Resolution)
 
