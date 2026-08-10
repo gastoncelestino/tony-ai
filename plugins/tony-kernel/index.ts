@@ -51,6 +51,13 @@ export class KernelBlockedError extends Error {
   }
 }
 
+export class KernelUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "KernelUnavailableError"
+  }
+}
+
 // ─── Kernel Python Subprocess Client ──────────────────────────────────────
 
 class KernelClient {
@@ -175,7 +182,14 @@ async function taskExecuteBeforeHook(
     if (error instanceof KernelBlockedError) {
       throw error
     }
-    throw new Error(kernelErrorMessage("Delegation gate", error))
+
+    if (error instanceof KernelUnavailableError) {
+      throw error
+    }
+
+    throw new KernelUnavailableError(
+      kernelErrorMessage("Delegation gate", error)
+    )
   }
 }
 
@@ -228,7 +242,14 @@ async function taskExecuteAfterHook(
     if (error instanceof KernelBlockedError) {
       throw error
     }
-    throw new Error(kernelErrorMessage("Phase completion", error))
+
+    if (error instanceof KernelUnavailableError) {
+      throw error
+    }
+
+    throw new KernelUnavailableError(
+      kernelErrorMessage("Phase completion", error)
+    )
   }
 }
 
