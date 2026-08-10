@@ -43,6 +43,7 @@ jobs:
           python3 -m kernel.test_kernel_integration
           python3 -m kernel.test_cli
           python3 -m kernel.test_hardening
+          python3 -m kernel.test_enforcement
         shell: bash
 
       - name: Run TypeScript tests

@@ -18,6 +18,7 @@ test-kernel:
 	@python3 -m kernel.test_kernel_integration
 	@python3 -m kernel.test_cli
 	@python3 -m kernel.test_hardening
+	@python3 -m kernel.test_enforcement
 	@echo "✓ Kernel tests passed"
 
 test-ts:

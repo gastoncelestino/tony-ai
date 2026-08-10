@@ -17,7 +17,7 @@ import sys
 from typing import Any, Optional
 
 from .persistence import load_orchestrator, save_orchestrator, reset_state
-from .artifact_store import disk_artifact_store
+from .artifact_store import disk_artifact_store, disk_artifact_hasher
 from .schemas import ArtifactRef, Evidence, EvidenceType
 
 
@@ -26,8 +26,13 @@ def _build_store():
     return disk_artifact_store(base)
 
 
+def _build_hasher():
+    base = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
+    return disk_artifact_hasher(base)
+
+
 def _load():
-    return load_orchestrator(artifact_store=_build_store())
+    return load_orchestrator(artifact_store=_build_store(), artifact_hasher=_build_hasher())
 
 
 def _result_to_dict(r) -> dict:

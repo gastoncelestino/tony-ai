@@ -262,10 +262,13 @@ def orchestrator_to_dict(o: KernelOrchestrator) -> dict:
     }
 
 
-def orchestrator_from_dict(d: dict, artifact_store: Optional[Callable[[ArtifactRef], bool]] = None) -> KernelOrchestrator:
+def orchestrator_from_dict(d: dict,
+                          artifact_store: Optional[Callable[[ArtifactRef], bool]] = None,
+                          artifact_hasher: Optional[Callable[[ArtifactRef], Optional[str]]] = None) -> KernelOrchestrator:
     change_id = d.get("change_id", "default")
     project = d.get("project", "default")
-    o = create_kernel_orchestrator(change_id, project, artifact_store=artifact_store)
+    o = create_kernel_orchestrator(change_id, project,
+                                   artifact_store=artifact_store, artifact_hasher=artifact_hasher)
     o.change_state = change_state_from_dict(d["change_state"])
     o.controller = PhaseController(o.change_state)
     o.gate = PhaseGate(o.controller, config=PhaseGateConfig(), artifact_store=artifact_store)
@@ -304,18 +307,21 @@ def save_orchestrator(o: KernelOrchestrator, path: Optional[str] = None) -> str:
 
 
 def load_orchestrator(path: Optional[str] = None,
-                      artifact_store: Optional[Callable[[ArtifactRef], bool]] = None) -> KernelOrchestrator:
+                      artifact_store: Optional[Callable[[ArtifactRef], bool]] = None,
+                      artifact_hasher: Optional[Callable[[ArtifactRef], Optional[str]]] = None) -> KernelOrchestrator:
     """Load the current orchestrator state, or a fresh one if none exists."""
     path = path or state_file_path()
     if not os.path.exists(path):
-        return create_kernel_orchestrator("default", "default", artifact_store=artifact_store)
+        return create_kernel_orchestrator("default", "default",
+                                          artifact_store=artifact_store, artifact_hasher=artifact_hasher)
     try:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        return orchestrator_from_dict(data, artifact_store=artifact_store)
+        return orchestrator_from_dict(data, artifact_store=artifact_store, artifact_hasher=artifact_hasher)
     except (ValueError, KeyError, json.JSONDecodeError, OSError):
         # Corrupt/partial state file — start clean rather than crash the gate.
-        return create_kernel_orchestrator("default", "default", artifact_store=artifact_store)
+        return create_kernel_orchestrator("default", "default",
+                                          artifact_store=artifact_store, artifact_hasher=artifact_hasher)
 
 
 def reset_state(path: Optional[str] = None) -> None:

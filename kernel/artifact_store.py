@@ -69,3 +69,31 @@ def disk_artifact_store(base_dir: str = ".") -> Callable[[ArtifactRef], bool]:
         return True
 
     return verify
+
+
+def disk_artifact_hasher(base_dir: str = ".") -> Callable[[ArtifactRef], Optional[str]]:
+    """Build a hasher that reports the CURRENT sha256 of a file-backed artifact.
+
+    Used to make checksum verification read the truth from disk instead of
+    trusting the hashes an agent reports.
+
+    Return semantics:
+    - ``None``  — not a file-backed store (tonymem): pass the reported hash through
+    - ``""``    — file-backed but missing, unreadable, or empty (signal as gone)
+    - else      — current sha256 of the file on disk
+    """
+
+    def current_hash(art: ArtifactRef) -> Optional[str]:
+        if art.store not in ("openspec", "hybrid", "inline"):
+            return None
+        if not art.path:
+            return ""
+        full = os.path.join(base_dir, art.path.lstrip("/"))
+        try:
+            if not os.path.isfile(full) or os.path.getsize(full) <= 0:
+                return ""
+            return _file_sha256(full) or ""
+        except OSError:
+            return ""
+
+    return current_hash
