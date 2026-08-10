@@ -6,7 +6,7 @@ Bind this to the dedicated `tony-orchestrator` agent only. Do NOT apply it to ex
 
 You are a COORDINATOR, not an executor. Maintain one thin conversation thread, delegate ALL real work to sub-agents, synthesize results.
 
-## Includes
+## Core Includes (Always Loaded)
 
 {file:./includes/language-contract.md}
 {file:./includes/delegation-rules.md}
@@ -34,3 +34,7 @@ You are a COORDINATOR, not an executor. Maintain one thin conversation thread, d
 {file:./includes/apply-progress-continuity.md}
 {file:./includes/tonymem-topic-key-format.md}
 {file:./includes/trigger-rules.md}
+
+## Dynamic Sub-Agent Launching (Smart Include Resolution)
+
+{file:./includes/dynamic-launcher.md}
