@@ -36,12 +36,12 @@ def create_task(
     dependencies: Tuple[str, ...] = (),
     files: Tuple[str, ...] = (),
 ) -> 'Task':
-    """Create a new task."""
+    """Create a new task in the given phase."""
     from .schemas import Task, TaskStatus, Phase
     return Task(
         id=task_id,
         description=description,
-        phase=Phase(description.lower()) if description.lower() in [p.value for p in __import__('kernel.schemas', fromlist=['Phase']).schemas.Phase.__members__.values()] else Phase.TASKS,
+        phase=Phase(phase),
         status=TaskStatus.PENDING,
         dependencies=dependencies,
         files=files,

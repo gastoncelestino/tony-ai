@@ -87,7 +87,7 @@ class KernelOrchestrator:
         self.gate = PhaseGate(self.controller, artifact_store=artifact_store)
         self.evidence_ledger = EvidenceLedger()
         self.task_ledger = TaskLedger()
-        self.artifact_gate = ArtifactGate()
+        self.artifact_gate = ArtifactGate(store=artifact_store)
         self.retry_budget = RetryBudget()
         # Per-change registry — NOT the module-level singleton, so parallel
         # changes never read each other's checksums.
@@ -216,9 +216,10 @@ class KernelOrchestrator:
             tuple(artifact_refs)
         )
         
-        # Recreate controller and gate with updated state
+        # Recreate controller and gate with updated state — the gate must keep
+        # the artifact store, or disk-backed artifact verification is lost.
         self.controller = PhaseController(self.change_state)
-        self.gate = PhaseGate(self.controller)
+        self.gate = PhaseGate(self.controller, artifact_store=self.artifact_store)
         
         # Record phase checksum
         self._record_phase_checksum(phase, artifact_refs)
@@ -269,14 +270,6 @@ class KernelOrchestrator:
                  dependencies: tuple = (), files: tuple = ()) -> None:
         """Add a task to the task ledger."""
         from .schemas import Task, TaskStatus, Phase
-        task = Task(
-            id=task_id,
-            description=description,
-            phase=Phase(phase),
-            status=TaskStatus.PENDING,
-            dependencies=dependencies,
-            files=files,
-        )
         self.task_ledger = self.task_ledger.add_task(Task(
             id=task_id,
             description=description,

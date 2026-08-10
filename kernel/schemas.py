@@ -365,6 +365,15 @@ class TaskLedger:
         return TaskLedger(tasks={**self.tasks, task_id: updated})
 
     def complete_task(self, task_id: str, evidence: tuple[Evidence, ...] = ()) -> "TaskLedger":
+        """Complete a task.
+
+        "No evidence, no progress": a task without at least one piece of
+        evidence is never marked COMPLETED. This is defense in depth — the
+        orchestrator already blocks empty evidence, but direct ledger callers
+        must not be able to manufacture a completed task either.
+        """
+        if not evidence:
+            return self
         task = self.tasks.get(task_id)
         if not task or task.status != TaskStatus.IN_PROGRESS:
             return self

@@ -17,6 +17,7 @@ test-kernel:
 	@python3 -m kernel.test_state_machine
 	@python3 -m kernel.test_kernel_integration
 	@python3 -m kernel.test_cli
+	@python3 -m kernel.test_hardening
 	@echo "✓ Kernel tests passed"
 
 test-ts:

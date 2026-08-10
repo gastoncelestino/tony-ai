@@ -42,6 +42,10 @@ def disk_artifact_store(base_dir: str = ".") -> Callable[[ArtifactRef], bool]:
     ``base_dir`` is the project root that reported artifact paths are relative
     to. Only file-backed stores (openspec/hybrid/inline) are checked; tonymem
     references pass through.
+
+    A reference passes only when the file exists, is readable, is non-empty,
+    and (when a hash was recorded) its content still matches the recorded
+    sha256.
     """
 
     def verify(art: ArtifactRef) -> bool:
@@ -50,7 +54,13 @@ def disk_artifact_store(base_dir: str = ".") -> Callable[[ArtifactRef], bool]:
         if not art.path:
             return False
         full = os.path.join(base_dir, art.path.lstrip("/"))
-        if not os.path.isfile(full):
+        try:
+            if not os.path.isfile(full):
+                return False
+            size = os.path.getsize(full)
+            if size <= 0:
+                return False
+        except OSError:
             return False
         if art.hash:
             current = _file_sha256(full)

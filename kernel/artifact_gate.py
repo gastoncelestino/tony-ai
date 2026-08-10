@@ -4,6 +4,12 @@ Tony Kernel — Artifact Gate
 Validates phase artifacts before allowing phase transitions.
 Implements "Artifact Gate" — artifacts must exist, be valid, belong to the change,
 and be integral (hash verified).
+
+The gate accepts an optional ``store`` (``ArtifactRef -> bool``, e.g. the
+disk-backed store from artifact_store.py). When provided, validation is REAL:
+the artifact must resolve on the backend (file exists, readable, non-empty,
+hash matches). Without a store it degrades to a structural check (ref + hash +
+validated flag) so the gate stays testable in-memory.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -31,30 +37,66 @@ class ArtifactValidator:
         raise NotImplementedError
 
 
-def _validate_artifact_ref(artifact_ref: ArtifactRef, content: str = "") -> dict:
-    """Validate that an ArtifactRef exists, is valid, belongs to change, and is integral."""
+def _validate_artifact_ref(artifact_ref: ArtifactRef, content: str = "", store: Optional[Callable[[ArtifactRef], bool]] = None) -> dict:
+    """Validate that an ArtifactRef exists, is valid, belongs to change, and is integral.
+
+    When a ``store`` is provided (e.g. ``disk_artifact_store``), the artifact
+    must resolve on the real backend: file exists, is readable, is non-empty,
+    and its sha256 matches the recorded hash. Without a store this is a
+    structural check only (ref + hash + validated flag).
+    """
     checks = {
         "exists": False,
         "has_hash": False,
         "validated": False,
         "integral": False,
     }
-    
+
     if not artifact_ref:
         return {"passed": False, "message": "Artifact not found", "details": checks}
-    
+
+    if store is not None:
+        try:
+            on_backend = bool(store(artifact_ref))
+        except Exception:
+            on_backend = False
+        if not on_backend:
+            return {
+                "passed": False,
+                "message": "Artifact does not resolve on the backend (missing, unreadable, empty, or hash mismatch)",
+                "details": checks,
+            }
+
     checks["exists"] = True
     checks["has_hash"] = bool(artifact_ref.hash)
     checks["validated"] = artifact_ref.validated
-    
-    if artifact_ref.hash:
-        checks["integral"] = True
-    
+    checks["integral"] = bool(artifact_ref.hash)
+
     all_ok = all(checks.values())
     return {
         "passed": all_ok,
         "message": "Artifact valid" if all_ok else "Artifact validation failed",
         "details": checks,
+    }
+
+
+def _validate_with_content(artifact_ref: ArtifactRef, content: str, store: Optional[Callable[[ArtifactRef], bool]]) -> dict:
+    """Shared spec/design/tasks validation: base ref checks + content probe."""
+    base = _validate_artifact_ref(artifact_ref, content, store)
+    if not base["passed"]:
+        return base
+
+    if content and not content.strip():
+        return {
+            "passed": False,
+            "message": "Artifact content is empty",
+            "details": {**base["details"], "content_checked": True},
+        }
+
+    return {
+        "passed": True,
+        "message": "Artifact valid" if content else "Artifact valid (structure only)",
+        "details": {**base["details"], "content_checked": bool(content)},
     }
 
 
@@ -65,22 +107,8 @@ class SpecValidator:
         self.kind = "spec"
         self.required = True
     
-    def validate(self, artifact_ref, content: str = "") -> dict:
-        base = _validate_artifact_ref(artifact_ref)
-        if not base["passed"]:
-            return base
-        
-        if content:
-            return {
-                "passed": True,
-                "message": "Spec artifact valid",
-                "details": {**base["details"], "content_checked": True},
-            }
-        return {
-            "passed": True,
-            "message": "Spec artifact valid (structure only)",
-            "details": {**base["details"], "content_checked": False},
-        }
+    def validate(self, artifact_ref, content: str = "", store: Optional[Callable[[ArtifactRef], bool]] = None) -> dict:
+        return _validate_with_content(artifact_ref, content, store)
 
 
 class DesignValidator:
@@ -90,22 +118,8 @@ class DesignValidator:
         self.kind = "design"
         self.required = True
     
-    def validate(self, artifact_ref, content: str = "") -> dict:
-        base = _validate_artifact_ref(artifact_ref)
-        if not base["passed"]:
-            return base
-        
-        if content:
-            return {
-                "passed": True,
-                "message": "Design artifact valid",
-                "details": {**base["details"], "content_checked": True},
-            }
-        return {
-            "passed": True,
-            "message": "Design artifact valid (structure only)",
-            "details": {**base["details"], "content_checked": False},
-        }
+    def validate(self, artifact_ref, content: str = "", store: Optional[Callable[[ArtifactRef], bool]] = None) -> dict:
+        return _validate_with_content(artifact_ref, content, store)
 
 
 class TasksValidator:
@@ -115,22 +129,8 @@ class TasksValidator:
         self.kind = "tasks"
         self.required = True
     
-    def validate(self, artifact_ref, content: str = "") -> dict:
-        base = _validate_artifact_ref(artifact_ref)
-        if not base["passed"]:
-            return base
-        
-        if content:
-            return {
-                "passed": True,
-                "message": "Tasks artifact valid",
-                "details": {**base["details"], "content_checked": True},
-            }
-        return {
-            "passed": True,
-            "message": "Tasks artifact valid (structure only)",
-            "details": {**base["details"], "content_checked": False},
-        }
+    def validate(self, artifact_ref, content: str = "", store: Optional[Callable[[ArtifactRef], bool]] = None) -> dict:
+        return _validate_with_content(artifact_ref, content, store)
 
 
 class ApplyProgressValidator:
@@ -140,15 +140,8 @@ class ApplyProgressValidator:
         self.kind = "apply-progress"
         self.required = True
     
-    def validate(self, artifact_ref, content: str = "") -> dict:
-        base = _validate_artifact_ref(artifact_ref)
-        if not base["passed"]:
-            return base
-        return {
-            "passed": True,
-            "message": "Apply progress artifact valid",
-            "details": base["details"],
-        }
+    def validate(self, artifact_ref, content: str = "", store: Optional[Callable[[ArtifactRef], bool]] = None) -> dict:
+        return _validate_artifact_ref(artifact_ref, content, store)
 
 
 class VerifyReportValidator:
@@ -158,24 +151,17 @@ class VerifyReportValidator:
         self.kind = "verify-report"
         self.required = True
     
-    def validate(self, artifact_ref, content: str = "") -> dict:
-        base = _validate_artifact_ref(artifact_ref)
-        if not base["passed"]:
-            return base
-        return {
-            "passed": True,
-            "message": "Verify report artifact valid",
-            "details": base["details"],
-        }
+    def validate(self, artifact_ref, content: str = "", store: Optional[Callable[[ArtifactRef], bool]] = None) -> dict:
+        return _validate_artifact_ref(artifact_ref, content, store)
 
 
-# Registry of validators
+# Registry of validators (store-aware so the module-level API stays usable)
 VALIDATORS = {
-    "spec": lambda ref, content="": SpecValidator().validate(ref, content),
-    "design": lambda ref, content="": DesignValidator().validate(ref, content),
-    "tasks": lambda ref, content="": TasksValidator().validate(ref, content),
-    "apply-progress": lambda ref, content="": ApplyProgressValidator().validate(ref, content),
-    "verify-report": lambda ref, content="": VerifyReportValidator().validate(ref, content),
+    "spec": lambda ref, content="", store=None: SpecValidator().validate(ref, content, store),
+    "design": lambda ref, content="", store=None: DesignValidator().validate(ref, content, store),
+    "tasks": lambda ref, content="", store=None: TasksValidator().validate(ref, content, store),
+    "apply-progress": lambda ref, content="", store=None: ApplyProgressValidator().validate(ref, content, store),
+    "verify-report": lambda ref, content="", store=None: VerifyReportValidator().validate(ref, content, store),
     "explore": _validate_artifact_ref,
     "proposal": _validate_artifact_ref,
     "archive-report": _validate_artifact_ref,
@@ -189,17 +175,20 @@ class ArtifactGate:
     Implements the Artifact Gate pattern.
     Artifact must be: exist + valid + belong to change + integral.
     """
-    
-    def __init__(self):
+
+    store: Optional[Callable[[ArtifactRef], bool]] = None
+
+    def __init__(self, store: Optional[Callable[[ArtifactRef], bool]] = None):
+        self.store = store
         self.validators = {
-            "explore": _validate_artifact_ref,
-            "proposal": _validate_artifact_ref,
-            "spec": lambda ref, content="": SpecValidator().validate(ref, content),
-            "design": lambda ref, content="": DesignValidator().validate(ref, content),
-            "tasks": lambda ref, content="": TasksValidator().validate(ref, content),
-            "apply-progress": lambda ref, content="": ApplyProgressValidator().validate(ref, content),
-            "verify-report": lambda ref, content="": VerifyReportValidator().validate(ref, content),
-            "archive-report": _validate_artifact_ref,
+            "explore": lambda ref, content="": _validate_artifact_ref(ref, content, self.store),
+            "proposal": lambda ref, content="": _validate_artifact_ref(ref, content, self.store),
+            "spec": lambda ref, content="": SpecValidator().validate(ref, content, self.store),
+            "design": lambda ref, content="": DesignValidator().validate(ref, content, self.store),
+            "tasks": lambda ref, content="": TasksValidator().validate(ref, content, self.store),
+            "apply-progress": lambda ref, content="": ApplyProgressValidator().validate(ref, content, self.store),
+            "verify-report": lambda ref, content="": VerifyReportValidator().validate(ref, content, self.store),
+            "archive-report": lambda ref, content="": _validate_artifact_ref(ref, content, self.store),
         }
     
     def register_validator(self, kind: str, validator: callable) -> None:
