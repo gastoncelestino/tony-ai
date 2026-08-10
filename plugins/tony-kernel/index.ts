@@ -223,7 +223,7 @@ export function derivePhase(args: Record<string, unknown>): string {
  * 
  * Fail-closed: any Kernel error blocks the delegation.
  */
-async function taskExecuteBeforeHook(
+export async function taskExecuteBeforeHook(
   input: DelegationInput,
   output: DelegationOutput
 ): Promise<void> {
@@ -263,7 +263,7 @@ async function taskExecuteBeforeHook(
  * 
  * Fail-closed: any Kernel error or missing artifacts blocks completion.
  */
-async function taskExecuteAfterHook(
+export async function taskExecuteAfterHook(
   input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
   output: unknown
 ): Promise<void> {
