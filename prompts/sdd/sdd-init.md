@@ -1,6 +1,6 @@
 ---
 name: sdd-init
-description: "Trigger: sdd init, iniciar sdd, openspec init. Initialize SDD context, testing capabilities, registry, and persistence."
+description: "Bootstrap SDD context and project configuration. Trigger: first SDD command in a project."
 disable-model-invocation: true
 user-invocable: false
 license: MIT
@@ -11,66 +11,77 @@ metadata:
 ---
 
 > **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Do NOT execute these instructions inline. Delegate to
-> the dedicated `sdd-init` sub-agent using your platform's delegation primitive
-> (e.g., `task(...)`, sub-agent invocation, etc.). This skill is for EXECUTORS
-> only.
+> the ORCHESTRATOR — STOP. Delegate to the dedicated `sdd-init` sub-agent.
 
 ## Executor Override
 
-If you ARE the `sdd-init` sub-agent (NOT the orchestrator), the gate above does NOT apply to you. Continue with the phase work below. Do NOT delegate. Do NOT call the Skill tool. You are the executor — execute.
+If you ARE the `sdd-init` sub-agent, continue. Do NOT delegate.
 
-## Language Domain Contract
+## Purpose
 
-Generated technical artifacts default to English. Do not inherit the user's conversational language or the active persona's regional voice for SDD artifacts unless the user explicitly requests that artifact language or the project convention requires it.
+Bootstrap SDD context: detect stack, configure persistence, cache testing capabilities.
 
-If technical artifacts are explicitly requested in another language, use a neutral/professional register unless the user explicitly requests a different tone or regional variant.
+## What You Receive
 
-Public/contextual comments follow the target context language by default. Explicit user language or tone overrides win; otherwise use a neutral/professional register unless the target context clearly calls for another tone or regional variant.
-
-## Activation Contract
-
-Run this phase when the orchestrator/user asks to initialize SDD in a project. You are the phase executor: do the work yourself, do not delegate, and do not behave like the orchestrator.
-
-## Hard Rules
-
-- Detect the real stack, conventions, architecture, testing tools, and persistence mode; never guess.
-- In `tonymem` mode, do **not** create `openspec/`.
-- In `openspec` mode, follow `skills/_shared/openspec-convention.md` and write file artifacts.
-- In `hybrid` mode, write both openspec files and tonymem observations.
-- Always persist testing capabilities separately as `sdd/{project}/testing-capabilities` or `openspec/config.yaml` `testing:`.
-- Always build `.atl/skill-registry.md`; also save `skill-registry` to tonymem when available.
-- Use `capture_prompt: false` for automated SDD/config saves when supported; omit it if the tool schema lacks it.
-- If `openspec/` already exists, report what exists and ask before updating it.
-
-## Decision Gates
-
-| Input | Action |
-|---|---|
-| `mode=tonymem` | Save context and capabilities to tonymem only. |
-| `mode=openspec` | Create/update openspec bootstrap files only. |
-| `mode=hybrid` | Do both tonymem and openspec persistence. |
-| `mode=none` | Return detected context only; write no SDD artifacts except registry if required. |
-| strict TDD marker/config found | Use that value. |
-| no marker/config but test runner exists | Default `strict_tdd: true`. |
-| no test runner | Set `strict_tdd: false` and explain unavailable. |
+- Project root (from orchestrator context)
+- Optional: user preferences if interactive
 
 ## Execution Steps
 
-1. Inspect project files (`package.json`, `go.mod`, `pyproject.toml`, CI, lint/test config) and summarize stack/conventions.
-2. Detect test runner, test layers, coverage, linter, type checker, and formatter.
-3. Resolve Strict TDD from agent marker, `openspec/config.yaml`, detected runner fallback, or no-runner fallback.
-4. Initialize persistence for the resolved mode.
-5. Build `.atl/skill-registry.md` using the skill-registry scan rules.
-6. Persist testing capabilities and project context.
-7. Return the structured initialization envelope.
+### 1. Detect Project Stack
+Analyze project to detect:
+- Language(s): Python, TypeScript, Go, Rust, etc.
+- Framework(s): FastAPI, Next.js, Gin, Actix, etc.
+- Test runner: pytest, jest, go test, cargo test, etc.
+- Build/type-check commands
+- Lint/formatter config
 
-## Output Contract
+### 2. Detect Testing Capabilities
+Determine:
+- `strict_tdd` support (test runner exists, can run RED→GREEN cycles)
+- Available test commands
+- Coverage tool availability
 
-Return `status`, `executive_summary`, `artifacts`, `next_recommended`, and `risks`. Include project, stack, persistence mode, Strict TDD status, testing capability table, saved observation IDs/paths, registry path, and next `/sdd-explore` or `/sdd-new` step.
+### 3. Cache Capabilities
+Persist `sdd-init/{project}` in tonymem:
+```json
+{
+  "project": "{project}",
+  "stack": ["python", "fastapi", "postgresql"],
+  "test_runner": "pytest",
+  "test_command": "pytest -xvs",
+  "coverage_command": "pytest --cov",
+  "build_command": "mypy . && pytest",
+  "strict_tdd": true,
+  "strict_tdd_module": "skills/sdd-apply/strict-tdd.md",
+  "verify_module": "skills/sdd-verify/strict-tdd-verify.md"
+}
+```
 
-## References
+### 3. Configure Artifact Store
+Prompt user (Interactive) or detect (Auto):
+- `tonymem` (default) — fast, no files
+- `openspec` — file-based, shareable
+- `hybrid` — both
 
-- [references/init-details.md](references/init-details.md) — detection checklist, tonymem payloads, config skeleton, and output templates.
-- `skills/_shared/tonymem-convention.md` — tonymem artifact naming.
-- `skills/_shared/openspec-convention.md` — openspec layout and rules.
+Persist `sdd-init/{project}` with `artifact_store.mode`.
+
+### 4. Configure Preflight Defaults
+Cache user preferences:
+- Execution mode: `interactive` (default) | `auto`
+- Delivery strategy: `ask-on-risk` (default) | `auto-chain` | `single-pr` | `exception-ok`
+- Review budget: `400` lines (default) | custom
+
+### 5. Persist Init Context
+Follow Section C from `sdd-phase-common.md`:
+- artifact: `project-context`
+- topic_key: `sdd-init/{project}`
+- type: `config`
+
+### 4. Return Summary
+Return Section D envelope with detected stack, capabilities, and next_recommended: `sdd-new` or `sdd-onboard`.
+
+## Rules
+- Run ONLY once per project (check `mem_search` first)
+- Cache is per-project; multi-project supported
+- If project already initialized, return cached config
