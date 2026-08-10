@@ -3,6 +3,8 @@
  * 
  * Deterministic hook that intercepts task delegations and validates them
  * against the Tony Kernel state machine before allowing execution.
+ * 
+ * Fail-closed: any Kernel communication failure BLOCKS the delegation/completion.
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
@@ -12,9 +14,7 @@ import { fileURLToPath } from "url"
 import { dirname } from "path"
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
-const KERNEL_SERVER_PATH = join(PLUGIN_DIR, "kernel_server.py")
-const KERNEL_PORT = 7438
-const KERNEL_BASE_URL = `http://127.0.0.1:${7438}`
+const KERNEL_DIR = join(PLUGIN_DIR, "..", "..", "kernel")
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -41,95 +41,54 @@ interface DelegationOutput {
   result?: unknown
 }
 
-// ─── Kernel HTTP Client ────────────────────────────────────────────────────
+// ─── Kernel Python Subprocess Client ──────────────────────────────────────
 
 class KernelClient {
-  private baseUrl: string
-  private serverProcess: ReturnType<typeof spawn> | null = null
+  private kernelModulePath: string
 
-  constructor(baseUrl: string = KERNEL_BASE_URL) {
-    this.baseUrl = baseUrl
+  constructor() {
+    this.kernelModulePath = join(KERNEL_DIR, "orchestrator_integration.py")
   }
 
-  async startServer(): Promise<void> {
-    if (this.serverProcess) return
+  private async runKernelCommand(args: string[]): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const proc = spawn(["python3", "-m", "kernel.orchestrator_integration", ...args], {
+        cwd: join(KERNEL_DIR, ".."),
+        stdout: "pipe",
+        stderr: "pipe",
+      })
 
-    const kernelServerPath = new URL("./kernel_server.py", import.meta.url).pathname
-    
-    this.serverProcess = spawn(["python3", kernelServerPath], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, PYTHONPATH: "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_0a609c26-9e31-4ad3-abf7-5af14c9f5367" }
-    })
+      let stdout = ""
+      let stderr = ""
 
-    this.serverProcess.stdout?.on("data", (data) => {
-      console.log(`[tony-kernel] ${data.toString().trim()}`)
-    })
-    this.serverProcess.stderr?.on("data", (data) => {
-      console.error(`[tony-kernel] ${data.toString().trim()}`)
-    })
+      proc.stdout?.on("data", (data) => { stdout += data.toString() })
+      proc.stderr?.on("data", (data) => { stderr += data.toString() })
 
-    // Wait for server to be ready
-    await this.waitForReady()
+      proc.exited.then((code) => {
+        if (code === 0) {
+          try {
+            resolve(JSON.parse(stdout.trim()))
+          } catch {
+            resolve({ success: true, output: stdout.trim() })
+          }
+        } else {
+          reject(new Error(`Kernel error (${code}): ${stderr}`))
+        }
+      })
+    })
   }
 
-  private async waitForReady(timeout = 10000): Promise<void> {
-    const start = Date.now()
-    while (Date.now() - start < timeout) {
-      try {
-        const response = await fetch(`${this.baseUrl}/health`, { method: "GET" })
-        if (response.ok) return
-      } catch {
-        // Server not ready yet
-      }
-      await new Promise(r => setTimeout(r, 100))
-    }
-    throw new Error("Kernel server failed to start within timeout")
-  }
-
-  async stopServer(): Promise<void> {
-    if (this.serverProcess) {
-      this.serverProcess.kill()
-      this.serverProcess = null
-    }
-  }
-
-  async canStartPhase(phase: string): Promise<{
-    allowed: boolean
-    decision: string
-    reason: string
-    current_phase: string
-    requested_phase: string
-    missing_artifacts: string[]
-    missing_evidence: string[]
-    scope_violations: string[]
-    retry_status: Record<string, unknown> | null
-    next_action: string | null
-  }> {
-    const response = await fetch(`${this.baseUrl}/can_start_phase`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase })
-    })
-    if (!response.ok) {
-      throw new Error(`Kernel error: ${await response.text()}`)
-    }
-    return response.json()
+  async canStartPhase(phase: string): Promise<CanStartPhaseResult> {
+    const result = await this.runKernelCommand(["can_start_phase", phase])
+    return result
   }
 
   async recordDelegation(phase: string, subAgent: string, taskId?: string): Promise<void> {
-    await fetch(`${this.baseUrl}/record_delegation`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase, sub_agent: subAgent, task_id: taskId })
-    })
+    await this.runKernelCommand(["record_delegation", phase, subAgent, taskId || ""])
   }
 
   async recordPhaseCompletion(phase: string, artifacts: Array<{ kind: string; path: string; store: string; hash?: string }>, evidence: unknown[] = []): Promise<void> {
-    await fetch(`${this.baseUrl}/record_phase_completion`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phase, artifacts, evidence })
-    })
+    await this.runKernelCommand(["record_phase_completion", phase, JSON.stringify(artifacts), JSON.stringify(evidence)])
   }
 
   async checkScope(gitDiff: string, allowedFiles: string[]): Promise<{
@@ -137,26 +96,12 @@ class KernelClient {
     reason: string
     scope_violations: string[]
   }> {
-    const response = await fetch(`${this.baseUrl}/check_scope`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ git_diff: gitDiff, allowed_files: allowedFiles })
-    })
-    return response.json()
+    const result = await this.runKernelCommand(["check_scope", JSON.stringify(gitDiff), JSON.stringify(allowedFiles)])
+    return result
   }
 
   async getStatus(): Promise<Record<string, unknown>> {
-    const response = await fetch(`${this.baseUrl}/status`)
-    return response.json()
-  }
-
-  async healthCheck(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/health`, { method: "GET" })
-      return response.ok
-    } catch {
-      return false
-    }
+    return this.runKernelCommand(["status"])
   }
 }
 
@@ -167,60 +112,70 @@ let kernelClient: KernelClient | null = null
 async function getKernelClient(): Promise<KernelClient> {
   if (!kernelClient) {
     kernelClient = new KernelClient()
-    await kernelClient.startServer()
   }
   return kernelClient
 }
 
-// ─── Hook: task.execute.before ───────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function phaseTransitionBlockedMessage(result: CanStartPhaseResult): string {
+  return (
+    `[Tony Kernel] Phase transition blocked: ${result.reason}\n` +
+    `Current phase: ${result.current_phase}, Requested: ${result.requested_phase}\n` +
+    (result.missing_artifacts.length > 0 ? `Missing artifacts: ${result.missing_artifacts.join(", ")}\n` : "") +
+    (result.missing_evidence.length > 0 ? `Missing evidence: ${result.missing_evidence.join(", ")}\n` : "") +
+    (result.scope_violations.length > 0 ? `Scope violations: ${result.scope_violations.join(", ")}\n` : "") +
+    (result.retry_status && result.retry_status.exhausted ? "\nRetry budget exhausted. Human required.\n" : "") +
+    (result.next_action ? `Next action: ${result.next_action}` : "")
+  )
+}
+
+function kernelErrorMessage(context: string, error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error)
+  return `[Tony Kernel] ${context} failed: ${reason}`
+}
+
+// ─── Hook: task.execute.before ────────────────────────────────────────────
 
 /**
  * Hook that intercepts task delegations before they execute.
  * Validates against the Kernel state machine before allowing delegation.
+ * 
+ * Fail-closed: any Kernel error blocks the delegation.
  */
 async function taskExecuteBeforeHook(
   input: DelegationInput,
   output: DelegationOutput
 ): Promise<void> {
-  // Only intercept Task tool delegations
   if (input.tool !== "Task") return
 
   const args = input.arguments as Record<string, unknown>
-  const requestedPhase = (args.phase as string) || "apply" // Default to apply
+  const requestedPhase = (args.phase as string) || "apply"
 
   try {
     const client = await getKernelClient()
     const result = await client.canStartPhase(requestedPhase)
 
     if (!result.allowed) {
-      // Block the delegation
-      throw new Error(
-        `[Tony Kernel] Phase transition blocked: ${result.reason}\n` +
-        `Current phase: ${result.current_phase}, Requested: ${result.requested_phase}\n` +
-        (result.missing_artifacts.length > 0 ? `Missing artifacts: ${result.missing_artifacts.join(", ")}\n` : "") +
-        (result.missing_evidence.length > 0 ? `Missing evidence: ${result.missing_evidence.join(", ")}\n` : "") +
-        (result.scope_violations.length > 0 ? `Scope violations: ${result.scope_violations.join(", ")}\n` : "") +
-        (result.retry_status && result.retry_status.exhausted ? "\nRetry budget exhausted. Human required." : "") +
-        (result.next_action ? `\nNext action: ${result.next_action}` : "")
-      )
+      throw new Error(phaseTransitionBlockedMessage(result))
     }
 
-    // Record delegation for tracking
-    const kernelClient = await getKernelClient()
-    await kernelClient.recordDelegation(requestedPhase, "sub-agent")
-    
+    await client.recordDelegation(requestedPhase, "sub-agent")
   } catch (error) {
+    // Re-throw ALL errors as blocking — fail closed
     if (error instanceof Error && error.message.startsWith("[Tony Kernel]")) {
-      throw error // Re-throw our blocking errors
+      throw error
     }
-    console.error("[tony-kernel] Hook error (non-blocking):", error)
+    throw new Error(kernelErrorMessage("Delegation gate", error))
   }
 }
 
-// ─── Hook: task.execute.after ────────────────────────────────────────────
+// ─── Hook: task.execute.after ─────────────────────────────────────────────
 
 /**
  * Hook that captures task completion and records phase completion.
+ * 
+ * Fail-closed: any Kernel error or missing artifacts blocks completion.
  */
 async function taskExecuteAfterHook(
   input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
@@ -229,20 +184,40 @@ async function taskExecuteAfterHook(
   if (input.tool !== "Task") return
 
   const args = input.arguments as Record<string, unknown>
-  const phase = (input.arguments.phase as string) || "apply"
+  const phase = (args.phase as string) || "apply"
 
   try {
-    // Check if task completed successfully
     const outputText = typeof output === "string" ? output : JSON.stringify(output)
     const success = !outputText.includes("error") && !outputText.includes("Error")
 
-    if (success) {
-      // Could record phase completion here if we have artifacts
-      // For now, just log
-      console.log(`[tony-kernel] Task completed for phase: ${phase}`)
+    if (!success) {
+      throw new Error(`[Tony Kernel] Phase completion rejected: task reported failure for phase ${phase}`)
+    }
+
+    const artifacts = args.artifacts as Array<{ kind: string; path: string; store: string; hash?: string }> | undefined
+    const evidence = (args.evidence as Array<unknown> | undefined) || []
+
+    if (!artifacts || artifacts.length === 0) {
+      throw new Error(`[Tony Kernel] Phase completion rejected: missing artifacts for phase ${phase}`)
+    }
+
+    const client = await getKernelClient()
+    await client.recordPhaseCompletion(phase, artifacts, evidence)
+
+    // Post-phase validation: verify the phase is actually complete in the kernel
+    const status = await client.getStatus()
+    const currentPhase = status.current_phase
+    if (currentPhase !== phase) {
+      throw new Error(
+        `[Tony Kernel] Post-phase validation failed: kernel state is ${currentPhase}, expected ${phase} after completion`
+      )
     }
   } catch (error) {
-    console.error("[tony-kernel] After hook error:", error)
+    // Re-throw ALL errors as blocking — fail closed
+    if (error instanceof Error && error.message.startsWith("[Tony Kernel]")) {
+      throw error
+    }
+    throw new Error(kernelErrorMessage("Phase completion", error))
   }
 }
 
@@ -258,9 +233,12 @@ const TonyKernelPlugin: Plugin = {
     "tool.execute.after": taskExecuteAfterHook,
   },
   
-  // Cleanup on plugin unload
+  async onLoad() {
+    console.log("[tony-kernel] Plugin loaded, kernel integration active")
+  },
+  
   async onUnload() {
-    // Cleanup handled by process exit
+    // Cleanup if needed
   }
 }
 

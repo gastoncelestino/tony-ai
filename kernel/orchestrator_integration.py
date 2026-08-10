@@ -76,18 +76,24 @@ class KernelOrchestrator:
     4. Enforce scope guards
     """
     
-    def __init__(self, change_id: str, project: str):
+    def __init__(self, change_id: str, project: str,
+                 artifact_store: Optional[Callable[[ArtifactRef], bool]] = None,
+                 artifact_hasher: Optional[Callable[[ArtifactRef], Optional[str]]] = None):
         # Core state
         self.change_state = create_initial_state(change_id, project)
         
         # Kernel components
+        self.artifact_store = artifact_store
+        self.artifact_hasher = artifact_hasher
         self.controller = PhaseController(self.change_state)
-        self.gate = PhaseGate(self.controller)
+        self.gate = PhaseGate(self.controller, artifact_store=artifact_store)
         self.evidence_ledger = EvidenceLedger()
         self.task_ledger = TaskLedger()
-        self.artifact_gate = ArtifactGate()
+        self.artifact_gate = ArtifactGate(store=artifact_store)
         self.retry_budget = RetryBudget()
-        self.checksum_registry = get_global_registry()
+        # Per-change registry — NOT the module-level singleton, so parallel
+        # changes never read each other's checksums.
+        self.checksum_registry = PhaseChecksumRegistry()
         
         # Tracking
         self.delegation_log: List[dict] = []
@@ -212,9 +218,10 @@ class KernelOrchestrator:
             tuple(artifact_refs)
         )
         
-        # Recreate controller and gate with updated state
+        # Recreate controller and gate with updated state — the gate must keep
+        # the artifact store, or disk-backed artifact verification is lost.
         self.controller = PhaseController(self.change_state)
-        self.gate = PhaseGate(self.controller)
+        self.gate = PhaseGate(self.controller, artifact_store=self.artifact_store)
         
         # Record phase checksum
         self._record_phase_checksum(phase, artifact_refs)
@@ -243,7 +250,13 @@ class KernelOrchestrator:
         self.checksum_registry.record_phase(phase, artifact_refs, recorded_by="kernel")
     
     def verify_phase_checksum(self, phase: str, artifacts: list = None) -> dict:
-        """Verify phase artifacts haven't been modified since completion."""
+        """Verify phase artifacts haven't been modified since completion.
+
+        When an ``artifact_hasher`` is wired, current hashes are recomputed
+        from the real backend (disk) before comparing, so stale or forged
+        reported hashes cannot mask tampering. A file-backed artifact that is
+        missing or empty is reported as such.
+        """
         if artifacts is None:
             artifacts = []
         artifact_refs = []
@@ -258,6 +271,20 @@ class KernelOrchestrator:
                 ))
             else:
                 artifact_refs.append(art)
+
+        if self.artifact_hasher is not None:
+            recomputed = []
+            for ref in artifact_refs:
+                current = self.artifact_hasher(ref)
+                if current is None:
+                    recomputed.append(ref)
+                else:
+                    recomputed.append(ArtifactRef(
+                        kind=ref.kind, path=ref.path, store=ref.store,
+                        hash=current or "", validated=True,
+                    ))
+            artifact_refs = recomputed
+
         result = self.checksum_registry.verify_phase(phase, artifact_refs)
         return result
     
@@ -265,14 +292,6 @@ class KernelOrchestrator:
                  dependencies: tuple = (), files: tuple = ()) -> None:
         """Add a task to the task ledger."""
         from .schemas import Task, TaskStatus, Phase
-        task = Task(
-            id=task_id,
-            description=description,
-            phase=Phase(phase),
-            status=TaskStatus.PENDING,
-            dependencies=dependencies,
-            files=files,
-        )
         self.task_ledger = self.task_ledger.add_task(Task(
             id=task_id,
             description=description,
@@ -432,18 +451,23 @@ class KernelOrchestrator:
         )
     
     def _parse_diff_files(self, git_diff: str) -> list:
-        """Parse git diff to extract modified file paths."""
-        import re
+        """Parse git diff to extract modified file paths.
+
+        Handles both `+++ b/path` (standard git diff) and `+++\tpath`
+        (tab-separated) header formats.
+        """
         files = []
         for line in git_diff.split('\n'):
-            if line.startswith('+++') or line.startswith('---'):
-                # Extract file path from diff header
-                parts = line.split('\t')
-                if len(parts) > 1:
-                    file_path = parts[1].lstrip('b/').lstrip('a/')
-                    if file_path != '/dev/null':
-                        files.append(file_path)
-        return list(set(files))
+            stripped = line.strip()
+            if not (stripped.startswith('+++') or stripped.startswith('---')):
+                continue
+            rest = stripped[3:].lstrip(' \t')
+            if not rest or rest.startswith('/dev/null'):
+                continue
+            if rest.startswith('a/') or rest.startswith('b/'):
+                rest = rest[2:]
+            files.append(rest)
+        return list(dict.fromkeys(files))
     
     def _match_pattern(self, file_path: str, pattern: str) -> bool:
         """Match file path against glob pattern."""
@@ -464,6 +488,9 @@ class KernelOrchestrator:
         }
 
 
-def create_kernel_orchestrator(change_id: str, project: str) -> KernelOrchestrator:
+def create_kernel_orchestrator(change_id: str, project: str,
+                               artifact_store: Optional[Callable[[ArtifactRef], bool]] = None,
+                               artifact_hasher: Optional[Callable[[ArtifactRef], Optional[str]]] = None) -> KernelOrchestrator:
     """Factory function to create a KernelOrchestrator."""
-    return KernelOrchestrator(change_id, project)
+    return KernelOrchestrator(change_id, project,
+                              artifact_store=artifact_store, artifact_hasher=artifact_hasher)
