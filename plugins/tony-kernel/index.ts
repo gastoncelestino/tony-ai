@@ -20,6 +20,7 @@ const KERNEL_DIR = join(PLUGIN_DIR, "..", "..", "kernel")
 
 interface CanStartPhaseResult {
   decision: string
+  allowed: boolean
   reason: string
   current_phase: string
   requested_phase: string
