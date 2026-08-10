@@ -61,8 +61,8 @@ const TONYMEM_TOOLS = new Set([
 
 // ─── Memory Instructions ─────────────────────────────────────────────────────
 // These get injected into the agent's context so it knows to call mem_save.
-// Same triggers/policy as tonymem's — only the branding and the tool surface
-// (no mem_judge or mem_merge_projects — TonyMem doesn't have them) changed.
+// Same triggers/policy as tonymem's — only the tool surface differs
+// (no mem_judge or mem_merge_projects — TonyMem doesn't have them).
 
 const MEMORY_INSTRUCTIONS = `## TonyMem Persistent Memory — Protocol
 
