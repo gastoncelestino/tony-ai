@@ -250,12 +250,24 @@ def mem_context(args: dict) -> dict:
     Mirrors what the AGENTS.md protocol expects from `mem_context`: a fast
     look at what happened recently (session summaries first, then other
     recent observations) before falling back to a full mem_search.
+    Supports `offset` for pagination (default 0).
     """
     project = args.get("project", "default")
     limit = min(int(args.get("limit", 5)), 20)
+    offset = max(int(args.get("offset", 0)), 0)
 
     conn = connect()
     try:
+        # If offset > 0, skip session-summary logic and just paginate recent observations
+        if offset > 0:
+            rows = conn.execute(
+                "SELECT id, project, title, topic_key, type, scope, content, created_at, updated_at "
+                "FROM observations WHERE project=? AND type != 'prompt-capture' "
+                "ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                (project, limit, offset),
+            ).fetchall()
+            return {"context": [dict(r) for r in rows], "count": len(rows)}
+
         rows = conn.execute(
             "SELECT id, project, title, topic_key, type, scope, content, created_at, updated_at "
             "FROM observations WHERE project=? AND type='session-summary' "
@@ -498,12 +510,13 @@ TOOLS = {
         "handler": mem_update,
     },
     "mem_context": {
-        "description": "Fast recent-session lookup for a project (latest session summary + most recent observations). Cheaper than mem_search — call this first when the user references past work.",
+        "description": "Fast recent-session lookup for a project (latest session summary + most recent observations). Cheaper than mem_search — call this first when the user references past work. Supports `offset` for pagination.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "project": {"type": "string", "description": "Project name, default 'default'"},
                 "limit": {"type": "number", "description": "Max items to return, default 5"},
+                "offset": {"type": "number", "description": "Pagination offset, default 0. If > 0, skips session-summary logic and paginates all observations."},
             },
             "required": [],
         },

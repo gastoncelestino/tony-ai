@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq make sqlite3
+
+      - name: Run Python tests
+        run: |
+          cd local-memory && python3 test_server.py
+          cd ../code-index && python3 test_core.py
+          cd ../judgment-memory && python3 test_ledger.py
+        shell: bash
+
+      - name: Run TypeScript tests
+        run: |
+          cd judgment-memory && bun test ./test_hooks.ts
+        shell: bash
+
+      - name: Validate configuration
+        run: |
+          bun run scripts/validate-config.ts
+        shell: bash
+
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker images
+        run: |
+          cd docker && docker compose build
+        shell: bash
