@@ -169,3 +169,109 @@ PHASE_COMPLETION_ARTIFACTS: dict[Phase, tuple[str, ...]] = {
     Phase.VERIFY: ("verify-report",),
     Phase.ARCHIVE: ("archive-report",),
 }
+
+
+# ============================================================================
+# Evidence & Task Ledger Schemas (Commit 2)
+# ============================================================================
+
+class EvidenceType(str, Enum):
+    """Types of evidence that can support a claim."""
+    TEST = "test"
+    BUILD = "build"
+    LINT = "lint"
+    COMMAND = "command"
+    GIT_DIFF = "git_diff"
+    FILE_EXISTS = "file_exists"
+    FILE_CONTENT = "file_content"
+    MANUAL = "manual"
+
+
+class EvidenceStatus(str, Enum):
+    VALID = "valid"
+    INVALID = "invalid"
+    PENDING = "pending"
+    EXPIRED = "expired"
+
+
+@dataclass(frozen=True, slots=True)
+class Evidence:
+    type: EvidenceType
+    claim: str
+    command: Optional[str] = None
+    exit_code: Optional[int] = None
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    stdout_hash: Optional[str] = None
+    stdout_path: Optional[str] = None
+    file_path: Optional[str] = None
+    file_hash: Optional[str] = None
+    metadata: dict = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=datetime.now)
+    status: EvidenceStatus = EvidenceStatus.PENDING
+
+    def validate(self) -> EvidenceStatus:
+        if self.type in (EvidenceType.TEST, EvidenceType.BUILD, EvidenceType.LINT, EvidenceType.COMMAND):
+            if self.exit_code is None:
+                return EvidenceStatus.INVALID
+            return EvidenceStatus.VALID if self.exit_code == 0 else EvidenceStatus.INVALID
+        elif self.type == EvidenceType.GIT_DIFF:
+            return EvidenceStatus.VALID if self.stdout else EvidenceStatus.INVALID
+        elif self.type in (EvidenceType.FILE_EXISTS, EvidenceType.FILE_CONTENT):
+            return EvidenceStatus.VALID if self.file_path else EvidenceStatus.INVALID
+        return EvidenceStatus.PENDING
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionRecord:
+    command: str
+    args: tuple[str, ...] = field(default_factory=tuple)
+    exit_code: int
+    stdout: str
+    stderr: str
+    duration_ms: int
+    timestamp: datetime = field(default_factory=datetime.now)
+    working_dir: Optional[str] = None
+    env: dict = field(default_factory=dict)
+
+    @property
+    def success(self) -> bool:
+        return self.exit_code == 0
+
+    def to_evidence(self, claim: str) -> Evidence:
+        return Evidence(
+            type=EvidenceType.COMMAND,
+            claim=claim,
+            command=self.command,
+            exit_code=self.exit_code,
+            stdout=self.stdout,
+            stderr=self.stderr,
+            stdout_hash=hashlib.sha256(self.stdout.encode()).hexdigest() if self.stdout else None,
+        )
+
+
+class ClaimStatus(str, Enum):
+    SUPPORTED = "supported"
+    REFUTED = "refuted"
+    INSUFFICIENT = "insufficient"
+    CONFLICTING = "conflicting"
+
+
+@dataclass(frozen=True, slots=True)
+class Claim:
+    id: str
+    description: str
+    evidence: tuple[Evidence, ...] = field(default_factory=tuple)
+    status: ClaimStatus = ClaimStatus.INSUFFICIENT
+    required: bool = True
+    metadata: dict = field(default_factory=dict)
+
+    def evaluate(self) -> ClaimStatus:
+        if not self.evidence:
+            return ClaimStatus.INSUFFICIENT
+        validated = [e for e in self.evidence if e.validate() == EvidenceStatus.VALID]
+        if not validated:
+            return ClaimStatus.INSUFFICIENT
+        # Simple: if any valid evidence supports, consider supported
+        # In reality, would need more sophisticated logic
+        return ClaimStatus.SUPPORTED
