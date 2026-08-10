@@ -1,8 +1,9 @@
 """
 Tests for Tony Kernel — State Machine + Phase Gate
+stdlib-only (unittest) — no pytest dependency
 """
 from __future__ import annotations
-import pytest
+import unittest
 from datetime import datetime
 
 from kernel.schemas import (
@@ -24,32 +25,14 @@ from kernel.state_machine import (
 from kernel.phase_gate import PhaseGate, PhaseGateConfig
 
 
-class TestPhaseTransitions:
+class TestPhaseTransitions(unittest.TestCase):
     """Test valid and invalid phase transitions."""
 
     def test_initial_state(self):
         state = create_initial_state("test-change", "test-project")
-        assert state.current_phase == "explore"
-        assert state.phases["explore"].status.value == "running"
-        assert state.change_id == "test-change"
-
-    def test_valid_transitions(self):
-        """Test all valid forward transitions."""
-        valid_pairs = [
-            ("explore", "propose"),
-            ("propose", "spec"),
-            ("spec", "design"),
-            ("design", "tasks"),
-            ("tasks", "apply"),
-            ("apply", "verify"),
-            ("verify", "archive"),
-        ]
-
-        for from_phase, to_phase in valid_pairs:
-            state = create_initial_state("test", "test")
-            # Manually complete phases up to from_phase
-            # (simplified for test)
-            pass  # We test via PhaseController below
+        self.assertEqual(state.current_phase, Phase.EXPLORE)
+        self.assertEqual(state.phases[Phase.EXPLORE].status, PhaseStatus.RUNNING)
+        self.assertEqual(state.change_id, "test-change")
 
     def test_invalid_transitions_denied(self):
         """Test that invalid transitions are denied."""
@@ -69,22 +52,22 @@ class TestPhaseTransitions:
             pass
 
 
-class TestPhaseController:
+class TestPhaseController(unittest.TestCase):
     """Test PhaseController logic."""
 
-    def setup_method(self):
+    def setUp(self):
         self.state = create_initial_state("test-change", "test-project")
         self.controller = PhaseController(self.state)
 
     def test_initial_state(self):
-        assert self.controller.change_state.current_phase == Phase.EXPLORE
-        assert self.controller.change_state.phases[Phase.EXPLORE].status == PhaseStatus.RUNNING
+        self.assertEqual(self.controller.change_state.current_phase, Phase.EXPLORE)
+        self.assertEqual(self.controller.change_state.phases[Phase.EXPLORE].status, PhaseStatus.RUNNING)
 
     def test_can_transition_same_phase(self):
         allowed, reason, missing = self.controller.can_transition(Phase.EXPLORE)
-        assert allowed is True
-        assert "Already in phase" in reason
-        assert missing == ()
+        self.assertTrue(allowed)
+        self.assertIn("Already in phase", reason)
+        self.assertEqual(missing, ())
 
     def test_valid_forward_transition_after_completion(self):
         # Complete explore phase
@@ -92,15 +75,15 @@ class TestPhaseController:
 
         controller = PhaseController(self.state)
         allowed, reason, missing = controller.can_transition(Phase.PROPOSE)
-        assert allowed is True
-        assert missing == ()
+        self.assertTrue(allowed)
+        self.assertEqual(missing, ())
 
     def test_transition_denied_without_completion(self):
         # Try to go to propose without completing explore
         allowed, reason, missing = self.controller.can_transition(Phase.PROPOSE)
-        assert allowed is False
+        self.assertFalse(allowed)
         # Should fail because explore not completed (or missing artifacts)
-        assert "not completed" in reason or "Missing required artifacts" in reason
+        self.assertTrue("not completed" in reason or "Missing required artifacts" in reason)
 
     def test_transition_denied_missing_artifacts(self):
         # Complete explore but without artifacts
@@ -109,8 +92,8 @@ class TestPhaseController:
         controller = PhaseController(self.state)
         allowed, reason, missing = controller.can_transition(Phase.PROPOSE)
         # Should fail because explore artifact is required for transition
-        assert allowed is False
-        assert "explore" in missing
+        self.assertFalse(allowed)
+        self.assertIn("explore", missing)
 
     def test_transition_with_artifacts(self):
         # Complete explore with artifacts
@@ -119,23 +102,23 @@ class TestPhaseController:
 
         controller = PhaseController(self.state)
         allowed, reason, missing = controller.can_transition(Phase.PROPOSE)
-        assert allowed is True
-        assert missing == ()
+        self.assertTrue(allowed)
+        self.assertEqual(missing, ())
 
     def test_invalid_backward_transition(self):
         self.state = create_initial_state("test", "test")
         controller = PhaseController(self.state)
         # Can't go from explore to spec directly
         allowed, reason, missing = controller.can_transition(Phase.SPEC)
-        assert allowed is False
-        assert "Invalid transition" in reason
+        self.assertFalse(allowed)
+        self.assertIn("Invalid transition", reason)
 
     def test_skip_phase_denied(self):
         self.state = create_initial_state("test", "test")
         controller = PhaseController(self.state)
         allowed, reason, missing = controller.can_transition(Phase.SPEC)
-        assert allowed is False
-        assert "Invalid transition" in reason
+        self.assertFalse(allowed)
+        self.assertIn("Invalid transition", reason)
 
     def test_transition_updates_state(self):
         explore_artifact = ArtifactRef(kind="explore", path="...", store="tonymem")
@@ -144,9 +127,9 @@ class TestPhaseController:
         controller = PhaseController(self.state)
         new_state = controller.transition(Phase.PROPOSE)
 
-        assert new_state.current_phase == Phase.PROPOSE
-        assert new_state.phases[Phase.EXPLORE].status == PhaseStatus.COMPLETED
-        assert new_state.phases[Phase.PROPOSE].status == PhaseStatus.RUNNING
+        self.assertEqual(new_state.current_phase, Phase.PROPOSE)
+        self.assertEqual(new_state.phases[Phase.EXPLORE].status, PhaseStatus.COMPLETED)
+        self.assertEqual(new_state.phases[Phase.PROPOSE].status, PhaseStatus.RUNNING)
 
     def test_complete_phase_updates_artifacts(self):
         artifact = ArtifactRef(kind="proposal", path="...", store="tonymem")
@@ -164,28 +147,28 @@ class TestPhaseController:
         # Now complete propose
         new_state = controller.complete_phase(Phase.PROPOSE, (ArtifactRef(kind="proposal", path="...", store="tonymem"),))
 
-        assert new_state.phases[Phase.PROPOSE].status == PhaseStatus.COMPLETED
-        assert len(new_state.phases[Phase.PROPOSE].artifacts) == 1
-        assert new_state.phases[Phase.PROPOSE].artifacts[0].kind == "proposal"
+        self.assertEqual(new_state.phases[Phase.PROPOSE].status, PhaseStatus.COMPLETED)
+        self.assertEqual(len(new_state.phases[Phase.PROPOSE].artifacts), 1)
+        self.assertEqual(new_state.phases[Phase.PROPOSE].artifacts[0].kind, "proposal")
 
 
-class TestPhaseGate:
+class TestPhaseGate(unittest.TestCase):
     """Test PhaseGate logic."""
 
-    def setup_method(self):
+    def setUp(self):
         self.state = create_initial_state("test-change", "test-project")
         self.controller = PhaseController(self.state)
         self.gate = PhaseGate(self.controller)
 
     def test_same_phase_allowed(self):
         result = self.gate.check_transition(Phase.EXPLORE)
-        assert result.allowed is True
-        assert "Already in phase" in result.reason
+        self.assertTrue(result.allowed)
+        self.assertIn("Already in phase", result.reason)
 
     def test_transition_denied_before_completion(self):
         result = self.gate.check_transition(Phase.PROPOSE)
-        assert result.allowed is False
-        assert "not completed" in result.reason
+        self.assertFalse(result.allowed)
+        self.assertIn("not completed", result.reason)
 
     def test_transition_allowed_after_completion_with_artifacts(self):
         explore_artifact = ArtifactRef(kind="explore", path="...", store="tonymem")
@@ -193,20 +176,20 @@ class TestPhaseGate:
 
         gate = PhaseGate(PhaseController(self.state))
         result = gate.check_transition(Phase.PROPOSE)
-        assert result.allowed is True
+        self.assertTrue(result.allowed)
 
     def test_assert_can_transition_raises(self):
         from kernel.state_machine import InvalidTransitionError
-        with pytest.raises(Exception):  # InvalidTransitionError
+        with self.assertRaises(InvalidTransitionError):
             self.gate.assert_can_transition(Phase.PROPOSE)
 
     def test_get_status_summary(self):
         summary = self.gate.get_status_summary()
-        assert summary["current_phase"] == "explore"
-        assert "next_allowed" in summary
+        self.assertEqual(summary["current_phase"], "explore")
+        self.assertIn("next_allowed", summary)
 
 
-class TestPhaseOrdering:
+class TestPhaseOrdering(unittest.TestCase):
     """Test phase ordering and indices."""
 
     def test_phase_order(self):
@@ -214,27 +197,27 @@ class TestPhaseOrdering:
             "explore", "propose", "spec", "design",
             "tasks", "apply", "verify", "archive"
         ]
-        assert [p.value for p in Phase.ordered()] == [p.value for p in Phase]
+        self.assertEqual([p.value for p in Phase.ordered()], ordered)
 
     def test_phase_index(self):
-        assert Phase.index("explore") == 0
-        assert Phase.index("spec") == 2
-        assert Phase.index("archive") == 7
+        self.assertEqual(Phase.index("explore"), 0)
+        self.assertEqual(Phase.index("spec"), 2)
+        self.assertEqual(Phase.index("archive"), 7)
 
 
-class TestArtifacts:
+class TestArtifacts(unittest.TestCase):
     """Test artifact requirements."""
 
     def test_required_artifacts_for_transitions(self):
-        assert REQUIRED_ARTIFACTS_FOR_TRANSITION[("explore", "propose")] == ("explore",)
-        assert REQUIRED_ARTIFACTS_FOR_TRANSITION[("spec", "design")] == ("spec",)
-        assert REQUIRED_ARTIFACTS_FOR_TRANSITION[("tasks", "apply")] == ("tasks", "spec", "design")
+        self.assertEqual(REQUIRED_ARTIFACTS_FOR_TRANSITION[("explore", "propose")], ("explore",))
+        self.assertEqual(REQUIRED_ARTIFACTS_FOR_TRANSITION[("spec", "design")], ("spec",))
+        self.assertEqual(REQUIRED_ARTIFACTS_FOR_TRANSITION[("tasks", "apply")], ("tasks", "spec", "design"))
 
     def test_completion_artifacts(self):
-        assert PHASE_COMPLETION_ARTIFACTS["explore"] == ("explore",)
-        assert PHASE_COMPLETION_ARTIFACTS["spec"] == ("spec",)
-        assert PHASE_COMPLETION_ARTIFACTS["apply"] == ("apply-progress",)
+        self.assertEqual(PHASE_COMPLETION_ARTIFACTS["explore"], ("explore",))
+        self.assertEqual(PHASE_COMPLETION_ARTIFACTS["spec"], ("spec",))
+        self.assertEqual(PHASE_COMPLETION_ARTIFACTS["apply"], ("apply-progress",))
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    unittest.main()

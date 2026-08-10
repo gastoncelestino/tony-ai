@@ -3,7 +3,7 @@
 
 .PHONY: test test-python test-ts verify-qdrant docker-up docker-down clean bootstrap health validate-config
 
-test: test-python test-ts
+test: test-python test-ts test-kernel
 
 test-python:
 	@echo "▶ Running Python tests..."
@@ -11,6 +11,11 @@ test-python:
 	@cd code-index && python3 test_core.py
 	@cd judgment-memory && python3 test_ledger.py
 	@echo "✓ Python tests passed"
+
+test-kernel:
+	@echo "▶ Running Kernel tests..."
+	@python3 -m kernel.test_state_machine
+	@echo "✓ Kernel tests passed"
 
 test-ts:
 	@echo "▶ Running TypeScript tests..."
