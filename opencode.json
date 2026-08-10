@@ -310,7 +310,7 @@
       ],
       "type": "local",
       "environment": {
-        "LOCAL_MEMORY_DB": "{cwd}/.tonymem/memory.db"
+        "LOCAL_MEMORY_DB": "{env:PWD}/.tonymem/memory.db"
       }
     },
     "code-index": {
@@ -321,7 +321,7 @@
       "type": "local",
       "environment": {
         "TONY_REPO_ROOT": "{env:TONY_REPO_ROOT}",
-        "TONY_INDEX_ROOT": "{cwd}",
+        "TONY_INDEX_ROOT": "{env:PWD}",
         "TONY_OLLAMA_URL": "http://localhost:11434",
         "TONY_QDRANT_URL": "http://localhost:6333",
         "TONY_EMBED_MODEL": "bge-m3",
@@ -336,7 +336,7 @@
       "type": "local",
       "environment": {
         "TONY_REPO_ROOT": "{env:TONY_REPO_ROOT}",
-        "JUDGMENT_MEMORY_DB": "{cwd}/.tonymem/judgment-memory.db",
+        "JUDGMENT_MEMORY_DB": "{env:PWD}/.tonymem/judgment-memory.db",
         "TONY_OLLAMA_URL": "http://localhost:11434",
         "TONY_QDRANT_URL": "http://localhost:6333",
         "TONY_EMBED_MODEL": "nomic-embed-text",

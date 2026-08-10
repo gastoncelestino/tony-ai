@@ -14,7 +14,7 @@ test-python:
 
 test-ts:
 	@echo "▶ Running TypeScript tests..."
-	@cd judgment-memory && bun test test_hooks.ts
+	@cd judgment-memory && bun test ./test_hooks.ts
 	@echo "✓ TypeScript tests passed"
 
 verify-qdrant:

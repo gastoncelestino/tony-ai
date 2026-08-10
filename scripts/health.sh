@@ -91,9 +91,9 @@ fi
 # 5. Disk: directorios locales existen y son escribibles
 DISK_OK=1
 DISK_MSG="todos los directorios .tonymem/ son escribibles"
-for d in "${REPO_ROOT}/local-memory/.tonymem" \
-         "${REPO_ROOT}/code-index/.codeindex" \
-         "${REPO_ROOT}/judgment-memory/.tonymem"; do
+# Usar TONY_REPO_ROOT (igual que PWD en OpenCode) para consistencia
+for d in "${REPO_ROOT}/.tonymem" \
+         "${REPO_ROOT}/code-index/.codeindex"; do
   if [[ ! -d "$d" ]]; then
     if ! mkdir -p "$d" 2>/dev/null; then
       DISK_OK=0; DISK_MSG="no pude crear $d"; break
