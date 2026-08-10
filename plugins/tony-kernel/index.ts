@@ -236,7 +236,7 @@ async function taskExecuteAfterHook(
   if (input.tool !== "Task") return
 
   const args = input.arguments as Record<string, unknown>
-  const phase = (args.phase as string) || "apply"
+  const phase = derivePhase(args)
 
   try {
     const outputText = typeof output === "string" ? output : JSON.stringify(output)
