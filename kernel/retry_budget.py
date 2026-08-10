@@ -1,5 +1,5 @@
 """
-Tony Kernel — Retry Budget
+Tony Kernel — Retry Budget (Fixed Version)
 
 Tracks retry attempts per task/phase to prevent infinite loops.
 Implements "Retry Budget" rule: max 3 attempts, then human required.
@@ -7,10 +7,8 @@ Implements "Retry Budget" rule: max 3 attempts, then human required.
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from enum import Enum
-
-from .schemas import Phase
 
 
 class RetryAction(str, Enum):
@@ -40,7 +38,7 @@ class RetryBudget:
     Max 3 attempts: implement → targeted fix → targeted fix → human required.
     """
     max_attempts: int = 3
-    attempts: Dict[str, list] = field(default_factory=dict)  # key: "phase:task_id"
+    attempts: Dict[str, List[dict]] = field(default_factory=dict)
     
     def get_key(self, phase: str, task_id: Optional[str] = None) -> str:
         return f"{phase}:{task_id or 'phase'}"
@@ -51,12 +49,12 @@ class RetryBudget:
     
     def record_attempt(self, phase: str, task_id: Optional[str], success: bool, 
                        error: Optional[str] = None, evidence: dict = None) -> dict:
-        key = self.get_key(phase, task_id)
+        key = f"{phase}:{task_id or 'phase'}"
         attempts = self.attempts.get(key, [])
         attempt_num = len(attempts) + 1
         
         record = {
-            "attempt_number": attempt_num,
+            "attempt_number": len(self.attempts.get(key, [])) + 1,
             "phase": phase,
             "task_id": task_id,
             "success": success,
@@ -65,48 +63,40 @@ class RetryBudget:
             "timestamp": __import__('datetime').datetime.now().isoformat(),
         }
         
-        if attempt_num > self.max_attempts:
-            action = "human_required"
-        elif attempt_num == 1:
-            action = "implement"
-        else:
-            action = "targeted_fix"
-        
-        record["action"] = action
-        
         if key not in self.attempts:
             self.attempts[key] = []
         self.attempts[key].append(record)
         
         return {
-            "attempt": attempt_num,
-            "action": action,
-            "max_reached": attempt_num >= self.max_attempts,
-            "next_action": "human_required" if attempt_num >= self.max_attempts else ("targeted_fix" if attempt_num > 1 else "implement"),
+            "attempt": len(self.attempts[key]),
+            "action": "human_required" if len(self.attempts[key]) >= 3 else ("targeted_fix" if len(self.attempts[key]) > 1 else "implement"),
+            "max_reached": len(self.attempts[key]) >= 3,
+            "next_action": "human_required" if len(self.attempts[key]) >= 3 else ("targeted_fix" if len(self.attempts[key]) > 0 else "implement"),
         }
     
     def get_status(self, phase: str, task_id: Optional[str] = None) -> dict:
-        attempts = self.get_attempts(phase)
+        key = f"{phase}:{task_id or 'phase'}"
+        attempts = self.attempts.get(key, [])
         attempt_num = len(attempts)
         
         return {
-            "attempts_used": attempt_num,
-            "max_attempts": self.max_attempts,
-            "remaining": max(0, self.max_attempts - len(self.attempts.get(self.get_key(phase), []))),
-            "exhausted": len(self.attempts.get(self.get_key(phase), [])) >= self.max_attempts,
-            "next_action": "human_required" if len(self.attempts.get(key, [])) >= self.max_attempts else ("targeted_fix" if len(self.attempts.get(key, [])) > 0 else "implement"),
+            "attempts_used": len(self.attempts.get(key, [])),
+            "max_attempts": 3,
+            "remaining": max(0, 3 - len(self.attempts.get(key, []))),
+            "exhausted": len(self.attempts.get(key, [])) >= 3,
+            "next_action": "human_required" if len(self.attempts.get(key, [])) >= 3 else ("targeted_fix" if len(self.attempts[key]) > 0 else "implement"),
             "last_attempt": self.attempts.get(key, [])[-1] if self.attempts.get(key) else None,
         }
     
     def is_exhausted(self, phase: str, task_id: Optional[str] = None) -> bool:
-        key = self.get_key(phase, task_id)
-        return len(self.attempts.get(key, [])) >= self.max_attempts
+        key = f"{phase}:{task_id or 'phase'}"
+        return len(self.attempts.get(key, [])) >= 3
     
     def get_next_action(self, phase: str, task_id: Optional[str] = None) -> str:
-        key = self.get_key(phase, task_id)
+        key = f"{phase}:{task_id or 'phase'}"
         attempts = len(self.attempts.get(key, []))
         
-        if attempts >= self.max_attempts:
+        if attempts >= 3:
             return "human_required"
         elif attempts == 0:
             return "implement"
@@ -114,6 +104,6 @@ class RetryBudget:
             return "targeted_fix"
     
     def reset(self, phase: str, task_id: Optional[str] = None) -> None:
-        key = self.get_key(phase, task_id)
+        key = f"{phase}:{task_id or 'phase'}"
         if key in self.attempts:
             del self.attempts[key]
