@@ -84,6 +84,49 @@ upsert path handles this at the SQLite level (`ON CONFLICT DO UPDATE`). Do not
 implement manual read-modify-write cycles; always use `mem_save` with the
 topic_key above.
 
+## Memory Lifecycle
+
+Saved memories can become stale as the codebase evolves. TonyMem uses a
+three-state lifecycle to prevent outdated memories from being trusted as
+current facts:
+
+| State | Meaning |
+|-------|---------|
+| `active` | Current, verified memory (default on save). |
+| `proven` | Solution verified through repeated Q&A. Ranks first in `mem_search`. |
+| `needs_review` | Stale memory that must be re-verified before use. |
+
+### mem_review Contract
+
+Lifecycle transitions are managed exclusively through `mem_review`:
+
+```
+mem_review(action: "mark_stale", ids: [...])       // → needs_review
+mem_review(action: "mark_reviewed", ids: [...])    // → active
+mem_review(action: "mark_proven", ids: [...])      // → proven
+mem_review(action: "list", project: "{project}")   // list needs_review (default)
+mem_review(action: "list", project: "{project}", status: "proven")  // list by status
+```
+
+Rules:
+- All transitions accept any source state (no guard on the previous status).
+- `mem_search` results include `lifecycle_status` in every row. When a result
+  shows `needs_review`, do NOT treat it as a confirmed fact — verify it
+  against the current codebase/state before acting on it.
+- `proven` memories rank first in `mem_search` (before `active` and
+  `needs_review`), so verified solutions surface first.
+- When saving updated knowledge for an evolving topic, reuse the same
+  `topic_key` to upsert in place, then `mark_reviewed` if the prior state was
+  `needs_review`.
+
+### SDD Artifact Lifecycle
+
+SDD artifacts (`proposal`, `spec`, `design`, `tasks`, etc.) default to
+`active`. Mark a design decision as `proven` only after it has been validated
+through a completed `sdd-verify` phase or repeated Q&A. If the codebase
+diverges from a stored artifact (e.g. the spec no longer matches
+implementation), `mark_stale` it and re-verify before reusing it.
+
 ## Fallback When tonymem Is Unavailable
 
 If `mem_save` or `mem_search` returns `available: false` or fails, degrade to

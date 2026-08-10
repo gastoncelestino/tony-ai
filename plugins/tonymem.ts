@@ -56,13 +56,13 @@ const TONYMEM_TOOLS = new Set([
   "mem_session_summary",
   "mem_suggest_topic_key",
   "mem_save_prompt",
+  "mem_review",
 ])
 
 // ─── Memory Instructions ─────────────────────────────────────────────────────
 // These get injected into the agent's context so it knows to call mem_save.
 // Same triggers/policy as tonymem's — only the branding and the tool surface
-// (no mem_judge, mem_review, mem_merge_projects — TonyMem doesn't have them,
-// and no current prompt actually depends on them) changed.
+// (no mem_judge or mem_merge_projects — TonyMem doesn't have them) changed.
 
 const MEMORY_INSTRUCTIONS = `## TonyMem Persistent Memory — Protocol
 
@@ -107,6 +107,20 @@ Also search memory PROACTIVELY when:
 - Starting work on something that might have been done before
 - The user mentions a topic you have no context on — check if past sessions covered it
 - The user's FIRST message references the project, a feature, or a problem — call \`mem_search\` with keywords from their message to check for prior work before responding
+
+### MEMORY LIFECYCLE (mandatory)
+
+Saved memories can become stale as the codebase evolves. TonyMem uses a three-state lifecycle:
+- \`active\` — current, verified memory (default)
+- \`proven\` — solution verified through repeated Q&A; ranks first in \`mem_search\`
+- \`needs_review\` — stale memory that must be re-verified before use
+
+Rules:
+1. \`mem_search\` results include \`lifecycle_status\`. When a result shows \`needs_review\`, do NOT treat it as a confirmed fact — verify it against the current codebase/state first.
+2. If you suspect a memory is outdated, call \`mem_review\` with \`action: mark_stale\` and the observation \`ids\`.
+3. To list stale memories for a project: \`mem_review\` with \`action: list\` (filter by \`status\` optionally).
+4. After verifying a stale memory, call \`mem_review\` with \`action: mark_reviewed\` and the \`ids\` to move it back to \`active\`.
+5. After a solution emerges from a Q&A exchange and is verified (tests pass or user confirms), call \`mem_review\` with \`action: mark_proven\` and the \`ids\`. Proven memories rank first in \`mem_search\`.
 
 ### SESSION CLOSE PROTOCOL (mandatory)
 

@@ -209,7 +209,7 @@ python3 server.py
 
 | Componente 	| Test         | Qué cubre    |
 |--------------|--------------|--------------|
-| TonyMem server 					| `local-memory/server.py` (manual JSON-RPC) 	| Sesión completa: save, search, context, session-summary, prompt-capture, lifecycle (active/proven/needs_review + mark_proven + ranking) 		|
+| TonyMem server 					| `local-memory/server.py` (manual JSON-RPC) 	| Sesión completa: save, search, context, session-summary, prompt-capture, lifecycle (active/proven/needs_review + mark_stale/mark_reviewed/mark_proven + ranking) 		|
 | TonyMem plugin 					| `plugins/tonymem.ts` (tipado `tsc`) 			| Tipado contra stubs de `bun:sqlite`/`@opencode-ai/plugin` 					|
 | Code Indexer 						| `code-index/test_core.py` 					| Chunking + mock HTTP end-to-end, 4/4 escenarios 								|
 | DCP config 						| validado contra `dcp.schema.json` 			| Schema completo, `additionalProperties: false` 								|
