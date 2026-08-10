@@ -1,125 +1,218 @@
 #!/usr/bin/env python3
 """
-Tony Kernel CLI — Command-line interface for the Kernel Orchestrator
-Used by the TypeScript plugin to communicate with the kernel.
+Tony Kernel CLI — command-line interface for the Kernel Orchestrator.
+
+Used by the tony-kernel plugin (and by hand, for debugging) to talk to the
+kernel. State is persisted across invocations via kernel/persistence.py, so a
+phase completed in one call is visible to the next (this is what makes the
+gate deterministic instead of stateless).
+
+Run from the repository root:  python3 -m kernel.cli <command> [args...]
 """
 from __future__ import annotations
+
 import json
+import os
 import sys
-from typing import Any
+from typing import Any, Optional
 
-# Add kernel to path
-import sys
-sys.path.insert(0, '/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_0a609c26-9e31-4ad3-abf7-5af14c9f5367')
-
-from kernel.orchestrator_integration import create_kernel_orchestrator
-from kernel.schemas import ArtifactRef, Phase
+from .persistence import load_orchestrator, save_orchestrator, reset_state
+from .artifact_store import disk_artifact_store
+from .schemas import ArtifactRef, Evidence, EvidenceType
 
 
-def main():
-    if len(sys.argv) < 2:
+def _build_store():
+    base = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
+    return disk_artifact_store(base)
+
+
+def _load():
+    return load_orchestrator(artifact_store=_build_store())
+
+
+def _result_to_dict(r) -> dict:
+    """Normalize an OrchestrationResult into the JSON shape the plugin reads."""
+    decision = r.decision.value
+    return {
+        "decision": decision,
+        "allowed": decision in ("proceed", "phase_complete"),
+        "reason": r.reason,
+        "current_phase": r.current_phase,
+        "requested_phase": r.requested_phase,
+        "missing_artifacts": list(r.missing_artifacts),
+        "missing_evidence": list(r.missing_evidence),
+        "scope_violations": list(r.scope_violations),
+        "retry_status": r.retry_status,
+        "next_action": r.next_action,
+    }
+
+
+def _parse_artifact_refs(raw: list) -> tuple:
+    refs = []
+    for art in raw:
+        if isinstance(art, dict):
+            refs.append(ArtifactRef(
+                kind=art.get("kind", ""),
+                path=art.get("path", ""),
+                store=art.get("store", "tonymem"),
+                hash=art.get("hash"),
+                validated=art.get("validated", False),
+            ))
+        else:
+            refs.append(art)
+    return tuple(refs)
+
+
+def _parse_evidence(raw: list) -> list:
+    evidence = []
+    for ev in raw:
+        if isinstance(ev, dict):
+            evidence.append(Evidence(
+                type=EvidenceType(ev.get("type", "manual")),
+                claim=ev.get("claim", ""),
+                command=ev.get("command"),
+                exit_code=ev.get("exit_code"),
+                stdout=ev.get("stdout"),
+                stderr=ev.get("stderr"),
+                file_path=ev.get("file_path"),
+                file_hash=ev.get("file_hash"),
+            ))
+        elif isinstance(ev, Evidence):
+            evidence.append(ev)
+    return evidence
+
+
+def _cmd_arg(args: list, index: int, name: str) -> str:
+    if index >= len(args):
+        print(json.dumps({"error": f"missing argument: {name}"}), file=sys.stderr)
+        sys.exit(1)
+    return args[index]
+
+
+def _main(argv: list) -> None:
+    if len(argv) < 1:
         print(json.dumps({"error": "No command provided"}), file=sys.stderr)
         sys.exit(1)
 
-    command = sys.argv[1]
-    args = sys.argv[2:]
+    command = argv[0]
+    args = argv[1:]
 
-    kernel = create_kernel_orchestrator("default", "default")
+    if command in ("status", "get_status"):
+        orch = _load()
+        print(json.dumps(orch.get_status()))
+        return
 
-    try:
-        if command == "can_start_phase":
-            if len(args) < 1:
-                print(json.dumps({"error": "phase required"}), file=sys.stderr)
-                sys.exit(1)
-            phase = args[0]
-            result = kernel.can_start_phase(args[0])
-            output = {
-                "decision": result.decision.value,
-                "reason": result.reason,
-                "current_phase": result.current_phase,
-                "requested_phase": result.requested_phase,
-                "missing_artifacts": list(result.missing_artifacts),
-                "missing_evidence": list(result.missing_evidence),
-                "scope_violations": list(result.scope_violations),
-                "retry_status": result.retry_status,
-                "next_action": result.next_action,
-            }
-            print(json.dumps(output))
+    if command == "health":
+        print(json.dumps({"status": "ok"}))
+        return
 
-        elif command == "record_delegation":
-            if len(args) < 2:
-                print(json.dumps({"error": "phase and sub_agent required"}), file=sys.stderr)
-                sys.exit(1)
-            phase, sub_agent = args[0], args[1]
-            task_id = args[2] if len(args) > 2 else None
-            kernel.record_delegation(phase, sub_agent, task_id)
-            print(json.dumps({"ok": True}))
+    if command == "reset":
+        reset_state()
+        print(json.dumps({"ok": True}))
+        return
 
-        elif command == "record_phase_completion":
-            if len(args) < 2:
-                print(json.dumps({"error": "phase and artifacts required"}), file=sys.stderr)
-                sys.exit(1)
-            phase = args[0]
-            artifacts_json = args[1]
-            artifacts = json.loads(artifacts_json)
-            artifact_refs = []
-            for art in artifacts:
-                if isinstance(art, dict):
-                    artifact_refs.append(ArtifactRef(
-                        kind=art.get("kind", ""),
-                        path=art.get("path", ""),
-                        store=art.get("store", "tonymem"),
-                        hash=art.get("hash"),
-                        validated=art.get("validated", False),
-                    ))
-                else:
-                    artifact_refs.append(art)
-            result = kernel.record_phase_completion(phase, tuple(artifact_refs))
-            print(json.dumps({
-                "decision": result.decision.value,
-                "reason": result.reason,
-                "current_phase": result.current_phase,
-                "requested_phase": result.requested_phase,
-            }))
+    if command == "can_start_phase":
+        phase = _cmd_arg(args, 0, "phase")
+        orch = _load()
+        result = orch.can_start_phase(phase)
+        print(json.dumps(_result_to_dict(result)))
+        return
 
-        elif command == "check_scope":
-            if len(args) < 2:
-                print(json.dumps({"error": "git_diff and allowed_files required"}), file=sys.stderr)
-                sys.exit(1)
-            git_diff = args[0]
-            allowed_files = json.loads(args[1])
-            result = kernel.check_scope(args[0], tuple(json.loads(args[1])))
-            print(json.dumps({
-                "decision": result.decision.value,
-                "reason": result.reason,
-                "current_phase": result.current_phase,
-                "scope_violations": list(result.scope_violations),
-            })
+    if command == "record_delegation":
+        phase = _cmd_arg(args, 0, "phase")
+        sub_agent = _cmd_arg(args, 1, "sub_agent")
+        task_id = args[2] if len(args) > 2 else None
+        orch = _load()
+        orch.record_delegation(phase, sub_agent, task_id)
+        save_orchestrator(orch)
+        print(json.dumps({"ok": True}))
+        return
 
-        elif command == "record_delegation":
-            if len(args) < 2:
-                print(json.dumps({"error": "phase and sub_agent required"}), file=sys.stderr)
-                sys.exit(1)
-            phase, sub_agent = args[0], args[1]
-            task_id = args[2] if len(args) > 2 else None
-            kernel.record_delegation(phase, sub_agent, task_id)
-            print(json.dumps({"ok": True}))
-
-        elif command == "get_status":
-            print(json.dumps(kernel.get_status()))
-
-        elif command == "health":
-            print(json.dumps({"status": "ok"}))
-
-        else:
-            print(json.dumps({"error": f"Unknown command: {command}"}), file=sys.stderr)
+    if command == "record_phase_completion":
+        phase = _cmd_arg(args, 0, "phase")
+        artifacts_json = _cmd_arg(args, 1, "artifacts")
+        try:
+            raw = json.loads(artifacts_json)
+        except json.JSONDecodeError:
+            print(json.dumps({"error": "artifacts must be a JSON array"}), file=sys.stderr)
             sys.exit(1)
+        orch = _load()
+        result = orch.record_phase_completion(phase, _parse_artifact_refs(raw))
+        save_orchestrator(orch)
+        print(json.dumps(_result_to_dict(result)))
+        return
 
-    except Exception as e:
-        print(json.dumps({"error": str(e)}), file=sys.stderr)
-        sys.exit(1)
+    if command == "verify_phase_checksum":
+        phase = _cmd_arg(args, 0, "phase")
+        artifacts_json = _cmd_arg(args, 1, "artifacts")
+        try:
+            raw = json.loads(artifacts_json)
+        except json.JSONDecodeError:
+            print(json.dumps({"error": "artifacts must be a JSON array"}), file=sys.stderr)
+            sys.exit(1)
+        orch = _load()
+        result = orch.verify_phase_checksum(phase, _parse_artifact_refs(raw))
+        print(json.dumps(result))
+        return
+
+    if command == "add_task":
+        task_id = _cmd_arg(args, 0, "task_id")
+        description = _cmd_arg(args, 1, "description")
+        phase = _cmd_arg(args, 2, "phase")
+        orch = _load()
+        orch.add_task(task_id, description, phase)
+        save_orchestrator(orch)
+        print(json.dumps({"ok": True}))
+        return
+
+    if command == "start_task":
+        task_id = _cmd_arg(args, 0, "task_id")
+        orch = _load()
+        ok = orch.start_task(task_id)
+        save_orchestrator(orch)
+        print(json.dumps({"ok": ok}))
+        return
+
+    if command == "complete_task":
+        task_id = _cmd_arg(args, 0, "task_id")
+        evidence_json = _cmd_arg(args, 1, "evidence")
+        try:
+            raw = json.loads(evidence_json)
+        except json.JSONDecodeError:
+            print(json.dumps({"error": "evidence must be a JSON array"}), file=sys.stderr)
+            sys.exit(1)
+        orch = _load()
+        result = orch.complete_task(task_id, _parse_evidence(raw))
+        save_orchestrator(orch)
+        print(json.dumps(_result_to_dict(result)))
+        return
+
+    if command == "check_scope":
+        git_diff = _cmd_arg(args, 0, "git_diff")
+        allowed_json = _cmd_arg(args, 1, "allowed_files")
+        try:
+            allowed = json.loads(allowed_json)
+        except json.JSONDecodeError:
+            print(json.dumps({"error": "allowed_files must be a JSON array"}), file=sys.stderr)
+            sys.exit(1)
+        orch = _load()
+        result = orch.check_scope(git_diff, tuple(allowed))
+        print(json.dumps({
+            "decision": result.decision.value,
+            "allowed": result.decision.value in ("proceed", "phase_complete"),
+            "reason": result.reason,
+            "current_phase": result.current_phase,
+            "scope_violations": list(result.scope_violations),
+        }))
+        return
+
+    print(json.dumps({"error": f"Unknown command: {command}"}), file=sys.stderr)
+    sys.exit(1)
+
+
+def main() -> None:
+    _main(sys.argv[1:])
 
 
 if __name__ == "__main__":
-    import json
     main()

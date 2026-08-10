@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Tony Kernel HTTP Server
+Tony Kernel HTTP Server (LEGACY — deprecated)
 
-Simple HTTP server that wraps the KernelOrchestrator for the tony-kernel plugin.
+Kept for backward compatibility only. The active integration is the MCP server
+(kernel/mcp_server.py) registered in opencode.json, which the orchestrator LLM
+calls directly. Prefer it over this HTTP server.
 """
 from __future__ import annotations
 import json
+import os
 import sys
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -13,8 +16,8 @@ from socketserver import ThreadingMixIn
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
-# Add kernel to path
-sys.path.insert(0, '/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_0a609c26-9e31-4ad3-abf7-5af14c9f5367')
+# Add kernel to path (repo root, resolved relative to this file)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from kernel.orchestrator_integration import (
     create_kernel_orchestrator, 

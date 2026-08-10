@@ -42,6 +42,7 @@ class PhaseGate:
     """
     controller: PhaseController
     config: PhaseGateConfig = field(default_factory=PhaseGateConfig)
+    artifact_store: Optional[Callable[[ArtifactRef], bool]] = None
 
     def check_transition(self, requested_phase: Phase, artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> GateCheckResult:
         """
@@ -120,7 +121,14 @@ class PhaseGate:
         )
 
     def _check_artifacts(self, required: tuple[str, ...], artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> tuple[str, ...]:
-        """Check if required artifacts exist in the real store or in-memory."""
+        """Check if required artifacts exist.
+
+        Priority:
+        1. `artifact_store` (per-call ``kind -> ArtifactRef``) — explicit store lookup.
+        2. `self.artifact_store` (field ``ArtifactRef -> bool``) — real-store
+           verification (disk/OpenSpec) of the artifact tracked in change state.
+        3. Fallback — tracked artifacts in change state (in-memory).
+        """
         missing = []
         for kind in required:
             if artifact_store is not None:
@@ -130,16 +138,21 @@ class PhaseGate:
                     continue
                 if not ref.hash or not ref.validated:
                     missing.append(kind)
-            else:
-                existing = set()
-                for phase_state in self.controller.change_state.phases.values():
-                    for artifact in phase_state.artifacts:
-                        if artifact.kind == kind:
-                            existing.add(artifact.kind)
-                            if artifact.hash and artifact.validated:
-                                break
-                if kind not in existing:
-                    missing.append(kind)
+                continue
+
+            found = False
+            for phase_state in self.controller.change_state.phases.values():
+                for artifact in phase_state.artifacts:
+                    if artifact.kind != kind:
+                        continue
+                    if self.artifact_store is not None and not self.artifact_store(artifact):
+                        continue
+                    found = True
+                    break
+                if found:
+                    break
+            if not found:
+                missing.append(kind)
         return tuple(missing)
 
     def assert_can_transition(self, requested_phase: Phase, artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> None:

@@ -76,18 +76,22 @@ class KernelOrchestrator:
     4. Enforce scope guards
     """
     
-    def __init__(self, change_id: str, project: str):
+    def __init__(self, change_id: str, project: str,
+                 artifact_store: Optional[Callable[[ArtifactRef], bool]] = None):
         # Core state
         self.change_state = create_initial_state(change_id, project)
         
         # Kernel components
+        self.artifact_store = artifact_store
         self.controller = PhaseController(self.change_state)
-        self.gate = PhaseGate(self.controller)
+        self.gate = PhaseGate(self.controller, artifact_store=artifact_store)
         self.evidence_ledger = EvidenceLedger()
         self.task_ledger = TaskLedger()
         self.artifact_gate = ArtifactGate()
         self.retry_budget = RetryBudget()
-        self.checksum_registry = get_global_registry()
+        # Per-change registry — NOT the module-level singleton, so parallel
+        # changes never read each other's checksums.
+        self.checksum_registry = PhaseChecksumRegistry()
         
         # Tracking
         self.delegation_log: List[dict] = []
@@ -464,6 +468,7 @@ class KernelOrchestrator:
         }
 
 
-def create_kernel_orchestrator(change_id: str, project: str) -> KernelOrchestrator:
+def create_kernel_orchestrator(change_id: str, project: str,
+                               artifact_store: Optional[Callable[[ArtifactRef], bool]] = None) -> KernelOrchestrator:
     """Factory function to create a KernelOrchestrator."""
-    return KernelOrchestrator(change_id, project)
+    return KernelOrchestrator(change_id, project, artifact_store=artifact_store)

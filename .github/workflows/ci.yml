@@ -41,6 +41,7 @@ jobs:
         run: |
           python3 -m kernel.test_state_machine
           python3 -m kernel.test_kernel_integration
+          python3 -m kernel.test_cli
         shell: bash
 
       - name: Run TypeScript tests

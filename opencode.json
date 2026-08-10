@@ -297,6 +297,9 @@
     }
   },
   "default_agent": "tony-orchestrator",
+  "plugin": [
+    "plugins/tony-kernel/index.ts"
+  ],
   "mcp": {
     "context7": {
       "enabled": true,
@@ -341,6 +344,17 @@
         "TONY_QDRANT_URL": "http://localhost:6333",
         "TONY_EMBED_MODEL": "nomic-embed-text",
         "TONY_RECALL_SCORE_THRESHOLD": "0.5"
+      }
+    },
+    "tony-kernel": {
+      "command": [
+        "python3",
+        "{env:TONY_REPO_ROOT}/kernel/mcp_server.py"
+      ],
+      "type": "local",
+      "environment": {
+        "TONY_REPO_ROOT": "{env:TONY_REPO_ROOT}",
+        "TONY_KERNEL_STATE_DIR": "{env:PWD}/.tony-kernel/kernel-state.json"
       }
     }
   },
