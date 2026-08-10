@@ -6,7 +6,7 @@ This is the main entry point for the orchestrator to check if a phase transition
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Callable
 
 from .schemas import (
     Phase,
@@ -43,9 +43,13 @@ class PhaseGate:
     controller: PhaseController
     config: PhaseGateConfig = field(default_factory=PhaseGateConfig)
 
-    def check_transition(self, requested_phase: Phase) -> GateCheckResult:
+    def check_transition(self, requested_phase: Phase, artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> GateCheckResult:
         """
         Check if transition to `requested_phase` is allowed.
+
+        Args:
+            requested_phase: The target phase.
+            artifact_store: Optional callable to verify artifacts in real store.
 
         Returns GateCheckResult with allowed/denied and detailed reasons.
         """
@@ -84,7 +88,7 @@ class PhaseGate:
         # Check required artifacts for transition
         required = REQUIRED_ARTIFACTS_FOR_TRANSITION.get((from_phase, requested_phase), ())
         if required:
-            missing = self._check_artifacts(required)
+            missing = self._check_artifacts(required, artifact_store)
             if missing:
                 return GateCheckResult(
                     allowed=False,
@@ -98,7 +102,7 @@ class PhaseGate:
         if self.config.require_completion_artifacts:
             completion_required = PHASE_COMPLETION_ARTIFACTS.get(from_phase, ())
             if completion_required:
-                missing = self._check_artifacts(completion_required)
+                missing = self._check_artifacts(completion_required, artifact_store)
                 if missing:
                     return GateCheckResult(
                         allowed=False,
@@ -115,24 +119,36 @@ class PhaseGate:
             reason=f"Transition allowed: {from_phase.value} → {requested_phase.value}",
         )
 
-    def _check_artifacts(self, required: tuple[str, ...]) -> tuple[str, ...]:
-        """Check if required artifacts exist."""
-        # In a real implementation, this would query tonymem/openspec
-        # For now, check against tracked artifacts in change state
-        existing = set()
-        for phase_state in self.controller.change_state.phases.values():
-            for artifact in phase_state.artifacts:
-                existing.add(artifact.kind)
+    def _check_artifacts(self, required: tuple[str, ...], artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> tuple[str, ...]:
+        """Check if required artifacts exist in the real store or in-memory."""
+        missing = []
+        for kind in required:
+            if artifact_store is not None:
+                ref = artifact_store(kind)
+                if ref is None:
+                    missing.append(kind)
+                    continue
+                if not ref.hash or not ref.validated:
+                    missing.append(kind)
+            else:
+                existing = set()
+                for phase_state in self.controller.change_state.phases.values():
+                    for artifact in phase_state.artifacts:
+                        if artifact.kind == kind:
+                            existing.add(artifact.kind)
+                            if artifact.hash and artifact.validated:
+                                break
+                if kind not in existing:
+                    missing.append(kind)
+        return tuple(missing)
 
-        return tuple(r for r in required if r not in existing)
-
-    def assert_can_transition(self, requested_phase: Phase) -> None:
+    def assert_can_transition(self, requested_phase: Phase, artifact_store: Callable[[str], Optional[ArtifactRef]] = None) -> None:
         """
         Assert that transition is allowed, raise exception if not.
 
         Use this in orchestrator before delegating to a sub-agent.
         """
-        result = self.check_transition(requested_phase)
+        result = self.check_transition(requested_phase, artifact_store)
         if not result.allowed:
             if result.missing_artifacts:
                 from .state_machine import MissingArtifactsError

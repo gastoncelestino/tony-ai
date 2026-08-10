@@ -34,13 +34,18 @@ interface DelegationInput {
   arguments: Record<string, unknown>
 }
 
+interface DelegationOutput {
+  success: boolean
+  result?: unknown
+}
+
 // ─── Kernel Python Subprocess Client ──────────────────────────────────────
 
 class KernelClient {
-  private kernelPath: string
+  private kernelModulePath: string
 
   constructor() {
-    this.kernelPath = join(KERNEL_DIR, "orchestrator_integration.py")
+    this.kernelModulePath = join(KERNEL_DIR, "orchestrator_integration.py")
   }
 
   private async runKernelCommand(args: string[]): Promise<any> {
@@ -136,8 +141,8 @@ async function getKernelClient(): Promise<KernelClient> {
  * Validates against the Kernel state machine before allowing delegation.
  */
 async function taskExecuteBeforeHook(
-  input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
-  output: { success: boolean; result?: unknown }
+  input: DelegationInput,
+  output: DelegationOutput
 ): Promise<void> {
   // Only intercept Task tool delegations
   if (input.tool !== "Task") return
@@ -146,11 +151,8 @@ async function taskExecuteBeforeHook(
   const requestedPhase = (args.phase as string) || "apply" // Default to apply
 
   try {
-    const client = new (await import("./kernel_client.js")).KernelClient()
-    // Note: In real implementation, we'd reuse a singleton client
-    // For now, create new instance per call (kernel is stateless per call)
-    
-    const result = await new (await import("./kernel_client.js")).KernelClient().canStartPhase(requestedPhase)
+    const client = await getKernelClient()
+    const result = await client.canStartPhase(requestedPhase)
 
     if (!result.allowed) {
       // Block the delegation by throwing an error
@@ -166,7 +168,6 @@ async function taskExecuteBeforeHook(
     }
 
     // Record delegation for tracking
-    const client = new (await import("./kernel_client.js")).KernelClient()
     await client.recordDelegation(requestedPhase, "sub-agent")
     
   } catch (error) {
@@ -174,6 +175,39 @@ async function taskExecuteBeforeHook(
       throw error // Re-throw our blocking errors
     }
     console.error("[tony-kernel] Hook error (non-blocking):", error)
+  }
+}
+
+// ─── Hook: tool.execute.after ─────────────────────────────────────────────
+
+/**
+ * Hook that captures task completion and records phase completion.
+ */
+async function taskExecuteAfterHook(
+  input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
+  output: unknown
+): Promise<void> {
+  if (input.tool !== "Task") return
+
+  const args = input.arguments as Record<string, unknown>
+  const phase = (input.arguments.phase as string) || "apply"
+
+  try {
+    const client = await getKernelClient()
+    
+    // Check if task completed successfully
+    const outputText = typeof output === "string" ? output : JSON.stringify(output)
+    const success = !outputText.includes("error") && !outputText.includes("Error")
+
+    if (success) {
+      // Record phase completion if we have artifacts
+      if (args.artifacts && Array.isArray(args.artifacts)) {
+        await client.recordPhaseCompletion(phase, args.artifacts as Array<{ kind: string; path: string; store: string; hash?: string }>)
+      }
+      console.log(`[tony-kernel] Task completed for phase: ${phase}`)
+    }
+  } catch (error) {
+    console.error("[tony-kernel] After hook error:", error)
   }
 }
 
@@ -185,13 +219,11 @@ const TonyKernelPlugin: Plugin = {
   description: "Tony Kernel — Deterministic hook for phase transitions, evidence tracking, and scope enforcement",
   
   hooks: {
-    "tool.execute.before": async (input, output) => {
-      await taskExecuteBeforeHook(input as any, output as any)
-    },
+    "tool.execute.before": taskExecuteBeforeHook,
+    "tool.execute.after": taskExecuteAfterHook,
   },
   
   async onLoad() {
-    // Verify kernel is available
     console.log("[tony-kernel] Plugin loaded, kernel integration active")
   },
   

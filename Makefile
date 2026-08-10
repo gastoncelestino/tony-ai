@@ -15,6 +15,7 @@ test-python:
 test-kernel:
 	@echo "▶ Running Kernel tests..."
 	@python3 -m kernel.test_state_machine
+	@python3 -m kernel.test_kernel_integration
 	@echo "✓ Kernel tests passed"
 
 test-ts:
