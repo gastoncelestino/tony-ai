@@ -152,6 +152,35 @@ function kernelErrorMessage(context: string, error: unknown): string {
   return `[Tony Kernel] ${context} failed: ${reason}`
 }
 
+const PHASE_BY_SUBAGENT: Record<string, string> = {
+  "sdd-explore": "explore",
+  "sdd-propose": "propose",
+  "sdd-spec": "spec",
+  "sdd-design": "design",
+  "sdd-tasks": "tasks",
+  "sdd-apply": "apply",
+  "sdd-verify": "verify",
+  "sdd-archive": "archive",
+}
+
+export function derivePhase(args: Record<string, unknown>): string {
+  if (typeof args.phase === "string" && args.phase.length > 0) {
+    return args.phase
+  }
+
+  if (typeof args.subagent_type === "string") {
+    const phase = PHASE_BY_SUBAGENT[args.subagent_type]
+
+    if (phase) {
+      return phase
+    }
+  }
+
+  throw new KernelBlockedError(
+    "[Tony Kernel] Unable to derive phase from task delegation"
+  )
+}
+
 // ─── Hook: task.execute.before ────────────────────────────────────────────
 
 /**
@@ -167,7 +196,7 @@ async function taskExecuteBeforeHook(
   if (input.tool !== "Task") return
 
   const args = input.arguments as Record<string, unknown>
-  const requestedPhase = (args.phase as string) || "apply"
+  const requestedPhase = derivePhase(args)
 
   try {
     const client = await getKernelClient()
