@@ -42,6 +42,15 @@ interface DelegationOutput {
   result?: unknown
 }
 
+// ─── Errors ───────────────────────────────────────────────────────────────
+
+export class KernelBlockedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "KernelBlockedError"
+  }
+}
+
 // ─── Kernel Python Subprocess Client ──────────────────────────────────────
 
 class KernelClient {
@@ -158,13 +167,12 @@ async function taskExecuteBeforeHook(
     const result = await client.canStartPhase(requestedPhase)
 
     if (!result.allowed) {
-      throw new Error(phaseTransitionBlockedMessage(result))
+      throw new KernelBlockedError(phaseTransitionBlockedMessage(result))
     }
 
     await client.recordDelegation(requestedPhase, "sub-agent")
   } catch (error) {
-    // Re-throw ALL errors as blocking — fail closed
-    if (error instanceof Error && error.message.startsWith("[Tony Kernel]")) {
+    if (error instanceof KernelBlockedError) {
       throw error
     }
     throw new Error(kernelErrorMessage("Delegation gate", error))
@@ -192,14 +200,14 @@ async function taskExecuteAfterHook(
     const success = !outputText.includes("error") && !outputText.includes("Error")
 
     if (!success) {
-      throw new Error(`[Tony Kernel] Phase completion rejected: task reported failure for phase ${phase}`)
+      throw new KernelBlockedError(`[Tony Kernel] Phase completion rejected: task reported failure for phase ${phase}`)
     }
 
     const artifacts = args.artifacts as Array<{ kind: string; path: string; store: string; hash?: string }> | undefined
     const evidence = (args.evidence as Array<unknown> | undefined) || []
 
     if (!artifacts || artifacts.length === 0) {
-      throw new Error(
+      throw new KernelBlockedError(
         `[Tony Kernel] Phase completion rejected for "${phase}": missing artifacts. ` +
           `Kernel state will NOT advance; the next phase will be blocked.`
       )
@@ -212,13 +220,12 @@ async function taskExecuteAfterHook(
     const status = await client.getStatus()
     const currentPhase = status.current_phase
     if (currentPhase !== phase) {
-      throw new Error(
+      throw new KernelBlockedError(
         `[Tony Kernel] Post-phase validation failed: kernel state is ${currentPhase}, expected ${phase} after completion`
       )
     }
   } catch (error) {
-    // Re-throw ALL errors as blocking — fail closed
-    if (error instanceof Error && error.message.startsWith("[Tony Kernel]")) {
+    if (error instanceof KernelBlockedError) {
       throw error
     }
     throw new Error(kernelErrorMessage("Phase completion", error))
