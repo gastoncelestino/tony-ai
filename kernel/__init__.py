@@ -27,14 +27,13 @@ from .schemas import (
     Task,
     TaskStatus,
     TaskLedger,
-    EvidenceType,
-    EvidenceStatus,
-    Claim,
-    ClaimStatus,
-    Task,
-    TaskStatus,
-    TaskLedger,
-    Phase,
+    # Artifact Gate
+    ArtifactGateResult,
+    ArtifactValidationResult,
+    ArtifactGateResult as ArtifactGateResultEnum,
+    # Retry Budget
+    RetryBudget,
+    AttemptRecord,
 )
 from .state_machine import (
     PhaseController,
@@ -62,6 +61,25 @@ from .retry_budget import (
     RetryBudget,
     AttemptRecord,
 )
+from .orchestrator_integration import (
+    KernelOrchestrator,
+    OrchestrationDecision,
+    OrchestrationResult,
+    create_kernel_orchestrator,
+)
+from .scope_guard import (
+    ScopeGuard,
+    ScopeCheckResult,
+    ScopeViolation,
+    ScopeViolationType,
+    create_sdd_scope_guard,
+)
+from .phase_checksum import (
+    PhaseChecksumRegistry,
+    PhaseChecksum,
+    PhaseChecksumResult,
+    get_global_registry,
+)
 
 __all__ = [
     # Schemas
@@ -86,6 +104,13 @@ __all__ = [
     "Task",
     "TaskStatus",
     "TaskLedger",
+    # Artifact Gate
+    "ArtifactGateResult",
+    "ArtifactValidationResult",
+    "ArtifactGateResultEnum",
+    # Retry Budget
+    "RetryBudget",
+    "AttemptRecord",
     # State Machine
     "PhaseController",
     "create_initial_state",
@@ -105,4 +130,20 @@ __all__ = [
     # Retry Budget
     "RetryBudget",
     "AttemptRecord",
+    # Orchestrator Integration
+    "KernelOrchestrator",
+    "OrchestrationDecision",
+    "OrchestrationResult",
+    "create_kernel_orchestrator",
+    # Scope Guard
+    "ScopeGuard",
+    "ScopeCheckResult",
+    "ScopeViolation",
+    "ScopeViolationType",
+    "create_sdd_scope_guard",
+    # Phase Checksum
+    "PhaseChecksumRegistry",
+    "PhaseChecksum",
+    "PhaseChecksumResult",
+    "get_global_registry",
 ]
