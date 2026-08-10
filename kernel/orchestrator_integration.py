@@ -55,6 +55,7 @@ class OrchestrationResult:
     requested_phase: Optional[str] = None
     missing_artifacts: tuple = ()
     missing_evidence: tuple = ()
+    blocked_reasons: tuple = ()
     scope_violations: tuple = ()
     retry_status: Optional[dict] = None
     next_action: Optional[str] = None

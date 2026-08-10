@@ -144,6 +144,7 @@ class PhaseController:
     def complete_phase(self, phase: Phase, artifacts: tuple[ArtifactRef, ...]) -> ChangeState:
         """
         Mark a phase as completed with its artifacts.
+        Updates internal state and returns new ChangeState.
         """
         if phase not in self.change_state.phases:
             raise PhaseNotFoundError(f"Phase {phase.value} not found in change state")
@@ -151,35 +152,25 @@ class PhaseController:
         current_state = self.change_state.get_phase_state(phase)
         if current_state.status == PhaseStatus.COMPLETED:
             # Already completed - just update artifacts
-            return ChangeState(
-                change_id=self.change_state.change_id,
-                project=self.change_state.project,
-                current_phase=self.change_state.current_phase,
-                phases={
-                    **self.change_state.phases,
-                    phase: PhaseState(
-                        phase=phase,
-                        status=PhaseStatus.COMPLETED,
-                        artifacts=artifacts,
-                        started_at=current_state.started_at,
-                        completed_at=datetime.now(),
-                    ),
-                },
-                created_at=self.change_state.created_at,
-                updated_at=datetime.now(),
-                metadata=self.change_state.metadata,
+            updated_phases = dict(self.change_state.phases)
+            updated_phases[phase] = PhaseState(
+                phase=phase,
+                status=PhaseStatus.COMPLETED,
+                artifacts=artifacts,
+                started_at=current_state.started_at,
+                completed_at=datetime.now(),
+            )
+        else:
+            updated_phases = dict(self.change_state.phases)
+            updated_phases[phase] = PhaseState(
+                phase=phase,
+                status=PhaseStatus.COMPLETED,
+                artifacts=artifacts,
+                started_at=current_state.started_at,
+                completed_at=datetime.now(),
             )
 
-        updated_phases = dict(self.change_state.phases)
-        updated_phases[phase] = PhaseState(
-            phase=phase,
-            status=PhaseStatus.COMPLETED,
-            artifacts=artifacts,
-            started_at=current_state.started_at,
-            completed_at=datetime.now(),
-        )
-
-        return ChangeState(
+        new_state = ChangeState(
             change_id=self.change_state.change_id,
             project=self.change_state.project,
             current_phase=self.change_state.current_phase,
@@ -188,6 +179,10 @@ class PhaseController:
             updated_at=datetime.now(),
             metadata=self.change_state.metadata,
         )
+        
+        # Update internal state
+        self.change_state = new_state
+        return new_state
 
     def get_missing_artifacts_for_next_phase(self) -> tuple[str, ...]:
         """Get artifacts missing for the next allowed phase."""
