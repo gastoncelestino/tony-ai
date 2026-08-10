@@ -198,7 +198,10 @@ async function taskExecuteAfterHook(
     const evidence = (args.evidence as Array<unknown> | undefined) || []
 
     if (!artifacts || artifacts.length === 0) {
-      throw new Error(`[Tony Kernel] Phase completion rejected: missing artifacts for phase ${phase}`)
+      throw new Error(
+        `[Tony Kernel] Phase completion rejected for "${phase}": missing artifacts. ` +
+          `Kernel state will NOT advance; the next phase will be blocked.`
+      )
     }
 
     const client = await getKernelClient()
