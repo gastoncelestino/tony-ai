@@ -385,5 +385,47 @@
       "*.env.*": "deny"
     }
   },
-  "share": "disabled"
+  "share": "disabled",
+  "provider": {
+    "ollama": {
+      "models": {
+        "qwen3-coder:30b": {
+          "options": {
+            "numCtx": 32768
+          },
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        },
+        "omnicoder:9b": {
+          "options": {
+            "numCtx": 16384
+          },
+          "limit": {
+            "context": 16384,
+            "output": 4096
+          }
+        },
+        "deepseek-r1:14b": {
+          "options": {
+            "numCtx": 16384
+          },
+          "limit": {
+            "context": 16384,
+            "output": 4096
+          }
+        },
+        "ornith:9b": {
+          "options": {
+            "numCtx": 16384
+          },
+          "limit": {
+            "context": 16384,
+            "output": 4096
+          }
+        }
+      }
+    }
+  }
 }

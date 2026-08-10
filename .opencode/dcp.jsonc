@@ -37,9 +37,10 @@
     // in opencode.json's agent.*.model fields (Model Router). Percentages
     // are of whatever context length your OpenCode provider config declares
     // for that model — verify that number is accurate before trusting these.
-    // Numbers below assume a fairly typical 32K num_ctx for the 9B/14B
-    // models and the 30B running with more headroom at 64K; ADJUST to your
-    // actual Ollama num_ctx per model.
+    // Calibration baseline (opencode.json provider.ollama.models.*.limit.
+    // context): qwen3-coder:30b = 32768, the 9B/14B models = 16384. These
+    // numbers must match each model's real Ollama num_ctx (see
+    // scripts/calibrate-ctx.sh) or DCP's percentage math is wrong.
     "modelMaxLimits": {
       "ollama/qwen3-coder:30b": "75%",
       "ollama/omnicoder:9b": "70%",
