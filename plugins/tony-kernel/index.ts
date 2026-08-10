@@ -42,6 +42,34 @@ interface DelegationOutput {
   result?: unknown
 }
 
+export interface KernelClientLike {
+  canStartPhase(phase: string): Promise<CanStartPhaseResult>
+  recordDelegation(
+    phase: string,
+    subAgent: string,
+    taskId?: string
+  ): Promise<void>
+  recordPhaseCompletion(
+    phase: string,
+    artifacts: Array<{
+      kind: string
+      path: string
+      store: string
+      hash?: string
+    }>,
+    evidence?: unknown[]
+  ): Promise<void>
+  checkScope(
+    gitDiff: string,
+    allowedFiles: string[]
+  ): Promise<{
+    decision: string
+    reason: string
+    scope_violations: string[]
+  }>
+  getStatus(): Promise<Record<string, unknown>>
+}
+
 // ─── Errors ───────────────────────────────────────────────────────────────
 
 export class KernelBlockedError extends Error {
@@ -60,7 +88,7 @@ export class KernelUnavailableError extends Error {
 
 // ─── Kernel Python Subprocess Client ──────────────────────────────────────
 
-class KernelClient {
+class KernelClient implements KernelClientLike {
   private kernelModulePath: string
 
   constructor() {
@@ -124,13 +152,19 @@ class KernelClient {
 
 // ─── Global Kernel Client ────────────────────────────────────────────────
 
-let kernelClient: KernelClient | null = null
+let kernelClient: KernelClientLike | null = null
 
-async function getKernelClient(): Promise<KernelClient> {
+async function getKernelClient(): Promise<KernelClientLike> {
   if (!kernelClient) {
     kernelClient = new KernelClient()
   }
   return kernelClient
+}
+
+export function __setKernelClientForTests(
+  client: KernelClientLike | null
+): void {
+  kernelClient = client
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
