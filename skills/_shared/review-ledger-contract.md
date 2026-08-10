@@ -155,11 +155,7 @@ not require it, since final verification has to complete before it can exist.
 
 ## Cross-references
 
-- Ordinary 4R corroboration and native facade calls (`tony-ai review
-  start/finalize/validate`): see `commands/sdd-apply.md`'s Authority-First
-  Terminal Procedure table.
-- Judgment Day execution order, hard rules, and judge/fix prompts: see
-  `../judgment-day/SKILL.md` and `../judgment-day/references/prompts-and-formats.md`.
+- Ordinary 4R corroboration and native facade calls (OpenCode review agents `review-readability`, `review-reliability`, `review-resilience`, `review-risk`, `review-refuter`): see `commands/sdd-apply.md`'s Authority-First Terminal Procedure table.
+- Judgment Day execution order, hard rules, and judge/fix prompts: see `../judgment-day/SKILL.md` and `../judgment-day/references/prompts-and-formats.md`.
 - Archive-time gating on these artifacts: see `../sdd-archive/SKILL.md`.
-- Status surface (`reviewGate`, `artifactPaths.review*`): see
-  `sdd-status-contract.md`.
+- Status surface (`reviewGate`, `artifactPaths.review*`): see `sdd-status-contract.md`.
