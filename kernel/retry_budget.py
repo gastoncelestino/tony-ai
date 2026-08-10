@@ -84,7 +84,7 @@ class RetryBudget:
             "max_attempts": 3,
             "remaining": max(0, 3 - len(self.attempts.get(key, []))),
             "exhausted": len(self.attempts.get(key, [])) >= 3,
-            "next_action": "human_required" if len(self.attempts.get(key, [])) >= 3 else ("targeted_fix" if len(self.attempts[key]) > 0 else "implement"),
+            "next_action": "human_required" if len(self.attempts.get(key, [])) >= 3 else ("targeted_fix" if len(self.attempts.get(key, [])) > 0 else "implement"),
             "last_attempt": self.attempts.get(key, [])[-1] if self.attempts.get(key) else None,
         }
     
