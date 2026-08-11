@@ -165,23 +165,34 @@ make test            # Ejecutar todos los tests
 # 5. Correr el suite de tests
 ## 5.1 Correr tests de Python + TypeScript. 
 ```bash
-make test   # Ejecutar todos los tests
-make verify-qdrant   # probar el pipeline vectorial real Qdrant
-make docker-up       # iniciar servicios Docker
-make docker-down     # detener servicios Docker
-make health          # OpenCode/MCP/Ollama/Qdrant/embeddings check
-make clean           # eliminar bases de datos/index SQLite locales
+make test            # Tests completos (Python + TypeScript + Kernel)
+make test-python     # Solo tests Python
+make test-ts         # Solo tests TypeScript
+make test-kernel     # Solo tests Kernel (state machine + integration + e2e adversarial)
+make verify-qdrant   # Smoke test pipeline real
+make health          # Verificar servicios
+make clean           # Borrar bases SQLite locales
+make docker-up       # Iniciar servicios Docker
+make docker-down     # Detener servicios Docker
+make validate-config # Validar opencode.json + prompts + skills
 ```
 
-## 5.2 Correr test validate-config.ts
+## 5.2 Comandos OpenCode (slash commands)
 ```bash
-make validate-config # Ejecuta `scripts/validate-config.ts`, que verifica:
-- JSON válido en `opencode.json`
-- Referencias `{file:...}` existentes
-- Archivos en `skills/_shared/` accesibles
-- Agentes referenciados definidos en `opencode.json`
-- Sin restos de `gentle-ai` / `Gentle AI` / `gentle-orchestrator`
-- Estructura de directorios mínima (`skills/`, `skills/_shared/`, `prompts/sdd/`)
+/sdd-init                      # Inicializar contexto SDD
+/sdd-new <description>         # Nuevo change con planificación automática
+/sdd-explore <task>            # Investigar una idea
+/sdd-propose                   # Crear propuesta PRD
+/sdd-spec                      # Especificación técnica detallada
+/sdd-design                    # Diseño técnico y estructuras de datos
+/sdd-tasks                     # Generar tareas de implementación
+/sdd-apply                     # Implementar tareas pendientes
+/sdd-verify                    # Validar implementación contra specs
+/sdd-archive                   # Cerrar change y persistir estado final
+/memory-search "query"         # Buscar decisiones anteriores
+/memory-stats                  # Estadísticas de memoria por proyecto
+/judgment-history              # Ver histórico de juicios
+juzgar esto                    # Activar Judgment Day (revisión adversarial)
 ```
 
 ## 5.3 Verificar el pipeline real de Qdrant/Ollama

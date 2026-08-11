@@ -119,38 +119,6 @@ cd tony-ai
 ./scripts/health.sh   # Verifica estado del sistema
 ```
 
-## Comandos OpenCode (slash commands)
-```bash
-/sdd-init                      # Inicializar contexto SDD
-/sdd-new <description>         # Nuevo change con planificación automática
-/sdd-explore <task>            # Investigar una idea
-/sdd-propose                   # Crear propuesta PRD
-/sdd-spec                      # Especificación técnica detallada
-/sdd-design                    # Diseño técnico y estructuras de datos
-/sdd-tasks                     # Generar tareas de implementación
-/sdd-apply                     # Implementar tareas pendientes
-/sdd-verify                    # Validar implementación contra specs
-/sdd-archive                   # Cerrar change y persistir estado final
-/memory-search "query"         # Buscar decisiones anteriores
-/memory-stats                  # Estadísticas de memoria por proyecto
-/judgment-history              # Ver histórico de juicios
-juzgar esto                    # Activar Judgment Day (revisión adversarial)
-```
-
-## Comandos de desarrollo (terminal)
-```bash
-make test            # Tests completos (Python + TypeScript + Kernel)
-make test-python     # Solo tests Python
-make test-ts         # Solo tests TypeScript
-make test-kernel     # Solo tests Kernel (state machine + integration + e2e adversarial)
-make verify-qdrant   # Smoke test pipeline real
-make health          # Verificar servicios
-make clean           # Borrar bases SQLite locales
-make docker-up       # Iniciar servicios Docker
-make docker-down     # Detener servicios Docker
-make validate-config # Validar opencode.json + prompts + skills
-```
-
 ## Code Review automático
 `GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
 El repo ya incluye `.gga` (config) y el agente `gga-reviewer` en `opencode.json`. Solo falta instalar el hook:
@@ -158,15 +126,12 @@ El repo ya incluye `.gga` (config) y el agente `gga-reviewer` en `opencode.json`
 ```bash
 gga install          # crea .git/hooks/pre-commit (local, no se commitea)
 gga config           # verificar configuración
-```
-
-Después, cada `git commit` dispara automáticamente la revisión de los archivos staged. Para revisar sin commitear:
-
-```bash
 gga run              # revisar archivos staged
 gga run --pr-mode    # revisar todos los cambios del PR vs main
 gga run --no-cache   # ignorar cache y revisar todo
 ```
+
+Después, cada `git commit` dispara automáticamente la revisión de los archivos staged. Para revisar sin commitear:
 
 ## Agradecimientos
 Toda la definición de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.  
