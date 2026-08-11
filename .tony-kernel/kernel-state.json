@@ -1,0 +1,37 @@
+{
+  "change_id": "default",
+  "project": "default",
+  "change_state": {
+    "change_id": "default",
+    "project": "default",
+    "current_phase": "explore",
+    "phases": {
+      "explore": {
+        "phase": "explore",
+        "status": "running",
+        "artifacts": [],
+        "started_at": "2026-08-11T00:32:06.133589",
+        "completed_at": null,
+        "error": null
+      }
+    },
+    "created_at": "2026-08-11T00:32:06.133603",
+    "updated_at": "2026-08-11T00:32:06.133604",
+    "metadata": {}
+  },
+  "delegation_log": [
+    {
+      "phase": "explore",
+      "sub_agent": "sub-agent",
+      "task_id": "",
+      "timestamp": "2026-08-11T00:32:06.133633"
+    }
+  ],
+  "retry_attempts": {},
+  "task_ledger": {},
+  "evidence_claims": {},
+  "checksum_registry": {
+    "checksums": {},
+    "history": []
+  }
+}
