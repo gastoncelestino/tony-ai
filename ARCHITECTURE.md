@@ -36,6 +36,12 @@ Este patrón permite un acceso directo al archivo SQLite en modo **WAL**, que es
 
 ## Componentes
 
+### Kernel (Tony Kernel)
+- **Orquestación determinista** — `kernel/orchestrator_integration.py` gobierna las 8 fases SDD (explore → archive) con checksums de fase, gate de artifacts, scope guard, retry budget y evidencias.
+- **Plugin OpenCode** — `plugins/tony-kernel/index.ts` intercepta `tool.execute.before/after` para forzar `can_start_phase` antes de delegar y `record_phase_completion` después de ejecutar.
+- **CLI** — `kernel/cli.py` expone `can_start_phase`, `record_delegation`, `record_phase_completion`, `check_scope`, `reset`, `status`.
+- **Persistencia** — `kernel/persistence.py` guarda estado en `.tony-kernel/kernel-state.json` (WAL mode en SQLite). `task_ledger.py` trackea tareas por fase. `evidence_ledger.py` guarda evidencias.
+
 ### Servicios de contexto
 - **TonyMem** — Memoria persistente para decisiones, hallazgos y compartición de contexto entre sesiones. Servidor MCP Python (`local-memory/server.py`) + plugin OpenCode (`plugins/tonymem.ts`) comparten el mismo `memory.db` en modo WAL. Lifecycle de memorias con 3 estados: `active` (default), `proven` (solución verificada, rankea primero en `mem_search`), `needs_review` (stale, no confiar sin verificar).
 - **Code Indexer + Qdrant** — Búsqueda semántica sobre el código usando embeddings locales (`bge-m3`). Servidor MCP Python (`code-index/server.py`) con indexación incremental.
@@ -69,6 +75,25 @@ tony-ai/
 ├── Makefile                           # Wrappers de tests, bootstrap, health, docker
 ├── requirements-optional.txt          # tree-sitter (opt-in)
 │
+├── kernel/                            # Tony Kernel — orquestación determinista SDD
+│   ├── __init__.py
+│   ├── cli.py                         # CLI: can_start_phase, record_phase_completion, check_scope, reset, status
+│   ├── orchestrator_integration.py    # Phase controller + artifact gate + scope guard + retry budget
+│   ├── state_machine.py               # FSM de fases SDD
+│   ├── phase_gate.py                  # Validación de transiciones de fase
+│   ├── artifact_gate.py               # Validación de artifacts (exists + hash + validated + integral)
+│   ├── artifact_store.py              # disk_artifact_store (sha256 + WAL)
+│   ├── scope_guard.py                 # Validación de diff contra allowed_files
+│   ├── phase_checksum.py              # Detección de tampering post-completion
+│   ├── retry_budget.py                # Presupuesto de reintentos por fase
+│   ├── evidence_ledger.py             # Registro de evidencias por tarea
+│   ├── task_ledger.py                 # Track de tareas por fase
+│   ├── schemas.py                     # ArtifactRef, DelegationRecord, PhaseCompletion
+│   ├── mcp_server.py                  # MCP server para kernel (registrado en opencode.json)
+│   ├── test_state_machine.py          # Tests unitarios FSM + enforcement
+│   ├── test_kernel_integration.py     # Tests de integración plugin ↔ Python
+│   └── test_e2e.ts                    # Prueba adversarial end-to-end (flujo completo SDD + 7 ataques)
+│
 ├── config/
 │   └── tony-memory.yaml               # Referencia documentada de env vars
 │
@@ -85,7 +110,11 @@ tony-ai/
 ├── plugins/
 │   ├── tonymem.ts                     # Hook OpenCode: auto-guardar sesiones + prompts
 │   ├── qdrant.ts                      # Cliente REST Qdrant + Ollama (Bun)
-│   └── judgment-memory.ts             # Bridge: recall antes de JD, captura después
+│   ├── judgment-memory.ts             # Bridge: recall antes de JD, captura después
+│   └── tony-kernel/                   # Tony Kernel plugin (deterministic SDD enforcement)
+│       ├── index.ts                   # Hook entry: before/after phase checks
+│       ├── test_integration.ts        # Unit tests (mocked client)
+│       └── test_e2e.ts                # End-to-end adversarial test suite (9/9 passing)
 │
 ├── prompts/
 │   └── sdd/                           # Prompts de fases SDD (uno por fase)
@@ -177,6 +206,8 @@ tony-ai/
 | `/memory-stats` | Estadísticas de memoria | SQLite | ✅ |
 | `/judgment-history [project]` | Ver historial de juicios | SQLite ledger | ✅ |
 | `juzgar esto` | Activar Judgment Day | 2 jueces + memoria | ❌ |
+| `/kernel-status` | Estado del Kernel (fase actual, artifacts, checksums) | kernel-state.json | ✅ |
+| `/kernel-reset` | Resetear estado del Kernel (solo desarrollo) | kernel-state.json | ✅ |
 
 💡 Todo funciona offline excepto los comandos que requieren sub-agentes (`/sdd-new`, `/sdd-explore`, `/sdd-propose`, `/sdd-spec`, `/sdd-design`, `/sdd-tasks`, `/sdd-apply`, `/sdd-verify`, `/sdd-onboard`, `/sdd-continue`, `/sdd-ff`, `juzgar esto`) y búsqueda semántica (`/memory-search` con Qdrant/Ollama).
 

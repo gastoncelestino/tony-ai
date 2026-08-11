@@ -8,6 +8,7 @@ Los assets de Docker en `docker/` proporcionan los servicios de soporte locales 
 
 ## ¿Cómo funciona?
 El orquestador trabaja por fases. Primero explora/propuesta/spec/diseño/tareas, después implementa, luego verifica y finalmente archiva.   
+El Tony Kernel intercepta cada transición de fase: valida artifacts, verifica checksums, aplica scope guard y evidencia antes de permitir el avance. Si algo falla, bloquea la fase y reporta el error exacto.
 
 TonyMem guarda decisiones y contexto entre sesiones, code-index te deja buscar "por significado" dentro del repo, y judgment-memory recuerda revisiones anteriores parecidas para no arrancar siempre desde cero.  
 
@@ -29,6 +30,7 @@ Spec-Driven Development es un enfoque estructurado para construir cambios en sof
 
 
 ## Qué incluye este repositorio
+- **Tony Kernel (`kernel/` + `plugins/tony-kernel/`)**: orquestación determinista de las 8 fases SDD. Intercepta transiciones de fase, valida artifacts con hash sha256, detecta tampering post-completion, aplica scope guard sobre diffs, registra evidencias y retry budgets. Incluye suite adversarial e2e (9 tests).
 - **TonyMem (`local-memory/`)**: un servidor MCP en Python con solo stdlib que proporciona memoria local persistente en SQLite, incluyendo herramientas para guardar, buscar, actualizar, resumen de sesión y recuperación contextual.
 - **Code Indexer (`code-index/`)**: búsqueda semántica sobre un codebase, usando llamadas HTTP a Ollama para embeddings y Qdrant para almacenamiento vectorial.
 - **Judgment Memory (`judgment-memory/`)**: un puente que almacena la salida final de flujos de revisión/juicio para que tareas futuras similares puedan recuperar resultados previos en lugar de empezar desde cero.
@@ -43,18 +45,24 @@ Spec-Driven Development es un enfoque estructurado para construir cambios en sof
                          │     Orquestador      │
                          └──────────┬───────────┘
                                     │
-                 ┌──────────────────┼──────────────────┐
-                 │                  │                  │
-                 ▼                  ▼                  ▼
-        ┌───────────────┐   ┌───────────────┐  ┌─────────────────┐
-        │ local-memory  │   │  code-index   │  │ judgment-memory │
-        │ memoria SQLite│   │ RAG semántico │  │ recuperación de │
-        │               │   │               │  │ juicios         │
-        └──────┬────────┘   └──────┬────────┘  └────────┬────────┘
-               │                   │                    │
-               ▼                   ▼                    ▼
-         Base de datos      Ollama + Qdrant       SQLite + Qdrant
-         SQLite              para embeddings       para juicios
+                         ┌──────────▼───────────┐
+                         │    Tony Kernel       │
+                         │  Phase Gate + Scope  │
+                         │  Guard + Artifacts   │
+                         └──────────┬───────────┘
+                                    │
+                  ┌─────────────────┼─────────────────┐
+                  │                 │                 │
+                  ▼                 ▼                 ▼
+         ┌───────────────┐   ┌───────────────┐  ┌─────────────────┐
+         │ local-memory  │   │  code-index   │  │ judgment-memory │
+         │ memoria SQLite│   │ RAG semántico │  │ recuperación de │
+         │               │   │               │  │ juicios         │
+         └──────┬────────┘   └──────┬────────┘  └────────┬────────┘
+                │                   │                    │
+                ▼                   ▼                    ▼
+          Base de datos      Ollama + Qdrant       SQLite + Qdrant
+          SQLite              para embeddings       para juicios
 ```
 
 ## Cómo funciona?
@@ -120,7 +128,7 @@ cd tony-ai
 
 `health.sh` verifica:
 1. OpenCode config válida
-2. Los 3 MCP servers arrancan
+2. Los 4 MCP servers arrancan (TonyMem, Code Indexer, Judgment Memory, Tony Kernel)
 3. Ollama responde y tiene los modelos
 4. Qdrant responde
 5. Pipeline de embeddings funcional
@@ -148,9 +156,10 @@ juzgar esto                    # Activar Judgment Day (revisión adversarial)
 
 ## Comandos de desarrollo (terminal)
 ```bash
-make test            # Tests completos (Python + TypeScript)
+make test            # Tests completos (Python + TypeScript + Kernel)
 make test-python     # Solo tests Python
 make test-ts         # Solo tests TypeScript
+make test-kernel     # Solo tests Kernel (state machine + integration + e2e adversarial)
 make verify-qdrant   # Smoke test pipeline real
 make health          # Verificar servicios
 make clean           # Borrar bases SQLite locales

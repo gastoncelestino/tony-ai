@@ -33,7 +33,7 @@ cd tony-ai
 
 `health.sh` verifica:
 1. OpenCode config válida
-2. Los 3 MCP servers arrancan
+2. Los 4 MCP servers arrancan (TonyMem, Code Indexer, Judgment Memory, Tony Kernel)
 3. Ollama responde y tiene los modelos
 4. Qdrant responde
 5. Pipeline de embeddings funcional
@@ -47,6 +47,7 @@ cp AGENTS.md ~/.opencode/
 cp plugins/tonymem.ts ~/.opencode/plugins/
 cp plugins/qdrant.ts ~/.opencode/plugins/
 cp plugins/judgment-memory.ts ~/.opencode/plugins/
+cp plugins/tony-kernel/index.ts ~/.opencode/plugins/
 ```
 
 ## 3.2 Configurar variables de entorno
@@ -86,6 +87,7 @@ source ~/.bashrc
    📄 tonymem.ts
    📄 qdrant.ts
    📄 judgment-memory.ts
+   📄 tony-kernel/index.ts
 ```
 
 ## 3.3 Iniciar servicios de soporte
@@ -215,7 +217,11 @@ python3 server.py
 | DCP config 						| validado contra `dcp.schema.json` 			| Schema completo, `additionalProperties: false` 								|
 | Judgment Day Memory Bridge 		| `judgment-memory/test_ledger.py` 				| Mock Ollama+Qdrant, 7/7 escenarios incl. camino feliz 						|
 | Judgment Day Memory Bridge 		| `judgment-memory/test_hooks.ts` 				| Hooks de plugin (`chat.message`, `tool.execute.after`, `system.transform`) 	|
-| Judgment Day Memory Bridge 		| `judgment-memory/scripts/verify-qdrant.ts` 	| Smoke test del cliente TS contra servicios reales 	
+| Judgment Day Memory Bridge 		| `judgment-memory/scripts/verify-qdrant.ts` 	| Smoke test del cliente TS contra servicios reales 	|
+| Tony Kernel 						| `kernel/test_state_machine.py` 				| FSM phases, phase gate, artifact validation, scope guard, checksum drift 	|
+| Tony Kernel 						| `kernel/test_kernel_integration.py` 			| Integration tests: can_start_phase, record_phase_completion, evidence rejection 	|
+| Tony Kernel 						| `plugins/tony-kernel/test_e2e.ts` 				| End-to-end adversarial: phase skip, fake evidence, tampering, scope violation, unknown agent, failed task 	|
+
 
 
 # 6. Troubleshooting
