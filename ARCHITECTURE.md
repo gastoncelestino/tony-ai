@@ -67,7 +67,6 @@ tony-ai/
 ├── ARCHITECTURE.md                    # Documentación técnica para entender el proyecto
 ├── INSTALL.md                         # Guía de instalación detallada
 ├── Makefile                           # Wrappers de tests, bootstrap, health, docker
-├── requirements.txt                   # Filosofía stdlib-only
 ├── requirements-optional.txt          # tree-sitter (opt-in)
 │
 ├── config/
