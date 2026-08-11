@@ -78,11 +78,12 @@ tony-ai/
 ├── kernel/                            # Tony Kernel — orquestación determinista SDD
 │   ├── __init__.py
 │   ├── cli.py                         # CLI: can_start_phase, record_phase_completion, check_scope, reset, status
-│   ├── orchestrator_integration.py    # Phase controller + artifact gate + scope guard + retry budget
+│   ├── orchestrator_integration.py    # Phase controller + artifact gate + scope check + retry budget
 │   ├── state_machine.py               # FSM de fases SDD
 │   ├── phase_gate.py                  # Validación de transiciones de fase
 │   ├── artifact_gate.py               # Validación de artifacts (exists + hash + validated + integral)
 │   ├── artifact_store.py              # disk_artifact_store (sha256 + WAL)
+│   ├── persistence.py                 # Persistencia WAL en .tony-kernel/kernel-state.json
 │   ├── phase_checksum.py              # Detección de tampering post-completion
 │   ├── retry_budget.py                # Presupuesto de reintentos por fase
 │   ├── evidence_ledger.py             # Registro de evidencias por tarea
@@ -91,6 +92,8 @@ tony-ai/
 │   ├── mcp_server.py                  # MCP server para kernel (registrado en opencode.json)
 │   ├── test_state_machine.py          # Tests unitarios FSM + enforcement
 │   ├── test_kernel_integration.py     # Tests de integración plugin ↔ Python
+│   ├── test_cli.py                    # Tests CLI (reset, record_delegation, etc.)
+│   ├── test_hardening.py              # Tests de hardening (validaciones adversarias)
 │   └── test_e2e.ts                    # Prueba adversarial end-to-end (flujo completo SDD + 7 ataques)
 │
 ├── config/
@@ -104,7 +107,9 @@ tony-ai/
 │
 ├── scripts/
 │   ├── setup.sh                       # Bootstrap idempotente
-│   └── health.sh                      # Verificación end-to-end
+│   ├── health.sh                      # Verificación end-to-end
+│   ├── calibrate-ctx.sh               # Sincroniza num_ctx de Ollama con opencode.json/DCP
+│   └── validate-config.ts             # Valida opencode.json, prompts, agents, MCP, skills
 │
 ├── plugins/
 │   ├── tonymem.ts                     # Hook OpenCode: auto-guardar sesiones + prompts
