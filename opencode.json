@@ -313,7 +313,8 @@
       ],
       "type": "local",
       "environment": {
-        "LOCAL_MEMORY_DB": "{env:PWD}/.tonymem/memory.db"
+        "LOCAL_MEMORY_DB": "{env:PWD}/.tonymem/memory.db",
+        "TONY_REPO_ROOT": "{env:TONY_REPO_ROOT}"
       }
     },
     "code-index": {

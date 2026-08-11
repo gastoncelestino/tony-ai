@@ -57,8 +57,9 @@ MCP_OK=1
 mcp_probe "local-memory/server.py"     || MCP_OK=0
 mcp_probe "code-index/server.py"       || MCP_OK=0
 mcp_probe "judgment-memory/server.py"  || MCP_OK=0
+mcp_probe "kernel/mcp_server.py"       || MCP_OK=0
 emit MCP "${MCP_OK}" \
-  "$([[ $MCP_OK -eq 1 ]] && echo 'los 3 servers arrancan' || echo 'al menos un server MCP fallo al initialize')"
+  "$([[ $MCP_OK -eq 1 ]] && echo 'los 4 servers arrancan' || echo 'al menos un server MCP fallo al initialize')"
 
 # 3. Ollama
 if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
