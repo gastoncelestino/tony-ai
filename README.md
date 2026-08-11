@@ -119,8 +119,6 @@ cd tony-ai
 ./scripts/health.sh   # Verifica estado del sistema
 ```
 
-## Comandos Principales
-
 ## Comandos OpenCode (slash commands)
 ```bash
 /sdd-init                      # Inicializar contexto SDD
