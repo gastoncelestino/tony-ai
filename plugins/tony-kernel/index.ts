@@ -97,7 +97,7 @@ class KernelClient implements KernelClientLike {
 
   private async runKernelCommand(args: string[]): Promise<any> {
     return new Promise((resolve, reject) => {
-      const proc = spawn(["python3", "-m", "kernel.orchestrator_integration", ...args], {
+      const proc = spawn(["python3", "-m", "kernel.cli", ...args], {
         cwd: join(KERNEL_DIR, ".."),
         stdout: "pipe",
         stderr: "pipe",
