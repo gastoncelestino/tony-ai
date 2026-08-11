@@ -188,3 +188,57 @@ test("real bridge: kernel caído -> KernelUnavailableError", async () => {
     taskExecuteBeforeHook(task({ phase: "explore" }), { success: true })
   ).resolves.toBeUndefined()
 })
+
+test("real bridge: gitDiff dentro de scope -> completion procede", async () => {
+  __setKernelClientForTests(null)
+  await resetKernelState()
+
+  await taskExecuteBeforeHook(task({ phase: "explore" }), { success: true })
+
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        phase: "explore",
+        artifacts: artifacts("explore"),
+        gitDiff: "+++ b/sdd/test/explore\n",
+        allowedFiles: ["sdd/*"],
+      }),
+      "success"
+    )
+  ).resolves.toBeUndefined()
+})
+
+test("real bridge: gitDiff fuera de scope -> KernelBlockedError real (no mock)", async () => {
+  __setKernelClientForTests(null)
+  await resetKernelState()
+
+  await taskExecuteBeforeHook(task({ phase: "explore" }), { success: true })
+
+  // El diff toca kernel/schemas.py, pero solo sdd/* está permitido.
+  // Esto pasa por check_scope real via `python3 -m kernel.cli check_scope`.
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        phase: "explore",
+        artifacts: artifacts("explore"),
+        gitDiff: "+++ b/kernel/schemas.py\n",
+        allowedFiles: ["sdd/*"],
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  // Y el estado del kernel NO debe haber avanzado: explore sigue incompleto.
+  const proc = await new Promise<string>((resolve, reject) => {
+    const p = spawn("python3", ["-m", "kernel.cli", "status"], {
+      cwd: REPO_ROOT,
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+    let out = ""
+    p.stdout.on("data", (d) => (out += d.toString()))
+    p.on("close", () => resolve(out))
+    p.on("error", reject)
+  })
+  const status = JSON.parse(proc)
+  expect(status.current_phase).toBe("explore")
+})

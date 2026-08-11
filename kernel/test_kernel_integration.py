@@ -164,6 +164,69 @@ class TestIntegrationEvidence(unittest.TestCase):
         result = orch.complete_task("t1", [evidence])
         self.assertEqual(result.decision, OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED)
 
+    def test_record_phase_completion_accepts_no_evidence(self):
+        """record_phase_completion still succeeds with no evidence at all
+        (evidence is optional, not mandatory, per phase completion)."""
+        orch = create_kernel_orchestrator("test-change", "test-project")
+        result = orch.record_phase_completion("explore", [
+            {"kind": "explore", "path": "sdd/x/explore", "store": "tonymem", "hash": "abc123", "validated": True},
+        ])
+        self.assertEqual(result.decision, OrchestrationDecision.PHASE_COMPLETE)
+        self.assertEqual(result.metadata.get("evidence_count"), 0)
+
+    def test_record_phase_completion_accepts_valid_evidence(self):
+        """record_phase_completion accepts well-formed evidence and reports
+        how many items were validated."""
+        orch = create_kernel_orchestrator("test-change", "test-project")
+        evidence = Evidence(
+            type=EvidenceType.COMMAND,
+            claim="Kernel tests pass",
+            command="python3 -m unittest",
+            exit_code=0,
+            stdout="OK",
+        )
+        result = orch.record_phase_completion(
+            "explore",
+            [{"kind": "explore", "path": "sdd/x/explore", "store": "tonymem", "hash": "abc123", "validated": True}],
+            [evidence],
+        )
+        self.assertEqual(result.decision, OrchestrationDecision.PHASE_COMPLETE)
+        self.assertEqual(result.metadata.get("evidence_count"), 1)
+
+    def test_record_phase_completion_rejects_fabricated_evidence(self):
+        """record_phase_completion rejects evidence that fails validation
+        (e.g. a claimed command with no exit_code) instead of silently
+        discarding it and completing the phase anyway."""
+        orch = create_kernel_orchestrator("test-change", "test-project")
+        fake_evidence = {"type": "command", "claim": "trust me, tests pass"}
+        result = orch.record_phase_completion(
+            "explore",
+            [{"kind": "explore", "path": "sdd/x/explore", "store": "tonymem", "hash": "abc123", "validated": True}],
+            [fake_evidence],
+        )
+        self.assertEqual(result.decision, OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED)
+        # And the phase state must NOT have advanced.
+        status = orch.get_status()
+        self.assertEqual(status["current_phase"], "explore")
+
+    def test_record_phase_completion_rejects_failed_evidence(self):
+        """A command evidence item with a non-zero exit_code is invalid,
+        even at phase-completion level, not just at task-completion level."""
+        orch = create_kernel_orchestrator("test-change", "test-project")
+        evidence = Evidence(
+            type=EvidenceType.COMMAND,
+            claim="Tests pass",
+            command="pytest",
+            exit_code=1,
+            stdout="failed",
+        )
+        result = orch.record_phase_completion(
+            "explore",
+            [{"kind": "explore", "path": "sdd/x/explore", "store": "tonymem", "hash": "abc123", "validated": True}],
+            [evidence],
+        )
+        self.assertEqual(result.decision, OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED)
+
 
 class TestIntegrationRetryBudget(unittest.TestCase):
     """Integration tests for retry budget."""

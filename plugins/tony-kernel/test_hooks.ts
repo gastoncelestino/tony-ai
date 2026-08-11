@@ -35,6 +35,9 @@ interface FakeOptions {
   recordDelegationThrows?: unknown
   completionThrows?: unknown
   statusPhase?: string
+  scopeAllowed?: boolean
+  scopeViolations?: string[]
+  checkScopeThrows?: unknown
 }
 
 function makeFakeClient(options: FakeOptions = {}) {
@@ -42,6 +45,7 @@ function makeFakeClient(options: FakeOptions = {}) {
     canStartPhase: [] as string[],
     recordDelegation: [] as string[],
     recordPhaseCompletion: [] as string[],
+    checkScope: [] as Array<{ gitDiff: string; allowedFiles: string[] }>,
     getStatus: 0,
   }
 
@@ -89,11 +93,19 @@ function makeFakeClient(options: FakeOptions = {}) {
       }
     },
 
-    async checkScope() {
+    async checkScope(gitDiff: string, allowedFiles: string[]) {
+      calls.checkScope.push({ gitDiff, allowedFiles })
+
+      if (options.checkScopeThrows) {
+        throw options.checkScopeThrows
+      }
+
+      const allowed = options.scopeAllowed !== false
       return {
-        decision: "allow",
-        reason: "ok",
-        scope_violations: [],
+        decision: allowed ? "proceed" : "block_scope_violation",
+        allowed,
+        reason: allowed ? "ok" : "modified files outside allowed scope",
+        scope_violations: options.scopeViolations ?? (allowed ? [] : ["src/unrelated.ts"]),
       }
     },
 
@@ -398,4 +410,87 @@ test("post-phase validation incorrecta -> KernelBlockedError", async () => {
 
   expect(calls.recordPhaseCompletion).toEqual(["spec"])
   expect(calls.getStatus).toBe(1)
+})
+
+// ─── SCOPE GUARD (gap #3: checkScope was defined but never called) ───────
+
+test("after hook sin gitDiff -> no llama a checkScope (opt-in, compat hacia atrás)", async () => {
+  const { client, calls } = makeFakeClient()
+  __setKernelClientForTests(client)
+
+  await taskExecuteAfterHook(
+    task({
+      subagent_type: "sdd-spec",
+      artifacts: artifacts(),
+    }),
+    "success"
+  )
+
+  expect(calls.checkScope).toEqual([])
+  expect(calls.recordPhaseCompletion).toEqual(["spec"])
+})
+
+test("after hook con gitDiff dentro de scope -> procede y registra completion", async () => {
+  const { client, calls } = makeFakeClient({ scopeAllowed: true })
+  __setKernelClientForTests(client)
+
+  await taskExecuteAfterHook(
+    task({
+      subagent_type: "sdd-spec",
+      artifacts: artifacts(),
+      gitDiff: "+++ b/openspec/spec.md\n",
+      allowedFiles: ["openspec/*"],
+    }),
+    "success"
+  )
+
+  expect(calls.checkScope).toEqual([
+    { gitDiff: "+++ b/openspec/spec.md\n", allowedFiles: ["openspec/*"] },
+  ])
+  expect(calls.recordPhaseCompletion).toEqual(["spec"])
+})
+
+test("after hook con gitDiff fuera de scope -> KernelBlockedError, NO registra completion", async () => {
+  const { client, calls } = makeFakeClient({
+    scopeAllowed: false,
+    scopeViolations: ["kernel/schemas.py"],
+  })
+  __setKernelClientForTests(client)
+
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+        gitDiff: "+++ b/kernel/schemas.py\n",
+        allowedFiles: ["openspec/*"],
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  // La violación de scope debe bloquear ANTES de tocar recordPhaseCompletion.
+  expect(calls.checkScope.length).toBe(1)
+  expect(calls.recordPhaseCompletion).toEqual([])
+})
+
+test("checkScope falla (Kernel caído) -> KernelUnavailableError", async () => {
+  const { client, calls } = makeFakeClient({
+    checkScopeThrows: new Error("kernel process failed"),
+  })
+  __setKernelClientForTests(client)
+
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+        gitDiff: "+++ b/openspec/spec.md\n",
+        allowedFiles: ["openspec/*"],
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelUnavailableError)
+
+  expect(calls.recordPhaseCompletion).toEqual([])
 })

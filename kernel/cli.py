@@ -141,8 +141,17 @@ def _main(argv: list) -> None:
         except json.JSONDecodeError:
             print(json.dumps({"error": "artifacts must be a JSON array"}), file=sys.stderr)
             sys.exit(1)
+        # Evidence is optional and backward-compatible: callers that only
+        # pass phase + artifacts (2 args) still work, evidence defaults to [].
+        evidence_raw = []
+        if len(args) > 2:
+            try:
+                evidence_raw = json.loads(args[2])
+            except json.JSONDecodeError:
+                print(json.dumps({"error": "evidence must be a JSON array"}), file=sys.stderr)
+                sys.exit(1)
         orch = _load()
-        result = orch.record_phase_completion(phase, _parse_artifact_refs(raw))
+        result = orch.record_phase_completion(phase, _parse_artifact_refs(raw), _parse_evidence(evidence_raw))
         save_orchestrator(orch)
         print(json.dumps(_result_to_dict(result)))
         return

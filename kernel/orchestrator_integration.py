@@ -173,7 +173,8 @@ class KernelOrchestrator:
     def record_phase_completion(self, phase: str, artifacts: list, evidence: list = None) -> OrchestrationResult:
         """
         Record that a phase has completed with its artifacts.
-        Validates artifacts and updates state.
+        Validates artifacts, validates evidence (when any is supplied), and
+        updates state.
         """
         try:
             phase_enum = Phase(phase)
@@ -183,7 +184,24 @@ class KernelOrchestrator:
                 reason=f"Unknown phase: {phase}",
                 current_phase=self.change_state.current_phase.value,
             )
-        
+
+        # Validate evidence, if any was supplied. An empty/omitted evidence
+        # list is accepted (evidence is not yet mandatory per phase — see
+        # record_phase_completion docstring/CHANGELOG), but whatever IS
+        # supplied must be well-formed and pass Evidence.validate(), the
+        # same rule complete_task() applies to task-level evidence. This
+        # closes the gap where fabricated or empty-but-nonempty evidence
+        # was silently accepted.
+        validated_evidence, invalid_evidence = self._validate_evidence_items(evidence or [])
+        if invalid_evidence:
+            reasons = [f"{type(ev).__name__}: {status}" for ev, status in invalid_evidence[:3]]
+            return OrchestrationResult(
+                decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
+                reason=f"Invalid evidence for phase {phase}: {', '.join(reasons)}",
+                current_phase=self.change_state.current_phase.value,
+                missing_evidence=tuple(str(e) for e, _ in invalid_evidence[:5]),
+            )
+
         # Validate artifacts
         artifact_refs = []
         for art in artifacts:
@@ -230,9 +248,53 @@ class KernelOrchestrator:
             decision=OrchestrationDecision.PHASE_COMPLETE,
             reason=f"Phase {phase} completed successfully",
             current_phase=self.change_state.current_phase.value,
-            metadata={"artifacts": [a.kind for a in artifact_refs]},
+            metadata={
+                "artifacts": [a.kind for a in artifact_refs],
+                "evidence_count": len(validated_evidence),
+            },
         )
-    
+
+    @staticmethod
+    def _validate_evidence_items(evidence_items: list) -> tuple:
+        """Validate a raw list of Evidence objects/dicts.
+
+        Shared by record_phase_completion() and complete_task() so both
+        checkpoints enforce the same evidence rules: every item must parse
+        into an Evidence and pass Evidence.validate() (VALID). Returns
+        (validated_evidence, invalid_evidence) where invalid_evidence is a
+        list of (item, status_or_reason) pairs.
+        """
+        validated: list = []
+        invalid: list = []
+        for ev in evidence_items:
+            if isinstance(ev, Evidence):
+                status = ev.validate()
+                if status == EvidenceStatus.VALID:
+                    validated.append(ev)
+                else:
+                    invalid.append((ev, status))
+            elif isinstance(ev, dict):
+                try:
+                    ev_obj = Evidence(
+                        type=EvidenceType(ev.get("type", "manual")),
+                        claim=ev.get("claim", ""),
+                        command=ev.get("command"),
+                        exit_code=ev.get("exit_code"),
+                        stdout=ev.get("stdout"),
+                        stderr=ev.get("stderr"),
+                        file_path=ev.get("file_path"),
+                    )
+                    status = ev_obj.validate()
+                    if status == EvidenceStatus.VALID:
+                        validated.append(ev_obj)
+                    else:
+                        invalid.append((ev_obj, status))
+                except Exception:
+                    invalid.append((ev, "invalid_format"))
+            else:
+                invalid.append((ev, "unknown_type"))
+        return validated, invalid
+
     def _record_phase_checksum(self, phase: str, artifacts: list) -> None:
         """Record checksum of phase artifacts for drift detection."""
         artifact_refs = []
@@ -330,37 +392,8 @@ class KernelOrchestrator:
                 current_phase=self.change_state.current_phase.value,
             )
         
-        evidence_objs = evidence or []
-        validated_evidence = []
-        invalid_evidence = []
-        for ev in evidence_objs:
-            if isinstance(ev, Evidence):
-                status = ev.validate()
-                if status == EvidenceStatus.VALID:
-                    validated_evidence.append(ev)
-                else:
-                    invalid_evidence.append((ev, status))
-            elif isinstance(ev, dict):
-                try:
-                    ev_obj = Evidence(
-                        type=EvidenceType(ev.get("type", "manual")),
-                        claim=ev.get("claim", ""),
-                        command=ev.get("command"),
-                        exit_code=ev.get("exit_code"),
-                        stdout=ev.get("stdout"),
-                        stderr=ev.get("stderr"),
-                        file_path=ev.get("file_path"),
-                    )
-                    status = ev_obj.validate()
-                    if status == EvidenceStatus.VALID:
-                        validated_evidence.append(ev_obj)
-                    else:
-                        invalid_evidence.append((ev_obj, status))
-                except Exception:
-                    invalid_evidence.append((ev, "invalid_format"))
-            else:
-                invalid_evidence.append((ev, "unknown_type"))
-        
+        validated_evidence, invalid_evidence = self._validate_evidence_items(evidence or [])
+
         if invalid_evidence:
             reasons = [f"{type(ev).__name__}: {status}" for ev, status in invalid_evidence[:3]]
             return OrchestrationResult(

@@ -64,6 +64,7 @@ export interface KernelClientLike {
     allowedFiles: string[]
   ): Promise<{
     decision: string
+    allowed: boolean
     reason: string
     scope_violations: string[]
   }>
@@ -141,11 +142,24 @@ class KernelClient implements KernelClientLike {
 
   async checkScope(gitDiff: string, allowedFiles: string[]): Promise<{
     decision: string
+    allowed: boolean
     reason: string
     scope_violations: string[]
   }> {
-    const result = await this.runKernelCommand(["check_scope", JSON.stringify(gitDiff), JSON.stringify(allowedFiles)])
-    return result
+    // NOTE: kernel.cli's `check_scope` command reads git_diff as a raw
+    // positional argv string (it does NOT json.loads it) — only
+    // allowed_files is JSON-encoded on the Python side. spawn() with an
+    // args array passes each element as a literal argv entry (no shell),
+    // so newlines in the diff survive intact without needing JSON
+    // escaping. JSON.stringify-ing gitDiff here would wrap it in quotes
+    // and escape its newlines as literal "\n", which kernel.cli's
+    // _parse_diff_files() can't match against — so scope violations would
+    // never be detected. Bug found via the real-bridge integration test.
+    const result = await this.runKernelCommand(["check_scope", gitDiff, JSON.stringify(allowedFiles)])
+    return {
+      ...result,
+      allowed: result.allowed === true,
+    }
   }
 
   async getStatus(): Promise<Record<string, unknown>> {
@@ -181,6 +195,13 @@ function phaseTransitionBlockedMessage(result: CanStartPhaseResult): string {
     (result.scope_violations.length > 0 ? `Scope violations: ${result.scope_violations.join(", ")}\n` : "") +
     (result.retry_status && result.retry_status.exhausted ? "\nRetry budget exhausted. Human required.\n" : "") +
     (result.next_action ? `Next action: ${result.next_action}` : "")
+  )
+}
+
+function scopeViolationMessage(phase: string, result: { reason: string; scope_violations: string[] }): string {
+  return (
+    `[Tony Kernel] Scope violation blocked phase completion for "${phase}": ${result.reason}\n` +
+    `Files outside allowed scope: ${result.scope_violations.join(", ")}`
   )
 }
 
@@ -285,6 +306,8 @@ export async function taskExecuteAfterHook(
 
     const artifacts = args.artifacts as Array<{ kind: string; path: string; store: string; hash?: string }> | undefined
     const evidence = (args.evidence as Array<unknown> | undefined) || []
+    const gitDiff = typeof args.gitDiff === "string" ? args.gitDiff : ""
+    const allowedFiles = (args.allowedFiles as string[] | undefined) || []
 
     if (!artifacts || artifacts.length === 0) {
       throw new KernelBlockedError(
@@ -294,6 +317,19 @@ export async function taskExecuteAfterHook(
     }
 
     const client = await getKernelClient()
+
+    // Scope Guard: opt-in. A sub-agent that reports a gitDiff is asserting
+    // "here's what I touched" — when it does, we verify that diff against
+    // the allowed files for this delegation before letting the phase
+    // complete. Callers that don't report a diff skip this check (same as
+    // before), but the check is now reachable and fail-closed once wired.
+    if (gitDiff.length > 0) {
+      const scopeResult = await client.checkScope(gitDiff, allowedFiles)
+      if (!scopeResult.allowed) {
+        throw new KernelBlockedError(scopeViolationMessage(phase, scopeResult))
+      }
+    }
+
     await client.recordPhaseCompletion(phase, artifacts, evidence)
 
     // Post-phase validation: verify the phase is actually complete in the kernel
