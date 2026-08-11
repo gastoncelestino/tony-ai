@@ -128,20 +128,55 @@ cd tony-ai
 
 # 2. Creá un cambio nuevo
 /sdd-new "agregar rate limiting al endpoint de login"
+```
 
-# 3. Dejá que el orquestador haga el resto:
-#    explore → propose → spec → design → tasks (automático)
+El orquestador hace el trabajo pesado: explora el código, arma una propuesta, genera la spec, el diseño y las tareas. Podés intervenir en cualquier momento:
+
+```bash
+/sdd-explore "chequear si hay middleware de auth existente"
+/sdd-propose   # ajustar la propuesta si hace falta
+/sdd-design    # modificar el diseño antes de implementar
+```
+
+```bash
+# 3. Implementá y validá
 /sdd-apply                    # implementá las tareas
 /sdd-verify                   # validá contra las specs
 /sdd-archive                  # cerrá el cambio
+```
 
-# 4. En cualquier momento, consultá memoria:
+Si algo falla, el Kernel te dice exactamente por qué:
+
+- **Artifacts faltantes o con hash inválido** → volvé a generar el artifact de la fase actual
+- **Diff fuera de allowed_files** → revisá el scope en `openspec/change-request.md`
+- **Salto de fase** → completá la fase anterior antes de avanzar
+
+```bash
+# 4. Consultá memoria en cualquier momento
 /memory-search "rate limiting"
 /memory-stats
 /judgment-history
+/kernel-status                # estado actual del Kernel (fase, artifacts, checksums)
 ```
 
-El Kernel se encarga de bloquear saltos de fase, artifacts faltantes y diffs fuera de scope sin que tengas que preocuparte.
+### Iterar sobre un cambio existente
+
+```bash
+/sdd-load <change-id>          # retomá un cambio anterior
+/sdd-apply                     # seguí con las tareas pendientes
+/sdd-verify                    # re-validá si tocaste specs
+/sdd-archive                   # cerrá la nueva iteración
+```
+
+### Activar Judgment Day
+
+Para revisiones adversariales explícitas:
+
+```bash
+juzgar esto
+```
+
+El sistema busca juicios previos similares en memoria, ejecuta 2 jueces en paralelo y registra el resultado para futuras referencias.
 
 
 ## Code Review automático
