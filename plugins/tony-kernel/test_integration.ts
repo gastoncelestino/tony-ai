@@ -6,7 +6,7 @@
 // Ejecutar:
 //   bun test ./plugins/tony-kernel/test_integration.ts
 
-import { test, expect, afterEach } from "bun:test"
+import { test, expect, afterEach, beforeEach } from "bun:test"
 import { spawn } from "node:child_process"
 import { join } from "path"
 import { fileURLToPath } from "url"
@@ -45,21 +45,26 @@ function task(args: Record<string, unknown> = {}) {
   }
 }
 
-function artifacts() {
+function artifacts(kind: string = "spec") {
   return [
     {
-      kind: "spec",
-      path: "openspec/spec.md",
-      store: "openspec",
+      kind,
+      path: `sdd/test/${kind}`,
+      store: "tonymem",
+      hash: "h-" + kind,
+      validated: true,
     },
   ]
 }
 
 // ─── Test isolation ──────────────────────────────────────────────────────
 
-afterEach(async () => {
-  __setKernelClientForTests(null)
+beforeEach(async () => {
   await resetKernelState()
+})
+
+afterEach(() => {
+  __setKernelClientForTests(null)
 })
 
 // ─── BEFORE HOOK: REAL BRIDGE ────────────────────────────────────────────
@@ -115,23 +120,24 @@ test("real bridge: unknown subagent -> BLOCK", async () => {
 
 test("real bridge: record_phase_completion funciona", async () => {
   __setKernelClientForTests(null)
+  await resetKernelState()
 
   // Completar explore -> propose -> spec en orden
   await taskExecuteBeforeHook(task({ phase: "explore" }), { success: true })
   await taskExecuteAfterHook(
-    task({ phase: "explore", artifacts: artifacts() }),
+    task({ phase: "explore", artifacts: artifacts("explore") }),
     "success"
   )
 
   await taskExecuteBeforeHook(task({ phase: "propose" }), { success: true })
   await taskExecuteAfterHook(
-    task({ phase: "propose", artifacts: artifacts() }),
+    task({ phase: "propose", artifacts: artifacts("proposal") }),
     "success"
   )
 
   await taskExecuteBeforeHook(task({ phase: "spec" }), { success: true })
   await taskExecuteAfterHook(
-    task({ phase: "spec", artifacts: artifacts() }),
+    task({ phase: "spec", artifacts: artifacts("spec") }),
     "success"
   )
 
@@ -143,9 +149,11 @@ test("real bridge: record_phase_completion funciona", async () => {
 
 test("real bridge: post-phase validation -> fase avanzó", async () => {
   __setKernelClientForTests(null)
+  await resetKernelState()
 
+  // Completar explore para poder avanzar
   await taskExecuteAfterHook(
-    task({ phase: "explore", artifacts: artifacts() }),
+    task({ phase: "explore", artifacts: artifacts("explore") }),
     "success"
   )
 
@@ -161,7 +169,7 @@ test("real bridge: task fallida -> BLOCK", async () => {
 
   await expect(
     taskExecuteAfterHook(
-      task({ phase: "explore", artifacts: artifacts() }),
+      task({ phase: "explore", artifacts: artifacts("explore") }),
       "Error: sub-agent failed"
     )
   ).rejects.toBeInstanceOf(KernelBlockedError)
