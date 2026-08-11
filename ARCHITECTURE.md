@@ -246,52 +246,68 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 
 ## Cómo lo utilizo?
 ```bash
-/sdd-init — inicializar el entorno
-```
-💡 Tip: La primera vez que uses /sdd-init, vas a necesitar contestar unas preguntas sobre cómo querés trabajar (modo interactivo vs automático, dónde guardar las specs, etc.).
+# 1. Inicializá el proyecto (una sola vez)
+/sdd-init
 
-
-```bash
-/sdd-new "mejorar login" — crear un nuevo cambio
-/sdd-explore – si necesitás profundizar algo
-/sdd-tasks – para ver el plan de trabajo
-/sdd-apply – para implementar una fase
-/sdd-verify – para evaluar resultados
-/sdd-archive – para cerrar y archivar un cambio
+# 2. Creá un cambio nuevo
+/sdd-new "mejorar login"
 ```
 
+El orquestador hace el trabajo pesado: explora el código, arma una propuesta, genera la spec, el diseño y las tareas. Podés intervenir en cualquier momento:
+
 ```bash
+/sdd-explore "chequear si hay middleware de auth existente"
+/sdd-propose   # ajustar la propuesta si hace falta
+/sdd-design    # modificar el diseño antes de implementar
+/sdd-tasks     # ver/ajustar el plan de tareas
+```
+
+```bash
+# 3. Implementá y validá
+/sdd-apply                    # implementá las tareas
+/sdd-verify                   # validá contra las specs
+/sdd-archive                  # cerrar el cambio
+```
+
+Si algo falla, el Kernel te dice exactamente por qué:
+
+- **Artifacts faltantes o con hash inválido** → volvé a generar el artifact de la fase actual
+- **Diff fuera de allowed_files** → revisá el scope en `openspec/change-request.md`
+- **Salto de fase** → completá la fase anterior antes de avanzar
+
+```bash
+# 4. Consultá memoria en cualquier momento
 /memory-search "manejo de errores HTTP"
-```
-✅ Combina búsquedas en TonyMem (decisiones, arquitectura, bugs, patrones) + judgment-memory (lecciones de revisiones anteriores)  
-✅ Usa mem_search (de observation store) y jd_recall (de vector DB)  
-✅ Es una interfaz unificada para recuperar contexto histórico  
-
-```bash
-/judgment-history — ver resultados de revisiones anteriores 
-```
-✅ Lee directamente del SQLite ledger (`judgment-memory.db`). Lista los últimos juicios de Judgment Day para el proyecto actual.  
-✅ No depende de Qdrant/Ollama (offline-first)  
-✅ Útil para revisar decisiones anteriores sin embedding  
-
-```bash
 /memory-stats
+/judgment-history
+/kernel-status                # estado actual del Kernel (fase, artifacts, checksums)
 ```
-✅ Muestra métricas de uso de memoria (número de observaciones, tipos más comunes, última actividad)  
-✅ Filtrado por proyecto  
+
+### Iterar sobre un cambio existente
 
 ```bash
-/mem_save_prompt 
+/sdd-load <change-id>          # retomá un cambio anterior
+/sdd-apply                     # seguí con las tareas pendientes
+/sdd-verify                    # re-validá si tocaste specs
+/sdd-archive                   # cerrar la nueva iteración
 ```
-✅ Llamado por el hook `chat.message` en `tonymem.ts`  
-✅ Captura prompts crudos con type='prompt-capture'  
-✅ Excluido de búsquedas por defecto (bookkeeping)  
-✅ Se puede filtrar explícitamente si necesitás revisar prompts  
 
+### Activar Judgment Day
 
-Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero  **se excluyen por defecto de `mem_search`** 
-— no son decisiones ni descubrimientos, son bookkeeping interno.  
-Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`. — no son decisiones ni descubrimientos, son bookkeeping interno.
+```bash
+juzgar esto
+```
+
+El sistema busca juicios previos similares en memoria, ejecuta 2 jueces en paralelo y registra el resultado para futuras referencias.
+
+### mem_save_prompt
+
+- Llamado por el hook `chat.message` en `tonymem.ts`
+- Captura prompts crudos con `type='prompt-capture'`
+- Excluido de búsquedas por defecto (bookkeeping)
+- Se puede filtrar explícitamente si necesitás revisar prompts
+
+Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero **se excluyen por defecto de `mem_search`** — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`.
 
 
 ## TonyMem - Memoria Persistente
