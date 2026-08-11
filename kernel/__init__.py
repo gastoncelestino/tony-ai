@@ -67,13 +67,6 @@ from .orchestrator_integration import (
     OrchestrationResult,
     create_kernel_orchestrator,
 )
-from .scope_guard import (
-    ScopeGuard,
-    ScopeCheckResult,
-    ScopeViolation,
-    ScopeViolationType,
-    create_sdd_scope_guard,
-)
 from .phase_checksum import (
     PhaseChecksumRegistry,
     PhaseChecksum,
@@ -135,12 +128,6 @@ __all__ = [
     "OrchestrationDecision",
     "OrchestrationResult",
     "create_kernel_orchestrator",
-    # Scope Guard
-    "ScopeGuard",
-    "ScopeCheckResult",
-    "ScopeViolation",
-    "ScopeViolationType",
-    "create_sdd_scope_guard",
     # Phase Checksum
     "PhaseChecksumRegistry",
     "PhaseChecksum",

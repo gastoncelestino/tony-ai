@@ -83,7 +83,6 @@ tony-ai/
 │   ├── phase_gate.py                  # Validación de transiciones de fase
 │   ├── artifact_gate.py               # Validación de artifacts (exists + hash + validated + integral)
 │   ├── artifact_store.py              # disk_artifact_store (sha256 + WAL)
-│   ├── scope_guard.py                 # Validación de diff contra allowed_files
 │   ├── phase_checksum.py              # Detección de tampering post-completion
 │   ├── retry_budget.py                # Presupuesto de reintentos por fase
 │   ├── evidence_ledger.py             # Registro de evidencias por tarea
