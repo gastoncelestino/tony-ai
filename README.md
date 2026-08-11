@@ -98,7 +98,7 @@ flowchart TD
     DCP -.->|"plugin global"| OC["OpenCode"]
 ```
 
-## Requisitos
+# Requisitos
 - **Python 3.10+** para los servidores MCP en Python.
 - **Bun** para los scripts de verificación basados en TypeScript y plugins.
 - **OpenCode CLI** (instalador oficial: https://opencode.ai)
@@ -107,7 +107,7 @@ flowchart TD
 - **GGA** (opcional, para code review antes de commit — https://github.com/Gentleman-Programming/gentleman-guardian-angel)
 
 
-## Clonar repositorio
+# Clonar repositorio
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
@@ -119,22 +119,8 @@ cd tony-ai
 ./scripts/health.sh   # Verifica estado del sistema
 ```
 
-`setup.sh` hace:
-1. Verifica dependencias (Python, Bun, OpenCode CLI, Docker)
-2. Verifica Ollama + Qdrant: si ya responden no toca nada (modo nativo); si no responden y hay Docker, los levanta con `docker compose up -d`; si no hay Docker, pide que los levantes a mano
-3. Descarga los modelos de Ollama (requiere Ollama respondiendo): qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text
-4. Configura `.env.example`
-5. Regenera `opencode.json` con rutas portables
 
-`health.sh` verifica:
-1. OpenCode config válida
-2. Los 4 MCP servers arrancan (TonyMem, Code Indexer, Judgment Memory, Tony Kernel)
-3. Ollama responde y tiene los modelos
-4. Qdrant responde
-5. Pipeline de embeddings funcional
-
-
-## Happy path — tu primer cambio con SDD
+# Como usar Tony-AI
 
 ```bash
 # 1. Inicializá el proyecto (una sola vez)
@@ -157,40 +143,6 @@ cd tony-ai
 
 El Kernel se encarga de bloquear saltos de fase, artifacts faltantes y diffs fuera de scope sin que tengas que preocuparte.
 
-
-## Comandos Principales
-
-## Comandos OpenCode (slash commands)
-```bash
-/sdd-init                      # Inicializar contexto SDD
-/sdd-new <description>         # Nuevo change con planificación automática
-/sdd-explore <task>            # Investigar una idea
-/sdd-propose                   # Crear propuesta PRD
-/sdd-spec                      # Especificación técnica detallada
-/sdd-design                    # Diseño técnico y estructuras de datos
-/sdd-tasks                     # Generar tareas de implementación
-/sdd-apply                     # Implementar tareas pendientes
-/sdd-verify                    # Validar implementación contra specs
-/sdd-archive                   # Cerrar change y persistir estado final
-/memory-search "query"         # Buscar decisiones anteriores
-/memory-stats                  # Estadísticas de memoria por proyecto
-/judgment-history              # Ver histórico de juicios
-juzgar esto                    # Activar Judgment Day (revisión adversarial)
-```
-
-## Comandos de desarrollo (terminal)
-```bash
-make test            # Tests completos (Python + TypeScript + Kernel)
-make test-python     # Solo tests Python
-make test-ts         # Solo tests TypeScript
-make test-kernel     # Solo tests Kernel (state machine + integration + e2e adversarial)
-make verify-qdrant   # Smoke test pipeline real
-make health          # Verificar servicios
-make clean           # Borrar bases SQLite locales
-make docker-up       # Iniciar servicios Docker
-make docker-down     # Detener servicios Docker
-make validate-config # Validar opencode.json + prompts + skills
-```
 
 ## Code Review automático
 `GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
