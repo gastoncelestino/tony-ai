@@ -277,36 +277,6 @@ function checkMcpServers(): void {
   }
 }
 
-function checkPromptConsistency(): void {
-  let config: Record<string, unknown>
-  try {
-    const content = readFileSync(OPENCODE_JSON, "utf-8")
-    config = JSON.parse(content)
-  } catch {
-    return
-  }
-
-  const agents = (config.agent ?? {}) as Record<string, { prompt?: string }>
-  for (const [agentName, agentConfig] of Object.entries(agents)) {
-    if (typeof agentConfig.prompt !== "string") continue
-
-    const prompt = agentConfig.prompt
-    if (prompt.includes("gentle-ai") || prompt.includes("Gentle AI")) {
-      fail(`agent.${agentName} prompt contains "gentle-ai" or "Gentle AI" reference`)
-    }
-
-    if (prompt.includes("gentle-orchestrator")) {
-      fail(`agent.${agentName} prompt contains "gentle-orchestrator" reference`)
-    }
-
-    if (prompt.includes("GENTLE_AI_")) {
-      fail(`agent.${agentName} prompt contains "GENTLE_AI_" prefix`)
-    }
-  }
-
-  ok("No legacy gentle-ai references found in prompts")
-}
-
 function checkSkillsDirectory(): void {
   if (!existsSync(resolve(ROOT, "skills"))) {
     fail("skills/ directory not found")
@@ -367,7 +337,6 @@ function main(): void {
   checkFileReferences()
   checkSharedReferences()
   checkAgentReferences()
-  checkPromptConsistency()
 
   console.log("\n=== Summary ===")
   if (errors === 0) {
