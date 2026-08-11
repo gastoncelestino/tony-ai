@@ -244,7 +244,7 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 | Revisión (juez B) | `ollama/qwen3-coder:30b` | `jd-judge-b` — deliberadamente distinto de `jd-judge-a` |
 | Ejecución | `ollama/ornith:9b` | `sdd-archive`, `jd-fix-agent` |
 
-## Cómo lo utilizo?
+# Como empezar con Tony-AI
 ```bash
 # 1. Inicializá el proyecto (una sola vez)
 /sdd-init
