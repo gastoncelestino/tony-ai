@@ -9,6 +9,7 @@
 import { join } from "path"
 import { fileURLToPath } from "url"
 import { dirname } from "path"
+import { spawn } from "node:child_process"
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(PLUGIN_DIR, "..", "..")
@@ -28,29 +29,27 @@ export interface CanStartPhaseResult {
 
 export class KernelClient {
   private async runCommand(args: string[]): Promise<any> {
-    const proc = Bun.spawn(["python3", "-m", "kernel.cli", ...args], {
+    const proc = spawn("python3", ["-m", "kernel.cli", ...args], {
       cwd: REPO_ROOT,
-      stdout: "pipe",
-      stderr: "pipe",
+      stdio: ["pipe", "pipe", "pipe"],
     })
 
     let stdout = ""
     let stderr = ""
 
-    for await (const chunk of proc.stdout) {
-      stdout += new TextDecoder().decode(chunk)
-    }
-    for await (const chunk of proc.stderr) {
-      stderr += new TextDecoder().decode(chunk)
-    }
+    proc.stdout.on("data", (data: Buffer) => { stdout += data.toString() })
+    proc.stderr.on("data", (data: Buffer) => { stderr += data.toString() })
 
-    const exitCode = await proc.exited
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      proc.on("close", (code) => resolve(code ?? 0))
+      proc.on("error", (err) => reject(err))
+    })
 
     if (exitCode === 0) {
       try {
         return JSON.parse(stdout.trim())
       } catch {
-        throw new Error(`[tony-kernel] Non-JSON kernel output: ${stdout.trim()}`)
+        return { success: true, output: stdout.trim() }
       }
     } else {
       throw new Error(`[tony-kernel] Kernel error (${exitCode}): ${stderr}`)

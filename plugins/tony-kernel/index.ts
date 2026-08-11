@@ -8,7 +8,7 @@
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
-import { spawn } from "bun"
+import { spawn } from "node:child_process"
 import { join } from "path"
 import { fileURLToPath } from "url"
 import { dirname } from "path"
@@ -97,19 +97,18 @@ class KernelClient implements KernelClientLike {
 
   private async runKernelCommand(args: string[]): Promise<any> {
     return new Promise((resolve, reject) => {
-      const proc = spawn(["python3", "-m", "kernel.cli", ...args], {
+      const proc = spawn("python3", ["-m", "kernel.cli", ...args], {
         cwd: join(KERNEL_DIR, ".."),
-        stdout: "pipe",
-        stderr: "pipe",
+        stdio: ["pipe", "pipe", "pipe"],
       })
 
       let stdout = ""
       let stderr = ""
 
-      proc.stdout?.on("data", (data) => { stdout += data.toString() })
-      proc.stderr?.on("data", (data) => { stderr += data.toString() })
+      proc.stdout.on("data", (data: Buffer) => { stdout += data.toString() })
+      proc.stderr.on("data", (data: Buffer) => { stderr += data.toString() })
 
-      proc.exited.then((code) => {
+      proc.on("close", (code) => {
         if (code === 0) {
           try {
             resolve(JSON.parse(stdout.trim()))
@@ -119,6 +118,10 @@ class KernelClient implements KernelClientLike {
         } else {
           reject(new Error(`Kernel error (${code}): ${stderr}`))
         }
+      })
+
+      proc.on("error", (err) => {
+        reject(new Error(`Kernel spawn error: ${err.message}`))
       })
     })
   }
