@@ -19,6 +19,7 @@ test-kernel:
 	@python3 -m kernel.test_cli
 	@python3 -m kernel.test_hardening
 	@python3 -m kernel.test_enforcement
+	@bun test ./plugins/tony-kernel/test_e2e.ts
 	@echo "✓ Kernel tests passed"
 
 test-ts:
