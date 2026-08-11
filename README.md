@@ -115,7 +115,7 @@ cd tony-ai
 
 # 1. Instalación automática (recomendada) [INSTALL.md](https://github.com/gastoncelestino/tony-ai/blob/main/INSTALL.md)
 ```bash
-./scripts/setup.sh    # Verifica dependencias, levanta servicios si hace falta, descarga modelos, configura .env
+./scripts/setup.sh    # Verifica dependencias, levanta servicios si hace falta, descarga modelos, configura .env.example
 ./scripts/health.sh   # Verifica estado del sistema
 ```
 
