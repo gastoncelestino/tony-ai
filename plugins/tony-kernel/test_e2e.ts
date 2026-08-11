@@ -158,14 +158,6 @@ test("SDD complete flow: explore -> archive with real artifacts", async () => {
 
     // AFTER: complete with real artifact
     const artifact = makeArtifact(step.kind, step.rel, `${step.phase} content v1`)
-
-    // Debug: verify file content before calling CLI
-    const fs = require("fs")
-    const fullPath = join(TEST_DIR, step.rel)
-    const fileContent = fs.readFileSync(fullPath, "utf-8")
-    const stat = fs.statSync(fullPath)
-    console.log(`[DEBUG] Before CLI: ${fullPath} => size=${stat.size} content=${JSON.stringify(fileContent)}`)
-
     await taskExecuteAfterHook(
       task({ phase: step.phase, artifacts: [artifact] }),
       "success"
@@ -255,21 +247,30 @@ test("ADVERSARIAL: tampered spec blocks advancing and archive", async () => {
 
 // ─── ADVERSARIAL CASE 4: Scope violation ─────────────────────────────────
 
+const EVIL_DIFF = `diff --git a/src/evil.js b/src/evil.js
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/src/evil.js
+@@ -0,0 +1 @@
++evil content`
+
 test("ADVERSARIAL: scope violation blocks completion", async () => {
   __setKernelClientForTests(null)
 
+  // Complete explore legitimately (no scope check on first phase)
   await taskExecuteBeforeHook(task({ phase: "explore" }), { success: true })
-  const artifact = makeArtifact("explore", "explore.md", "v1")
+  await taskExecuteAfterHook(task({ phase: "explore", artifacts: [makeArtifact("explore", "explore.md", "v1")] }), "success")
 
-  // The after hook doesn't check scope directly, but if we simulate
-  // a phase that requires scope validation, it would be blocked.
-  // For now, verify that tampered artifacts block advancement.
-  await taskExecuteAfterHook(task({ phase: "explore", artifacts: [artifact] }), "success")
-
-  // Tamper artifact and try to proceed
-  tamperArtifact("explore.md", "explore v1 - TAMPERED")
+  // Try to complete propose with a diff that touches files outside allowed scope
+  await taskExecuteBeforeHook(task({ phase: "propose" }), { success: true })
   await expect(
-    taskExecuteBeforeHook(task({ phase: "propose" }), { success: true })
+    taskExecuteAfterHook(task({
+      phase: "propose",
+      artifacts: [makeArtifact("proposal", "proposal.md", "v1")],
+      gitDiff: EVIL_DIFF,
+      allowedFiles: ["openspec/change-request.md"],
+    }), "success")
   ).rejects.toBeInstanceOf(KernelBlockedError)
 })
 
