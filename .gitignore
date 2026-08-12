@@ -61,3 +61,8 @@ Thumbs.db
 *.lock
 *.bak
 opencode.json.bak
+
+### Prompt build artifacts ###
+prompts/generated/
+.zip-build/
+build-prompts-p0.zip

@@ -61,7 +61,7 @@ function extractSharedReferences(text: string): Array<{ path: string; context: s
 }
 
 function extractAgentReferences(text: string): Array<{ agent: string; context: string }> {
-  const regex = /(?<![A-Za-z0-9_\/-])agent\.([a-z][a-z0-9_-]*[a-z0-9])/g
+  const regex = /agent\.([a-z][a-z0-9_-]*[a-z0-9])(?![a-z0-9_.-])/g
   const refs: Array<{ agent: string; context: string }> = []
   let match
   while ((match = regex.exec(text)) !== null) {
@@ -227,6 +227,10 @@ function checkAgentReferences(): void {
     if (seen.has(ref.agent)) continue
     seen.add(ref.agent)
 
+    // Skip generated bundles and config references
+    if (ref.context.includes("prompts/generated/")) continue
+    if (ref.agent === "md") continue
+
     // Skip if this ref is a prefix of another ref that exists
     const isPrefix = agents.some(a => a !== ref.agent && a.startsWith(ref.agent + "-"))
     if (isPrefix) {
@@ -371,6 +375,51 @@ function checkScripts(): void {
   }
 }
 
+function checkAgentBundleContract(): void {
+  const manifestPath = resolve(ROOT, "prompts/generated/prompt-manifest.json")
+  if (!existsSync(manifestPath)) {
+    warn("prompt-manifest.json not found; skipping agent-bundle contract check")
+    return
+  }
+
+  const opencode = JSON.parse(readFileSync(OPENCODE_JSON, "utf-8"))
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"))
+
+  const phaseAgents = new Set<string>()
+  const bundlePhases = new Set<string>()
+
+  for (const [name, config] of Object.entries(opencode.agent ?? {})) {
+    const prompt = (config as { prompt?: string }).prompt
+    if (typeof prompt === "string" && prompt.includes("prompts/generated/phases/")) {
+      const match = prompt.match(/prompts\/generated\/phases\/([^/]+)\.md/)
+      if (match) {
+        phaseAgents.add(match[1])
+      }
+    }
+  }
+
+  for (const relPath of Object.keys(manifest.files ?? {})) {
+    const match = relPath.match(/^prompts\/generated\/phases\/([^/]+)\.md$/)
+    if (match) {
+      bundlePhases.add(match[1])
+    }
+  }
+
+  const missingAgents = [...bundlePhases].filter(p => !phaseAgents.has(p))
+  const missingBundles = [...phaseAgents].filter(p => !bundlePhases.has(p))
+
+  if (missingAgents.length === 0 && missingBundles.length === 0) {
+    ok(`Agent-bundle contract valid (${phaseAgents.size} phases)`)
+  } else {
+    if (missingAgents.length > 0) {
+      fail(`Phases without agent in opencode.json: ${missingAgents.join(", ")}`)
+    }
+    if (missingBundles.length > 0) {
+      fail(`Agents without bundle in prompt-manifest.json: ${missingBundles.join(", ")}`)
+    }
+  }
+}
+
 function main(): void {
   console.log("\n=== Tony-AI Configuration Validator ===\n")
 
@@ -386,6 +435,7 @@ function main(): void {
   checkPromptSourceTokens()
   checkSharedReferences()
   checkAgentReferences()
+  checkAgentBundleContract()
 
   console.log("\n=== Summary ===")
   if (errors === 0) {

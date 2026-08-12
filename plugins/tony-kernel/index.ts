@@ -246,27 +246,55 @@ function kernelErrorMessage(context: string, error: unknown): string {
   return `[Tony Kernel] ${context} failed: ${reason}`
 }
 
-const PHASE_BY_SUBAGENT: Record<string, string> = {
-  "sdd-explore": "explore",
-  "sdd-propose": "propose",
-  "sdd-spec": "spec",
-  "sdd-design": "design",
-  "sdd-tasks": "tasks",
-  "sdd-apply": "apply",
-  "sdd-verify": "verify",
-  "sdd-archive": "archive",
+const FSM_PHASES = new Set([
+  "sdd-explore",
+  "sdd-propose",
+  "sdd-spec",
+  "sdd-design",
+  "sdd-tasks",
+  "sdd-apply",
+  "sdd-verify",
+  "sdd-archive",
+])
+
+const NON_FSM_PREFIXES = new Set([
+  "review-",
+  "jd-",
+  "sdd-init",
+  "sdd-onboard",
+])
+
+const KNOWN_NON_FSM = new Set([
+  "explore",
+  "general",
+])
+
+export function isKernelPhase(subAgent: string): boolean {
+  return FSM_PHASES.has(subAgent)
 }
 
-export function derivePhase(args: Record<string, unknown>): string {
+export function isNonFsmAgent(subAgent: string): boolean {
+  if (KNOWN_NON_FSM.has(subAgent)) return true
+  for (const prefix of NON_FSM_PREFIXES) {
+    if (subAgent.startsWith(prefix)) return true
+  }
+  return false
+}
+
+export function derivePhase(args: Record<string, unknown>): string | null {
   if (typeof args.phase === "string" && args.phase.length > 0) {
     return args.phase
   }
 
   if (typeof args.subagent_type === "string") {
-    const phase = PHASE_BY_SUBAGENT[args.subagent_type]
+    const subAgent = args.subagent_type
 
-    if (phase) {
-      return phase
+    if (isKernelPhase(subAgent)) {
+      return subAgent
+    }
+
+    if (isNonFsmAgent(subAgent)) {
+      return null
     }
   }
 
@@ -291,6 +319,10 @@ export async function taskExecuteBeforeHook(
 
   const args = input.arguments as Record<string, unknown>
   const requestedPhase = derivePhase(args)
+
+  if (requestedPhase === null) {
+    return
+  }
 
   try {
     const client = await getKernelClient()
@@ -331,6 +363,10 @@ export async function taskExecuteAfterHook(
 
   const args = input.arguments as Record<string, unknown>
   const phase = derivePhase(args)
+
+  if (phase === null) {
+    return
+  }
 
   try {
     const outputText = typeof output === "string" ? output : JSON.stringify(output)

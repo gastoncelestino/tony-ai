@@ -1,5 +1,59 @@
 {
   "agent": {
+    "sdd-apply": {
+      "prompt": "{file:./prompts/generated/phases/sdd-apply.md}"
+    },
+    "sdd-verify": {
+      "prompt": "{file:./prompts/generated/phases/sdd-verify.md}"
+    },
+    "sdd-spec": {
+      "prompt": "{file:./prompts/generated/phases/sdd-spec.md}"
+    },
+    "sdd-design": {
+      "prompt": "{file:./prompts/generated/phases/sdd-design.md}"
+    },
+    "sdd-tasks": {
+      "prompt": "{file:./prompts/generated/phases/sdd-tasks.md}"
+    },
+    "sdd-archive": {
+      "prompt": "{file:./prompts/generated/phases/sdd-archive.md}"
+    },
+    "sdd-explore": {
+      "prompt": "{file:./prompts/generated/phases/sdd-explore.md}"
+    },
+    "sdd-propose": {
+      "prompt": "{file:./prompts/generated/phases/sdd-propose.md}"
+    },
+    "sdd-init": {
+      "prompt": "{file:./prompts/generated/phases/sdd-init.md}"
+    },
+    "sdd-onboard": {
+      "prompt": "{file:./prompts/generated/phases/sdd-onboard.md}"
+    },
+    "review-readability": {
+      "prompt": "{file:./prompts/generated/phases/review-readability.md}"
+    },
+    "review-reliability": {
+      "prompt": "{file:./prompts/generated/phases/review-reliability.md}"
+    },
+    "review-resilience": {
+      "prompt": "{file:./prompts/generated/phases/review-resilience.md}"
+    },
+    "review-risk": {
+      "prompt": "{file:./prompts/generated/phases/review-risk.md}"
+    },
+    "review-refuter": {
+      "prompt": "{file:./prompts/generated/phases/review-refuter.md}"
+    },
+    "jd-fix-agent": {
+      "prompt": "{file:./prompts/generated/phases/jd-fix-agent.md}"
+    },
+    "jd-judge-a": {
+      "prompt": "{file:./prompts/generated/phases/jd-judge-a.md}"
+    },
+    "jd-judge-b": {
+      "prompt": "{file:./prompts/generated/phases/jd-judge-b.md}"
+    },
     "tony-orchestrator": {
       "description": "Tony AI SDD Orchestrator - coordinates sub-agents, never does work inline",
       "mode": "primary",
