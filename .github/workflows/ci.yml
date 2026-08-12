@@ -32,28 +32,32 @@ jobs:
 
       - name: Run Python tests
         run: |
-          cd local-memory && python3 test_server.py
-          cd ../code-index && python3 test_core.py
-          cd ../judgment-memory && python3 test_ledger.py
+          python3 tests/test_local_memory_server.py
+          python3 tests/test_code_index_core.py
+          python3 tests/test_judgment_memory_ledger.py
         shell: bash
 
       - name: Run Kernel tests
         run: |
-          python3 -m kernel.test_state_machine
-          python3 -m kernel.test_kernel_integration
-          python3 -m kernel.test_cli
-          python3 -m kernel.test_hardening
-          python3 -m kernel.test_enforcement
+          python3 tests/test_kernel_state_machine.py
+          python3 tests/test_kernel_integration.py
+          python3 tests/test_kernel_cli.py
+          python3 tests/test_kernel_hardening.py
+          python3 tests/test_kernel_enforcement.py
+          python3 tests/test_sdd_flow_e2e.py
+          bun test ./tests/test_tony_kernel_hooks.ts
+          bun test ./tests/test_tony_kernel_integration.ts
+          bun test ./tests/test_tony_kernel_e2e.ts
         shell: bash
 
       - name: Run TypeScript tests
         run: |
-          cd judgment-memory && bun test ./test_hooks.ts
+          bun test ./tests/test_judgment_memory_hooks.ts
         shell: bash
 
       - name: Validate configuration
         run: |
-          bun run scripts/validate-config.ts
+          bun run tools/validate-config.ts
         shell: bash
 
   docker-build:

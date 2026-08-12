@@ -15,9 +15,14 @@ ArtifactGate, TaskLedger) and the real flow:
 from __future__ import annotations
 
 import hashlib
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 
 from kernel.artifact_store import disk_artifact_store
 from kernel.artifact_gate import ArtifactGate

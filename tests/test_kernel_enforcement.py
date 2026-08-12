@@ -24,10 +24,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
 from kernel.artifact_store import disk_artifact_store, disk_artifact_hasher
 from kernel.orchestrator_integration import create_kernel_orchestrator, OrchestrationDecision
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def sha256_of(text: str) -> str:
