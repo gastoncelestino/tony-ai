@@ -78,18 +78,43 @@ El plugin también expone `createJudgmentMemory(ctx, overrides)` para pruebas qu
 
 ## Bundles materializados de prompts
 
-Los includes internos de `prompts/agents/tony-orchestrator.md` usan la sintaxis propia `{{include:...}}` y se expanden antes de que OpenCode cargue la configuración. OpenCode recibe solamente `prompts/generated/tony-orchestrator.md`; los agentes de fase reciben `prompts/generated/phases/<phase>.md`.
+La documentación técnica completa está en `ARCHITECTURE.md`. Acá se resumen los puntos relevantes para testing:
 
-El manifiesto `prompts/agents/includes/phase-manifest.json` es la fuente única de composición por fase. Los prompts inline de review y Judgment Day están externalizados en `prompts/agents/phase-prompts/` para evitar duplicación dentro de `opencode.json`.
+- `phase-manifest.json` es la fuente única de composición por fase.
+- `tools/prompt-bundler.ts` expande includes y skills en build-time; `tools/build-prompts.ts` es la CLI.
+- Los bundles se escriben en `prompts/generated/phases/<phase>.md` y el orquestador en `prompts/generated/tony-orchestrator.md`.
+- `prompt-manifest.json` y `prompt-snapshot.json` registran SHA-256 y tamaño para detectar drift.
+
+### Checks recomendados
 
 ```bash
 make build-prompts       # genera el bundle raíz y los 18 bundles de fase
 make check-prompts       # falla si falta un bundle, hay drift o quedan tokens sin resolver
 bun test tests/prompt_bundler.test.ts
+bun run tools/validate-config.ts
 ```
 
-El resolver resuelve rutas relativas al archivo que contiene el include, registra hashes SHA-256, deduplica dependencias, rechaza ciclos, path traversal, nombres dinámicos y profundidad excesiva, y produce salida byte-identical para el mismo árbol de fuentes. `make test` incluye `make check-prompts`, por lo que modificar un prompt sin regenerar los bundles bloquea CI.
+`make test` incluye `make check-prompts`, por lo que modificar un include o skill sin regenerar los bundles bloquea la suite local y CI. El pre-commit hook ejecuta `make check-prompts` antes de cada commit.
 
+### Errores comunes
+
+- `{file:...}` pendiente en `prompts/agents/tony-orchestrator.md`, `dynamic-launcher.md` o `phase-launcher.md`: migrar a `{{include:...}}` o marcar como documentación plana.
+- Agentes en `opencode.json` sin bundle en `prompt-manifest.json`: ejecutar `make build-prompts` o `make generate-agents`.
+- Drift después de editar `skills/_shared/*.md`: ejecutar `make build-prompts` y verificar con `make check-prompts`.
+
+### CI
+
+En CI el orden recomendado es:
+
+```bash
+make check-prompts
+make test-all
+make coverage
+```
+
+`check-prompts` es barato y detecta desvíos antes de correr la suite completa. Los reportes deben publicar `prompt-manifest.json` y `prompt-snapshot.json` como artifacts.
+
+## Smoke tests externos
 ## Smoke tests externos
 
 Los tests que requieren servicios reales quedan separados de la suite local:
