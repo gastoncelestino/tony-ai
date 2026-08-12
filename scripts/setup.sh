@@ -141,11 +141,20 @@ else
   bad "Qdrant no responde en ${QDRANT_URL} (docker run -p 6333:6333 qdrant/qdrant)"
 fi
 
-# 7. tree-sitter (opcional, solo si TONY_INDEX_CHUNKER=tree-sitter)
+# 7. Python dev/test dependencies
+hdr "Python dev/test dependencies"
+printf "  . pip install -r requirements-dev.txt ...\n"
+if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --quiet --break-system-packages 2>/dev/null; then
+  ok "pytest $(python3 -c 'import pytest; print(pytest.__version__)' 2>/dev/null || echo 'instalado')"
+else
+  bad "pip install -r requirements-dev.txt fallo"
+fi
+
+# 8. tree-sitter (opcional, solo si TONY_INDEX_CHUNKER=tree-sitter)
 hdr "tree-sitter (opcional)"
 if [[ "${TONY_INDEX_CHUNKER:-regex}" == "tree-sitter" ]]; then
   printf "  . pip install -r requirements-optional.txt ...\n"
-  if python3 -m pip install -r "${REPO_ROOT}/requirements-optional.txt" --quiet 2>/dev/null; then
+  if python3 -m pip install -r "${REPO_ROOT}/requirements-optional.txt" --quiet --break-system-packages 2>/dev/null; then
     ok "tree-sitter instalado"
   else
     bad "pip install tree-sitter fallo"
@@ -154,7 +163,7 @@ else
   printf "  \033[33minfo\033[0m  tree-sitter no requerido (TONY_INDEX_CHUNKER=regex)\n"
 fi
 
-# 8. Regenerar opencode.json idempotentemente
+# 9. Regenerar opencode.json idempotentemente
 hdr "opencode.json (TONY_REPO_ROOT)"
 OPENCODE_JSON="${REPO_ROOT}/opencode.json"
 if [[ -f "${OPENCODE_JSON}" ]]; then
