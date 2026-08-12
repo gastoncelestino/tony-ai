@@ -16,6 +16,9 @@ build-prompts: check-test-deps
 check-prompts: check-test-deps
 	@bun run tools/build-prompts.ts --check
 
+# Target explícito que ejecuta TODO, incluyendo el Kernel de forma focalizada.
+test-all: test test-kernel
+
 check-test-deps:
 	@python3 -c 'import pytest; print("pytest", pytest.__version__)' || \
 		(echo "ERROR: falta pytest. Ejecutá: python3 -m pip install -r requirements-dev.txt"; exit 1)
