@@ -214,6 +214,28 @@ Aprende de: Errores de review, mejores prácticas validadas
 
 Aprende de: Crecimiento del codebase, patrones emergentes
 
+## Hooks de OpenCode (tonymem.ts)
+```bash
+// Hook que captura automáticamente lo que haces
+"chat.message" → mem_save_prompt() // guarda prompts
+"task.execute.after" → guarda discoveries importantes
+```
+
+## Cómo funciona el aprendizaje en práctica:
+```bash
+Usuario: "Implementa login con refresh token"
+```
+
+1. `/sdd-new` → delega `sdd-explore` + `sdd-propose` a sub-agentes
+2. `mem_search()` → encuentra decisión previa sobre JWT
+3. `code_search()` → encuentra cómo funciona auth actual
+4. `jd_recall()` → recuerda lección sobre token expiration
+5. `/sdd-tasks` → genera plan de implementación
+6. `/sdd-apply` → implementa las tareas
+7. `/sdd-verify` → valida contra specs
+8. `/sdd-archive` → cierra el cambio, guarda `archive-report`
+9. `juzgar esto` → dos jueces review + lesson guardada en `jd_record`
+
 ## Code Review automático
 `GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
 El repo ya incluye `.gga` (config) y el agente `gga-reviewer` en `opencode.json`. Solo falta instalar el hook:
