@@ -1,48 +1,72 @@
 # Makefile para Tony-AI
-# Wrappers de conveniencia sobre docker/ + tests locales y smoke tests externos.
+# Wrappers de conveniencia sobre tests locales y smoke tests externos.
 #
 # La suite local usa descubrimiento automático: pytest descubre todos los .py y
 # Bun descubre todos los *.test.ts. Los smoke tests externos quedan separados.
 
-.PHONY: test test-python test-ts test-kernel coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
+.PHONY: test check-test-deps check-test-discovery check-coverage-deps test-python test-ts test-kernel coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
-test: test-python test-ts validate-config
+# Este target es la suite completa. test-kernel es un target focalizado y no se
+# invoca aquí para evitar ejecutar dos veces los mismos tests del Kernel.
+test: check-test-deps check-test-discovery test-python test-ts validate-config
 
-# Descubre todos los tests Python, incluidos los nuevos tests de persistencia,
+check-test-deps:
+	@python3 -c 'import pytest; print("pytest", pytest.__version__)' || \
+		(echo "ERROR: falta pytest. Ejecutá: python3 -m pip install -r requirements-dev.txt"; exit 1)
+	@command -v bun >/dev/null 2>&1 || \
+		(echo "ERROR: falta Bun. Instalá Bun antes de ejecutar los tests TypeScript."; exit 1)
+	@echo "✓ Test dependencies available"
+
+# Evita que un archivo nuevo quede fuera de pytest o Bun por una convención de
+# nombres incorrecta. La ejecución de test-ts valida además el descubrimiento real.
+check-test-discovery:
+	@set -eu; \
+	invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' -print); \
+	invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' -print); \
+	if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; \
+	if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; \
+	test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; \
+	echo "✓ Test naming/discovery conventions valid"
+
+# Descubre todos los tests Python, incluidos los tests de persistencia,
 # concurrencia y contrato MCP.
-test-python:
+test-python: check-test-deps check-test-discovery
 	@echo "▶ Running all Python tests..."
 	@python3 -m pytest tests -q
 	@echo "✓ Python tests passed"
 
-# Target explícito para depurar únicamente el Kernel, sin duplicar esta etapa
-# dentro de `make test`.
-test-kernel:
-	@echo "▶ Running Kernel tests..."
+# Target explícito para depurar únicamente el Kernel, sin duplicarlo en `make test`.
+test-kernel: check-test-deps check-test-discovery
+	@echo "▶ Running focused Kernel tests..."
 	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v
 	@bun test tests/tony_kernel_hooks.test.ts
 	@bun test tests/tony_kernel_integration.test.ts
 	@bun test tests/tony_kernel_e2e.test.ts
-	@echo "✓ Kernel tests passed"
+	@echo "✓ Focused Kernel tests passed"
 
 # Bun descubre los archivos *.test.ts por convención.
-test-ts:
+test-ts: check-test-deps check-test-discovery
 	@echo "▶ Running all TypeScript tests..."
 	@bun test tests
 	@echo "✓ TypeScript tests passed"
 
+check-coverage-deps: check-test-deps
+	@python3 -c 'import coverage; print("coverage", coverage.__version__)' || \
+		(echo "ERROR: falta coverage. Ejecutá: python3 -m pip install -r requirements-dev.txt"; exit 1)
+	@echo "✓ Coverage dependencies available"
+
 # Coverage local y artefactos XML/LCOV básicos. El umbral inicial es deliberadamente
 # moderado: sirve para detectar módulos no ejercitados sin bloquear mejoras futuras.
-coverage: coverage-python coverage-ts
+coverage: check-coverage-deps coverage-python coverage-ts
 
-coverage-python:
+coverage-python: check-coverage-deps
 	@echo "▶ Running Python coverage..."
 	@coverage run --source=kernel,code-index,judgment-memory,local-memory -m pytest tests -q
 	@coverage report -m --fail-under=40
 	@coverage xml -o coverage.xml
 	@echo "✓ Python coverage threshold passed"
 
-coverage-ts:
+coverage-ts: check-test-deps check-test-discovery
 	@echo "▶ Running TypeScript coverage..."
 	@rm -rf coverage-bun
 	@bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests

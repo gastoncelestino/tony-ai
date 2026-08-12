@@ -9,7 +9,15 @@ python3 -m pip install -r requirements-dev.txt
 make test
 ```
 
-`make test` descubre todos los archivos Python bajo `tests/`, ejecuta todos los archivos TypeScript con sufijo `.test.ts` y valida las referencias de `opencode.json`, prompts, skills y servidores MCP.
+`make test` comienza con un preflight que verifica que `pytest` y Bun estén instalados y que todos los archivos de test cumplan las convenciones de descubrimiento. Luego descubre todos los archivos Python bajo `tests/`, ejecuta todos los archivos TypeScript con sufijo `.test.ts` y valida las referencias de `opencode.json`, prompts, skills y servidores MCP.
+
+Si falta una dependencia, el comando muestra cómo instalarla en lugar de fallar con un `ModuleNotFoundError` poco descriptivo:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+make check-test-deps
+make check-test-discovery
+```
 
 También se pueden ejecutar las suites por separado:
 
@@ -19,7 +27,7 @@ make test-ts
 make test-kernel
 ```
 
-La nomenclatura `.test.ts` es intencional. Permite que `bun test tests` descubra la suite automáticamente y evita que el Makefile y CI mantengan listas manuales divergentes.
+La nomenclatura `.test.ts` es intencional. Permite que `bun test tests` descubra la suite automáticamente y evita que el Makefile y CI mantengan listas manuales divergentes. `make test-kernel` es un target focalizado para depurar solo el Kernel; no se invoca desde `make test` porque sus casos ya están incluidos en el descubrimiento global y duplicarlos haría más lenta la suite.
 
 ## Categorías
 
