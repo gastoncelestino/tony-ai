@@ -224,14 +224,15 @@ python3 server.py
 |--------------|--------------|--------------|
 | TonyMem server 					| `local-memory/server.py` (manual JSON-RPC) 	| Sesión completa: save, search, context, session-summary, prompt-capture, lifecycle (active/proven/needs_review + mark_stale/mark_reviewed/mark_proven + ranking) 		|
 | TonyMem plugin 					| `plugins/tonymem.ts` (tipado `tsc`) 			| Tipado contra stubs de `bun:sqlite`/`@opencode-ai/plugin` 					|
-| Code Indexer 						| `code-index/test_core.py` 					| Chunking + mock HTTP end-to-end, 4/4 escenarios 								|
+| Code Indexer 						| `tests/test_code_index_core.py` 				| Chunking + mock HTTP end-to-end, 4/4 escenarios 								|
 | DCP config 						| validado contra `dcp.schema.json` 			| Schema completo, `additionalProperties: false` 								|
-| Judgment Day Memory Bridge 		| `judgment-memory/test_ledger.py` 				| Mock Ollama+Qdrant, 7/7 escenarios incl. camino feliz 						|
-| Judgment Day Memory Bridge 		| `judgment-memory/test_hooks.ts` 				| Hooks de plugin (`chat.message`, `tool.execute.after`, `system.transform`) 	|
+| Judgment Day Memory Bridge 		| `tests/test_judgment_memory_ledger.py` 		| Mock Ollama+Qdrant, 7/7 escenarios incl. camino feliz 						|
+| Judgment Day Memory Bridge 		| `tests/test_judgment_memory_hooks.ts` 		| Hooks de plugin (`chat.message`, `tool.execute.after`, `system.transform`) 	|
 | Judgment Day Memory Bridge 		| `judgment-memory/scripts/verify-qdrant.ts` 	| Smoke test del cliente TS contra servicios reales 	|
-| Tony Kernel 						| `kernel/test_state_machine.py` 				| FSM phases, phase gate, artifact validation, scope guard, checksum drift 	|
-| Tony Kernel 						| `kernel/test_kernel_integration.py` 			| Integration tests: can_start_phase, record_phase_completion, evidence rejection 	|
-| Tony Kernel 						| `plugins/tony-kernel/test_e2e.ts` 				| End-to-end adversarial: phase skip, fake evidence, tampering, scope violation, unknown agent, failed task 	|
+| Tony Kernel 						| `tests/test_kernel_state_machine.py` 			| FSM phases, phase gate, artifact validation, scope guard, checksum drift 	|
+| Tony Kernel 						| `tests/test_kernel_integration.py` 			| Integration tests: can_start_phase, record_phase_completion, evidence rejection 	|
+| Tony Kernel 						| `tests/test_tony_kernel_e2e.ts` 				| End-to-end adversarial: phase skip, fake evidence, tampering, scope violation, unknown agent, failed task 	|
+| Tony Kernel 						| `tests/test_sdd_flow_e2e.py` 					| Flujo aislado explore→archive contra el kernel real, 28 checks adversariales 	|
 
 
 

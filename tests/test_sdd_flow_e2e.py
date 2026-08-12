@@ -5,8 +5,9 @@ kernel REAL, vía `python3 -m kernel.cli` — el mismo subprocess que invoca
 plugins/tony-kernel/index.ts. No usa mocks en ningún punto.
 
 Uso:
-    python3 scripts/verify_sdd_flow.py      # desde la raíz del repo
-    make verify-sdd-flow                    # atajo (ver Makefile)
+    pytest tests/test_sdd_flow_e2e.py        # vía pytest (recomendado)
+    python3 tests/test_sdd_flow_e2e.py       # standalone, con --keep-tmp disponible
+    make verify-sdd-flow                     # atajo (ver Makefile)
 
 Aislamiento: corre con TONY_KERNEL_STATE_DIR y TONY_REPO_ROOT apuntando a
 un directorio temporal descartable (tempfile.mkdtemp()), así que NO toca
@@ -287,6 +288,12 @@ class FlowRunner:
             return 1
         print(f"RESULTADO: {self.checks_run}/{self.checks_run} casos OK.")
         return 0
+
+
+def test_sdd_flow_e2e() -> None:
+    """pytest entry point: runs the full isolated adversarial flow (28 checks)."""
+    runner = FlowRunner(REPO_ROOT)
+    assert runner.run_all() == 0
 
 
 def main() -> int:

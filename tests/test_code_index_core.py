@@ -5,7 +5,7 @@ doesn't depend on either service being up. Covers: full index, no-op
 reindex, incremental update on file change, deletion cleanup, search, and
 status.
 
-Run with: python3 test_core.py
+Run with: pytest tests/test_code_index_core.py  (or: python3 tests/test_code_index_core.py)
 """
 
 import hashlib
@@ -18,7 +18,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-sys.path.insert(0, os.path.dirname(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO_ROOT, "code-index"))
 import core
 
 QDRANT_STATE = {"collections": {}}
@@ -111,7 +112,7 @@ class MockHandler(BaseHTTPRequestHandler):
             self._send(404, {"status": {"error": "not found"}})
 
 
-def run():
+def test_code_index_core():
     server = HTTPServer(("127.0.0.1", 0), MockHandler)
     port = server.server_port
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -207,4 +208,4 @@ def standalone():
 
 
 if __name__ == "__main__":
-    run()
+    test_code_index_core()

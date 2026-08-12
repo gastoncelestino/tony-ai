@@ -9,7 +9,7 @@ upsert-not-duplicate on re-recording the same execution_id, stats
 aggregation across multiple records, and graceful degradation when
 Qdrant/Ollama are unreachable (points at a closed port instead of a mock).
 
-Run with: python3 test_ledger.py
+Run with: pytest tests/test_judgment_memory_ledger.py  (or: python3 tests/test_judgment_memory_ledger.py)
 """
 
 import hashlib
@@ -21,7 +21,8 @@ import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-sys.path.insert(0, os.path.dirname(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO_ROOT, "judgment-memory"))
 import ledger
 
 
@@ -125,7 +126,7 @@ RECORD_B = {
 }
 
 
-def run():
+def test_judgment_memory_ledger():
     server = HTTPServer(("127.0.0.1", 0), MockHandler)
     port = server.server_port
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -219,4 +220,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    test_judgment_memory_ledger()

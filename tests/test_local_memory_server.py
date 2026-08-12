@@ -16,7 +16,7 @@ Highlights:
     prompt-capture kept out of default results.
   - MCP framing: initialize, tools/list, unknown tool, error propagation.
 
-Run with: python3 test_server.py
+Run with: pytest tests/test_local_memory_server.py  (or: python3 tests/test_local_memory_server.py)
 """
 
 import os
@@ -30,7 +30,8 @@ import threading
 _TMP = tempfile.mkdtemp()
 os.environ["LOCAL_MEMORY_DB"] = os.path.join(_TMP, "memory-test.db")
 
-sys.path.insert(0, os.path.dirname(__file__))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO_ROOT, "local-memory"))
 import server  # noqa: E402
 
 
@@ -39,7 +40,7 @@ def count_rows(conn, where="", params=()):
     return cur.fetchone()["n"]
 
 
-def run():
+def test_local_memory_server():
     server.init_db()
     try:
         # ── 1. mem_save: create + upsert with topic_key ──────────────────
@@ -282,4 +283,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    test_local_memory_server()

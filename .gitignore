@@ -1,23 +1,60 @@
-# Python
+### Python ###
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
 *.egg-info/
+.eggs/
+.installed.cfg
+*.egg
 .venv/
 venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Tony-AI runtime artifacts (DBs / indexados locales)
-local-memory/.tonymem/
+### Node / Bun ###
+node_modules/
+npm-debug.log*
+bun-debug.log*
+.npm/
+
+### Tony-AI runtime state (generado en cada corrida, no se versiona) ###
+.tony-kernel/
 local-memory/memory.db
-code-index/.codeindex/
+local-memory/.tonymem/
 code-index/manifest.db
-judgment-memory/.tonymem/
+code-index/.codeindex/
 judgment-memory/judgment-memory.db
+judgment-memory/.tonymem/
+.test-e2e-tmp/
 
-# Env
+### Env / secrets ###
 .env
 .env.local
+.env.*.local
+docker/.env
 
-# OS
+### Docker ###
+docker/*.override.yml
+
+### Editores / SO ###
 .DS_Store
-opencode.json.bak
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
+### Varios ###
+*.log
+*.bak
+opencode.json.bak

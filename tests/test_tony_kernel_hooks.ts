@@ -24,7 +24,7 @@ import {
   KernelBlockedError,
   KernelUnavailableError,
   type KernelClientLike,
-} from "./index"
+} from "../plugins/tony-kernel/index"
 
 // ─── Fake Kernel ─────────────────────────────────────────────────────────
 

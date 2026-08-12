@@ -1,33 +1,30 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre docker/ + los tests
+#
+# Todos los tests viven en tests/. Los de Python se corren con pytest
+# (unifica los que ya eran unittest.TestCase con los que eran asserts
+# sueltos, sin tocarles la lógica). Los de TypeScript se corren con bun.
 
-.PHONY: test test-python test-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
+.PHONY: test test-python test-ts test-kernel verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
 test: test-python test-ts test-kernel
 
 test-python:
 	@echo "▶ Running Python tests..."
-	@cd local-memory && python3 test_server.py
-	@cd code-index && python3 test_core.py
-	@cd judgment-memory && python3 test_ledger.py
+	@python3 -m pytest tests/test_local_memory_server.py tests/test_code_index_core.py tests/test_judgment_memory_ledger.py -v
 	@echo "✓ Python tests passed"
 
 test-kernel:
 	@echo "▶ Running Kernel tests..."
-	@python3 -m kernel.test_state_machine
-	@python3 -m kernel.test_kernel_integration
-	@python3 -m kernel.test_cli
-	@python3 -m kernel.test_hardening
-	@python3 -m kernel.test_enforcement
-	@bun test ./plugins/tony-kernel/test_hooks.ts
-	@bun test ./plugins/tony-kernel/test_integration.ts
-	@bun test ./plugins/tony-kernel/test_e2e.ts
-	@python3 scripts/verify_sdd_flow.py
+	@python3 -m pytest tests/test_kernel_state_machine.py tests/test_kernel_integration.py tests/test_kernel_cli.py tests/test_kernel_hardening.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py -v
+	@bun test ./tests/test_tony_kernel_hooks.ts
+	@bun test ./tests/test_tony_kernel_integration.ts
+	@bun test ./tests/test_tony_kernel_e2e.ts
 	@echo "✓ Kernel tests passed"
 
 test-ts:
 	@echo "▶ Running TypeScript tests..."
-	@cd judgment-memory && bun test ./test_hooks.ts
+	@bun test ./tests/test_judgment_memory_hooks.ts
 	@echo "✓ TypeScript tests passed"
 
 verify-qdrant:
@@ -37,7 +34,7 @@ verify-qdrant:
 
 verify-sdd-flow:
 	@echo "▶ Running full SDD flow (explore→archive) adversarial verification..."
-	@python3 scripts/verify_sdd_flow.py
+	@python3 tests/test_sdd_flow_e2e.py
 	@echo "✓ SDD flow verification passed"
 
 bootstrap:
@@ -59,5 +56,5 @@ clean:
 
 validate-config:
 	@echo "▶ Validating configuration..."
-	@bun run scripts/validate-config.ts
+	@bun run tools/validate-config.ts
 	@echo "✓ Configuration valid"

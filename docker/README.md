@@ -77,7 +77,7 @@ La primera vez descarga `nomic-embed-text` y `bge-m3` (unos cientos de MB total)
 Mismos dos scripts del repo, apuntando a estos containers — como los puertos son los defaults, no hace falta cambiar variables de entorno:
 
 ```bash
-python3 ../judgment-memory/test_ledger.py        # mock-based, no necesita
+python3 ../tests/test_judgment_memory_ledger.py   # mock-based, no necesita
                                                     # estos containers,
                                                     # pero es bueno correrlo
                                                     # igual

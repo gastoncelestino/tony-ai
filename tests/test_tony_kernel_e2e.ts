@@ -24,8 +24,8 @@ import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { mkdirSync, rmSync, existsSync } from "fs"
 
-const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
-const REPO_ROOT = join(PLUGIN_DIR, "..", "..")
+const THIS_DIR = dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = join(THIS_DIR, "..")
 
 import {
   taskExecuteBeforeHook,
@@ -34,7 +34,7 @@ import {
   __setKernelClientForTests,
   KernelBlockedError,
   KernelUnavailableError,
-} from "./index"
+} from "../plugins/tony-kernel/index"
 
 // ─── Test scratch area ────────────────────────────────────────────────────
 

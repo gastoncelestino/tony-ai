@@ -1,0 +1,4 @@
+# Tony-AI Python dev/test dependencies
+# Instalá esto para correr la suite de tests/ (pip install -r requirements-dev.txt).
+
+pytest>=8.0
