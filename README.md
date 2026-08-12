@@ -250,6 +250,20 @@ gga run --no-cache   # ignorar cache y revisar todo
 
 Después, cada `git commit` dispara automáticamente la revisión de los archivos staged. Para revisar sin commitear:
 
+## Prompt Bundles
+
+Los prompts de orquestador y sub-agentes se materializan en build-time desde `phase-manifest.json`. Esto evita que el modelo tenga que resolver includes en runtime y garantiza que el bundle que recibe cada agente es determinista.
+
+```bash
+make build-prompts   # regenera bundles en prompts/generated/
+make check-prompts   # valida que no haya drift (CI gate)
+make generate-agents # sincroniza opencode.json con phase-manifest.json
+```
+
+Si modificás un include (`prompts/agents/includes/*.md`) o un skill (`skills/_shared/*.md`), tenés que correr `make build-prompts` antes de commitear. El pre-commit hook lo valida automáticamente.
+
+Los bundles generados (`prompts/generated/`) son artefactos y no se editan a mano. El único prompt editable es `prompts/agents/tony-orchestrator.md`.
+
 ## Agradecimientos
 Algunos conceptos de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.  
 

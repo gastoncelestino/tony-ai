@@ -274,6 +274,43 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 - **Prompt separation**: los prompts de orquestación y fases viven en `prompts/sdd/` como archivos `.md` referenciados desde `opencode.json`, no inline en JSON.
 - **Skill registry**: las skills se resuelven una vez por sesión desde el registry y se inyectan como rutas exactas en cada sub-agente, no se buscan ad-hoc.
 
+## Prompt Bundling System
+
+El sistema de prompts de Tony-AI usa un modelo **build-time materialization** en lugar de resolución dinámica en runtime. Esto garantiza que el orquestador y cada sub-agente reciban el prompt completo, con includes y skills ya resueltos, sin depender de que el modelo interprete tokens `{file:...}`.
+
+### Componentes
+
+| Componente | Rol |
+|------------|-----|
+| `prompts/agents/includes/phase-manifest.json` | Manifiesto fuente de verdad: declara includes y skills por fase SDD, review y Judgment Day. |
+| `scripts/build-prompts.ts` | Resolvedor determinista: expande `{file:...}`, detecta ciclos, rechaza path traversal, genera bundles materializados. |
+| `scripts/generate-opencode-agents.ts` | Sincroniza la sección `agent` de `opencode.json` desde `phase-manifest.json`. |
+| `prompts/generated/prompt-manifest.json` | Manifiesto de bundles generados: registra SHA-256 por dependencia para detectar drift. |
+| `prompts/generated/tony-orchestrator.md` | Bundle raíz del orquestador, con todos los includes base expandidos. |
+| `prompts/generated/phases/<phase>.md` | 18 bundles materializados (8 SDD core + 2 auxiliares + 5 review + 3 JD). |
+
+### Flujo de build
+
+1. **`make build-prompts`** ejecuta `scripts/build-prompts.ts --build`.
+2. El resolvedor lee `phase-manifest.json`, expande includes y skills, y concatena el prompt de fase específico (`prompts/sdd/<phase>.md`).
+3. Escribe bundles en `prompts/generated/phases/` y el bundle raíz en `prompts/generated/tony-orchestrator.md`.
+4. Genera `prompt-manifest.json` con el hash SHA-256 de cada archivo incluido.
+5. **`make check-prompts`** ejecuta `scripts/build-prompts.ts --check`: compara los hashes actuales contra el manifiesto. Si algún include cambió sin rebuild, falla.
+
+### Contrato OpenCode ↔ Kernel
+
+- `opencode.json` define 18 agentes de fase (`sdd-*`, `review-*`, `jd-*`) más `tony-orchestrator` y `gga-reviewer`.
+- Cada agente de fase apunta a `{file:./prompts/generated/phases/<phase>.md}`.
+- El Tony Kernel solo intercepta las **8 fases SDD core** (`sdd-explore` → `sdd-archive`). Los agentes de protocolo (`review-*`, `jd-*`, `sdd-init`, `sdd-onboard`) y los agentes nativos de OpenCode (`explore`, `general`) bypassean el FSM sin bloqueos.
+- Un `subagent_type` desconocido sigue siendo bloqueado por `KernelBlockedError` (fail-closed).
+
+### Invariantes
+
+- Ningún token `{file:...}` queda pendiente en los bundles materializados.
+- Un include se materializa a lo sumo una vez por bundle.
+- El mismo árbol de fuentes produce byte-identical output.
+- El bundle raíz y los 18 bundles de fase se regeneran en un solo paso y se versionan como artefactos generados.
+
 
 ## Notas
 - `AGENTS.md` define convenciones de orquestación, reglas de respuesta y patrones de uso de memoria/indexación esperados por el ecosistema de agentes circundante.

@@ -28,8 +28,9 @@ cd tony-ai
 1. Verifica dependencias (Python, Bun, OpenCode CLI, Docker)
 2. Verifica Ollama + Qdrant: si ya responden no toca nada (modo nativo); si no responden y hay Docker, los levanta con `docker compose up -d`; si no hay Docker, pide que los levantes a mano
 3. Descarga los modelos de Ollama (requiere Ollama respondiendo): qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text
-4. Configura `.env.example`
+4. Instala `requirements-dev.txt` (pytest) y configura `.env.example`
 5. Regenera `opencode.json` con rutas portables usando `TONY_REPO_ROOT`
+6. Instala el pre-commit hook de prompt bundles (`.githooks/pre-commit`)
 
 `health.sh` verifica:
 1. OpenCode config válida
@@ -175,6 +176,9 @@ make clean           # Borrar bases SQLite locales
 make docker-up       # Iniciar servicios Docker
 make docker-down     # Detener servicios Docker
 make validate-config # Validar opencode.json + prompts + skills
+make build-prompts    # Regenerar bundles de prompts
+make check-prompts    # Validar que los bundles estén actualizados
+make generate-agents  # Sincronizar agents de opencode.json con phase-manifest.json
 ```
 
 ## 5.2 Comandos OpenCode (slash commands)
@@ -195,12 +199,26 @@ make validate-config # Validar opencode.json + prompts + skills
 juzgar esto                    # Activar Judgment Day (revisión adversarial)
 ```
 
-## 5.3 Verificar el pipeline real de Qdrant/Ollama
+## 5.3 Prompt Bundles
+
+Los prompts de orquestador y sub-agentes se materializan en build-time desde `phase-manifest.json`. Esto garantiza que cada agente reciba el prompt completo con includes y skills ya resueltos, sin depender de que el modelo interprete tokens en runtime.
+
+```bash
+make build-prompts   # regenera bundles en prompts/generated/
+make check-prompts   # valida que no haya drift (CI gate)
+make generate-agents # sincroniza opencode.json con phase-manifest.json
+```
+
+Si modificás un include (`prompts/agents/includes/*.md`) o un skill (`skills/_shared/*.md`), corré `make build-prompts` antes de commitear. El pre-commit hook valida esto automáticamente.
+
+Los bundles generados (`prompts/generated/`) son artefactos y no se editan a mano. El único prompt editable es `prompts/agents/tony-orchestrator.md`.
+
+## 5.4 Verificar el pipeline real de Qdrant/Ollama
 ```bash
 opencode mcp list
 ```
 
-## 5.4 Correr el indexador de código
+## 5.5 Correr el indexador de código
 ```bash
 cd code-index
 python3 core.py index --path /ruta/al/repo --project mi-proyecto
@@ -208,12 +226,12 @@ python3 core.py search --query "manejo de reintentos HTTP" --project mi-proyecto
 python3 core.py status --path /ruta/al/repo --project mi-proyecto
 ```
 
-## 5.5 Correr tests de judgment-memory
+## 5.6 Correr tests de judgment-memory
 ```bash
 python3 -m pytest tests/test_judgment_memory_ledger.py
 ```
 
-## 5.6 Correr local-memory manualmente
+## 5.7 Correr local-memory manualmente
 ```bash
 cd local-memory
 python3 server.py
