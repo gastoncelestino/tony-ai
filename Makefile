@@ -1,7 +1,7 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre docker/ + los tests
 
-.PHONY: test test-python test-ts verify-qdrant docker-up docker-down clean bootstrap health validate-config
+.PHONY: test test-python test-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
 test: test-python test-ts test-kernel
 
@@ -19,7 +19,10 @@ test-kernel:
 	@python3 -m kernel.test_cli
 	@python3 -m kernel.test_hardening
 	@python3 -m kernel.test_enforcement
+	@bun test ./plugins/tony-kernel/test_hooks.ts
+	@bun test ./plugins/tony-kernel/test_integration.ts
 	@bun test ./plugins/tony-kernel/test_e2e.ts
+	@python3 scripts/verify_sdd_flow.py
 	@echo "✓ Kernel tests passed"
 
 test-ts:
@@ -31,6 +34,11 @@ verify-qdrant:
 	@echo "▶ Running Qdrant smoke test (requires Ollama + Qdrant running)..."
 	@cd judgment-memory && bun run scripts/verify-qdrant.ts
 	@echo "✓ Qdrant smoke test passed"
+
+verify-sdd-flow:
+	@echo "▶ Running full SDD flow (explore→archive) adversarial verification..."
+	@python3 scripts/verify_sdd_flow.py
+	@echo "✓ SDD flow verification passed"
 
 bootstrap:
 	@bash scripts/setup.sh
