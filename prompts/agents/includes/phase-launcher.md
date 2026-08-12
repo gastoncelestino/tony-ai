@@ -1,79 +1,36 @@
-# Phase Launcher — Dynamic Include Resolver
+# Phase Launcher — Materialized Prompt Bundles
 
-This skill is used by the orchestrator to build sub-agent prompts dynamically by resolving includes from the phase manifest.
+The phase manifest is the source of truth for sub-agent prompt composition. The bundler resolves it before runtime and writes one immutable prompt per phase.
 
-## Usage
+## Generated artifacts
 
-When the orchestrator needs to launch a sub-agent for phase `X`:
-
-1. Read `prompts/agents/includes/phase-manifest.json`
-2. Look up `phases["X"]` (or `review_phases["X"]` for review agents)
-3. Build the prompt by concatenating:
-   - Base includes (always included)
-   - Phase-specific includes
-   - Skills (referenced as skill files to load)
-4. Inject into the sub-agent prompt template
-
-## Prompt Template
-
-```
-{file:./includes/sub-agent-context-protocol.md}
-
-{file:./includes/{include_1}.md}
-{file:./includes/{include_2}.md}
-...
-
-## Skills to load before work
-{file:./../_shared/sdd-phase-common.md}
-{file:./../_shared/{skill_1}.md}
-...
-
-## Phase-Specific Instructions
-{file:./prompts/sdd/{phase_name}.md}
+```text
+prompts/generated/phases/<phase>.md
+prompts/generated/prompt-manifest.json
 ```
 
-## Phase Mappings
+Each phase bundle contains the base context, phase-specific includes, shared skills, and the phase prompt in deterministic order. Review bundles contain the review contract only when declared by `review_phases`.
 
-| Phase | Base Includes | Extra Includes | Skills |
-|-------|---------------|----------------|--------|
-| sdd-apply | sub-agent-context-protocol | tonymem-topic-key-format, trigger-rules, strict-tdd-forwarding, apply-progress-continuity | sdd-phase-common, openspec-convention, tonymem-convention, skill-resolver |
-| sdd-verify | sub-agent-context-protocol | trigger-rules, review-lens-selection, review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
-| sdd-spec | sub-agent-context-protocol | sdd-workflow, sdd-session-preflight, sdd-entry-routing, sdd-init-guard | sdd-phase-common, openspec-convention |
-| sdd-design | sub-agent-context-protocol | sdd-workflow, sdd-session-preflight | sdd-phase-common, openspec-convention |
-| sdd-tasks | sub-agent-context-protocol | sdd-workflow, review-workload-guard, delivery-strategy, chain-strategy | sdd-phase-common, openspec-convention, tonymem-convention, skill-resolver |
-| sdd-archive | sub-agent-context-protocol | trigger-rules, sdd-workflow | sdd-phase-common, openspec-convention, tonymem-convention |
-| sdd-explore | sub-agent-context-protocol | delegation-rules, mandatory-delegation-triggers | - |
-| sdd-propose | sub-agent-context-protocol | sdd-workflow, sdd-session-preflight | sdd-phase-common |
-| sdd-init | sub-agent-context-protocol | sdd-session-preflight, artifact-store-mode | sdd-phase-common, tonymem-convention |
-| sdd-onboard | sub-agent-context-protocol | sdd-workflow, execution-mode, artifact-store-mode, delivery-strategy | sdd-phase-common |
+## Runtime procedure
 
-## Review Phases
+When launching phase `X`:
 
-| Phase | Includes | Skills |
-|-------|----------|--------|
-| review-readability | review-lens-selection, review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
-| review-reliability | review-lens-selection, review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
-| review-resilience | review-lens-selection, review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
-| review-risk | review-lens-selection, review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
-| review-refuter | review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
+1. Confirm that `prompts/generated/phases/X.md` exists.
+2. Confirm that `prompt-manifest.json` contains its SHA-256.
+3. Pass the generated file contents as the sub-agent prompt.
+4. Include the phase name and bundle hash in the delegation evidence.
 
-## Judgment Day Phases
+The orchestrator chooses the phase; it does not resolve filenames, concatenate Markdown, or ask the model to interpret a manifest. If the bundle is missing or stale, delegation must stop and the repository build command must be run.
 
-| Phase | Includes | Skills |
-|-------|----------|--------|
-| jd-fix-agent | trigger-rules, strict-tdd-forwarding | sdd-phase-common |
-| jd-judge-a | review-lens-selection, review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
-| jd-judge-b | review-lens-selection, review-execution-contract, authority-first-terminal-procedure | sdd-phase-common, review-ledger-contract |
+## Build and verification
 
-## Usage in Orchestrator
+```bash
+bun run tools/build-prompts.ts
+bun run tools/build-prompts.ts --check
+```
 
-When the orchestrator decides to launch a sub-agent for phase `X`:
+The resolver rejects missing files, dynamic filenames, path traversal, cycles, excessive include depth, and unresolved include tokens. The generated output must not contain native config references or bundler directives.
 
-1. Read `prompts/agents/includes/phase-manifest.json`
-2. Resolve includes for phase `X`
-3. Build prompt by concatenating `{file:./includes/{include}.md}` for each include
-4. Append skills as `## Skills to load before work` + `{file:./../_shared/{skill}.md}`
-4. Append phase-specific instructions from `prompts/sdd/{phase}.md` (which now only contains phase-specific logic, not common includes)
-5. Launch sub-agent with constructed prompt
+## Phase inventory
 
-This ensures each sub-agent loads ONLY the includes it needs, reducing token overhead by ~70-80%.
+The complete SDD, review, and Judgment Day phase inventory is stored in `prompts/agents/includes/phase-manifest.json`. Do not duplicate phase mappings in this document; duplicate mappings drift and are not authoritative.

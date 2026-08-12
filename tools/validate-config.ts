@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs"
 import { resolve } from "node:path"
+import { checkGenerated, ORCHESTRATOR_BUNDLE } from "./prompt-bundler"
 
 const ROOT = resolve(process.cwd())
 const OPENCODE_JSON = resolve(ROOT, "opencode.json")
@@ -60,7 +61,7 @@ function extractSharedReferences(text: string): Array<{ path: string; context: s
 }
 
 function extractAgentReferences(text: string): Array<{ agent: string; context: string }> {
-  const regex = /agent\.([a-z][a-z0-9_-]*[a-z0-9])/g
+  const regex = /(?<![A-Za-z0-9_\/-])agent\.([a-z][a-z0-9_-]*[a-z0-9])/g
   const refs: Array<{ agent: string; context: string }> = []
   let match
   while ((match = regex.exec(text)) !== null) {
@@ -106,6 +107,52 @@ function checkFileReferences(): void {
     } else {
       fail(`{file:${file}} not found at ${fullPath}`)
     }
+  }
+}
+
+function checkGeneratedPromptBundles(): void {
+  try {
+    const drift = checkGenerated(ROOT)
+    if (drift.length > 0) {
+      for (const error of drift) fail(error)
+      return
+    }
+
+    const bundle = readFileSync(resolve(ROOT, ORCHESTRATOR_BUNDLE), "utf-8")
+    if (bundle.includes("{{include:") || /\{file:[^}]+\}/.test(bundle)) {
+      fail(`${ORCHESTRATOR_BUNDLE} contains unresolved include tokens`)
+      return
+    }
+
+    ok("Materialized prompt bundles exist, are current, and contain no unresolved tokens")
+  } catch (error) {
+    fail(`Prompt bundle validation failed — ${error}`)
+  }
+}
+
+function checkPromptSourceTokens(): void {
+  const sourceRoot = resolve(ROOT, "prompts/agents")
+  const pending: string[] = []
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const file = resolve(directory, entry.name)
+      if (entry.isDirectory()) {
+        visit(file)
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        const content = readFileSync(file, "utf-8")
+        if (content.match(/\{file:[^}]+\}/)) pending.push(file)
+      }
+    }
+  }
+  if (!existsSync(sourceRoot)) {
+    fail("prompts/agents/ directory not found")
+    return
+  }
+  visit(sourceRoot)
+  if (pending.length > 0) {
+    for (const file of pending) fail(`${file}: native {file:...} token remains in source prompt; use {{include:...}} or plain documentation`)
+  } else {
+    ok("Prompt sources contain no native nested {file:...} references")
   }
 }
 
@@ -335,6 +382,8 @@ function main(): void {
   checkPermissions()
   checkMcpServers()
   checkFileReferences()
+  checkGeneratedPromptBundles()
+  checkPromptSourceTokens()
   checkSharedReferences()
   checkAgentReferences()
 

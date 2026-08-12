@@ -76,6 +76,20 @@ El test usa SQLite temporal y un servidor HTTP local compatible con los endpoint
 
 El plugin también expone `createJudgmentMemory(ctx, overrides)` para pruebas que necesiten reemplazar dependencias concretas sin mocks globales. El entrypoint de producción continúa siendo `JudgmentMemory(ctx)`.
 
+## Bundles materializados de prompts
+
+Los includes internos de `prompts/agents/tony-orchestrator.md` usan la sintaxis propia `{{include:...}}` y se expanden antes de que OpenCode cargue la configuración. OpenCode recibe solamente `prompts/generated/tony-orchestrator.md`; los agentes de fase reciben `prompts/generated/phases/<phase>.md`.
+
+El manifiesto `prompts/agents/includes/phase-manifest.json` es la fuente única de composición por fase. Los prompts inline de review y Judgment Day están externalizados en `prompts/agents/phase-prompts/` para evitar duplicación dentro de `opencode.json`.
+
+```bash
+make build-prompts       # genera el bundle raíz y los 18 bundles de fase
+make check-prompts       # falla si falta un bundle, hay drift o quedan tokens sin resolver
+bun test tests/prompt_bundler.test.ts
+```
+
+El resolver resuelve rutas relativas al archivo que contiene el include, registra hashes SHA-256, deduplica dependencias, rechaza ciclos, path traversal, nombres dinámicos y profundidad excesiva, y produce salida byte-identical para el mismo árbol de fuentes. `make test` incluye `make check-prompts`, por lo que modificar un prompt sin regenerar los bundles bloquea CI.
+
 ## Smoke tests externos
 
 Los tests que requieren servicios reales quedan separados de la suite local:
