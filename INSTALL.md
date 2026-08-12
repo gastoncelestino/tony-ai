@@ -210,8 +210,7 @@ python3 core.py status --path /ruta/al/repo --project mi-proyecto
 
 ## 5.5 Correr tests de judgment-memory
 ```bash
-cd judgment-memory
-python3 test_ledger.py
+python3 -m pytest tests/test_judgment_memory_ledger.py
 ```
 
 ## 5.6 Correr local-memory manualmente

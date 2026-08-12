@@ -73,7 +73,23 @@ tony-ai/
 ├── ARCHITECTURE.md                    # Documentación técnica para entender el proyecto
 ├── INSTALL.md                         # Guía de instalación detallada
 ├── Makefile                           # Wrappers de tests, bootstrap, health, docker
+├── requirements-dev.txt               # pytest (para correr tests/)
 ├── requirements-optional.txt          # tree-sitter (opt-in)
+│
+├── tests/                             # TODOS los tests del proyecto, centralizados
+│   ├── test_kernel_state_machine.py   # Tests unitarios FSM + enforcement
+│   ├── test_kernel_integration.py     # Tests de integración plugin ↔ Python
+│   ├── test_kernel_cli.py             # Tests CLI (reset, record_delegation, etc.)
+│   ├── test_kernel_hardening.py       # Tests de hardening (validaciones adversarias)
+│   ├── test_kernel_enforcement.py     # Contrato de enforcement fail-closed
+│   ├── test_sdd_flow_e2e.py           # Flujo aislado explore→archive, 28 checks adversariales
+│   ├── test_tony_kernel_hooks.ts      # Unit tests del plugin (mocked client)
+│   ├── test_tony_kernel_integration.ts# Puente TS → Python real (sin mocks)
+│   ├── test_tony_kernel_e2e.ts        # End-to-end adversarial (flujo completo SDD + 7 ataques)
+│   ├── test_local_memory_server.py    # Regression test (MCP framing, UPSERT, FTS)
+│   ├── test_code_index_core.py        # Regression test (mock HTTP, incremental)
+│   ├── test_judgment_memory_ledger.py # Regression test (mock Ollama/Qdrant)
+│   └── test_judgment_memory_hooks.ts  # Test harness para hooks de plugin
 │
 ├── kernel/                            # Tony Kernel — orquestación determinista SDD
 │   ├── __init__.py
@@ -89,12 +105,7 @@ tony-ai/
 │   ├── evidence_ledger.py             # Registro de evidencias por tarea
 │   ├── task_ledger.py                 # Track de tareas por fase
 │   ├── schemas.py                     # ArtifactRef, DelegationRecord, PhaseCompletion
-│   ├── mcp_server.py                  # MCP server para kernel (registrado en opencode.json)
-│   ├── test_state_machine.py          # Tests unitarios FSM + enforcement
-│   ├── test_kernel_integration.py     # Tests de integración plugin ↔ Python
-│   ├── test_cli.py                    # Tests CLI (reset, record_delegation, etc.)
-│   ├── test_hardening.py              # Tests de hardening (validaciones adversarias)
-│   └── test_e2e.ts                    # Prueba adversarial end-to-end (flujo completo SDD + 7 ataques)
+│   └── mcp_server.py                  # MCP server para kernel (registrado en opencode.json)
 │
 ├── config/
 │   └── tony-memory.yaml               # Referencia documentada de env vars
@@ -105,10 +116,12 @@ tony-ai/
 │   ├── .env.example
 │   └── README.md                      # Servicios de soporte en Linux
 │
-├── scripts/
+├── scripts/                           # Solo shell — bootstrap y operación
 │   ├── setup.sh                       # Bootstrap idempotente
 │   ├── health.sh                      # Verificación end-to-end
-│   ├── calibrate-ctx.sh               # Sincroniza num_ctx de Ollama con opencode.json/DCP
+│   └── calibrate-ctx.sh               # Sincroniza num_ctx de Ollama con opencode.json/DCP
+│
+├── tools/
 │   └── validate-config.ts             # Valida opencode.json, prompts, agents, MCP, skills
 │
 ├── plugins/
@@ -116,9 +129,7 @@ tony-ai/
 │   ├── qdrant.ts                      # Cliente REST Qdrant + Ollama (Bun)
 │   ├── judgment-memory.ts             # Bridge: recall antes de JD, captura después
 │   └── tony-kernel/                   # Tony Kernel plugin (deterministic SDD enforcement)
-│       ├── index.ts                   # Hook entry: before/after phase checks
-│       ├── test_integration.ts        # Unit tests (mocked client)
-│       └── test_e2e.ts                # End-to-end adversarial test suite (9/9 passing)
+│       └── index.ts                   # Hook entry: before/after phase checks
 │
 ├── prompts/
 │   └── sdd/                           # Prompts de fases SDD (uno por fase)
@@ -166,21 +177,17 @@ tony-ai/
 │
 ├── local-memory/                      # TonyMem — MCP server (8 tools)
 │   ├── server.py
-│   ├── test_server.py                 # Regression test (MCP framing, UPSERT, FTS)
 │   └── README.md
 │
 ├── code-index/                        # Code Indexer + Qdrant — MCP server (3 tools)
 │   ├── core.py                        # Chunking, embeddings, Qdrant client (stdlib)
 │   ├── server.py
-│   ├── test_core.py                   # Regression test (mock HTTP, incremental)
 │   └── README.md
 │
 ├── judgment-memory/                   # Judgment Day <-> TonyMem bridge
 │   ├── ledger.py                      # SQLite ledger + normalize + embed + Qdrant
 │   ├── server.py                      # jd_recall / jd_record / jd_history / jd_stats
 │   ├── schema.json                    # Shape de un judgment record
-│   ├── test_ledger.py                 # Regression test (mock Ollama/Qdrant)
-│   ├── test_hooks.ts                  # Test harness para hooks de plugin
 │   ├── scripts/
 │   │   └── verify-qdrant.ts           # Smoke test del cliente TS real
 │   └── README.md
@@ -188,6 +195,9 @@ tony-ai/
 └── .opencode/
     └── dcp.jsonc                      # Config de DCP (plugin externo)
 ```
+
+> Todos los tests viven en `tests/`, corridos con `pytest tests/` (Python) o `bun test tests/*.ts` (TypeScript) — ver [`## Comandos`](#comandos) y el `Makefile`.
+
 
 ## Comandos
 | Comando | Descripción | Fuente | Offline |
