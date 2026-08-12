@@ -4,13 +4,16 @@
 # La suite local usa descubrimiento automático: pytest descubre todos los .py y
 # Bun descubre todos los *.test.ts. Los smoke tests externos quedan separados.
 
-.PHONY: test check-test-deps check-test-discovery check-coverage-deps test-python test-ts test-kernel coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
+.PHONY: test test-all check-test-deps check-test-discovery check-coverage-deps test-python test-ts test-kernel coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
 # Este target es la suite completa. El Kernel está incluido vía
 # descubrimiento automático en test-python (test_kernel_*.py) y test-ts
 # (tony_kernel_*.test.ts), por lo que no se invoca test-kernel aquí para
 # evitar duplicar ejecución.
 test: check-test-deps check-test-discovery test-python test-ts validate-config
+
+# Target explícito que ejecuta TODO, incluyendo el Kernel de forma focalizada.
+test-all: test test-kernel
 
 check-test-deps:
 	@python3 -c 'import pytest; print("pytest", pytest.__version__)' || \
