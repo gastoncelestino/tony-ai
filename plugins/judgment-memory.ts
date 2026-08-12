@@ -182,6 +182,33 @@ function upsertJudgment(rec: PassiveRecord, pointId: string | null): void {
   }
 }
 
+function toolOutputToText(output: unknown): string {
+  if (typeof output === "string") return output
+  if (output && typeof output === "object") {
+    const record = output as Record<string, unknown>
+    const directText = [record.text, record.output, record.content]
+      .find((value): value is string => typeof value === "string")
+    if (directText) return directText
+
+    const target = record.Target ?? record.target ?? record.Issue ?? record.issue
+    const lesson = record.Lesson ?? record.lesson ?? record.Learned ?? record.learned
+    const judgment = record.JUDGMENT ?? record.judgment ?? record.final
+    if (typeof target === "string" && typeof judgment === "string") {
+      return [
+        `Target: ${target}`,
+        typeof lesson === "string" ? `Lesson: ${lesson}` : "",
+        `JUDGMENT: ${judgment}`,
+      ].filter(Boolean).join("\\n")
+    }
+  }
+
+  try {
+    return JSON.stringify(output) ?? ""
+  } catch {
+    return ""
+  }
+}
+
 // ─── Best-effort parsing of Judgment Day output ─────────────────────────────
 // Deliberately conservative: only extracts fields the Output Contract in
 // judgment-day/SKILL.md guarantees are present in some form. Never invents
@@ -343,7 +370,7 @@ export async function createJudgmentMemory(
       if (input.tool !== "Task" || !output) return
 
       const sessionId = input.sessionID
-      const text = typeof output === "string" ? output : JSON.stringify(output)
+      const text = toolOutputToText(output)
       if (!JD_TERMINAL_RE.test(text)) return
 
       const rec = parsePassiveRecord(text, sessionId ?? "unknown", project)

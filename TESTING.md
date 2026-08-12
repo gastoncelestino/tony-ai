@@ -63,7 +63,7 @@ El umbral es deliberadamente moderado. Su función inicial es detectar módulos 
 
 ## Tests del plugin judgment-memory
 
-`tests/judgment_memory_hooks.test.ts` importa el plugin real y ejecuta:
+`tests/judgment_memory_hooks.test.ts` contiene 24 escenarios y importa el plugin real para ejecutar:
 
 ```ts
 const hooks = await JudgmentMemory(ctx)
@@ -72,7 +72,7 @@ await hooks["tool.execute.after"](input, output)
 await hooks["experimental.chat.system.transform"](input, output)
 ```
 
-El test usa SQLite temporal y un servidor HTTP local compatible con los endpoints de Ollama y Qdrant. De ese modo comprueba filas persistidas, upserts, embeddings, búsqueda semántica, inyección consumible del recall y degradación cuando falla el indexado.
+El test usa SQLite temporal y un servidor HTTP local compatible con los endpoints de Ollama y Qdrant. De ese modo comprueba filas persistidas, upserts, embeddings, búsqueda semántica, inyección consumible del recall, thresholds, filtros de tools, formatos alternativos del parser, outputs estructurados de `Task`, transformación del prompt y degradación cuando falla el indexado.
 
 El plugin también expone `createJudgmentMemory(ctx, overrides)` para pruebas que necesiten reemplazar dependencias concretas sin mocks globales. El entrypoint de producción continúa siendo `JudgmentMemory(ctx)`.
 
