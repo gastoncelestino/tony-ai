@@ -243,6 +243,26 @@ export function buildAll(root: string): { orchestrator: BuildResult; phases: Bui
   const manifest = loadManifest(root)
   const orchestrator = buildOrchestrator(root)
   const phases = allPhases(manifest).map((phase) => buildPhase(root, phase))
+  const files: Record<string, { path: string; relative: string; size: number; sha256: string }> = {}
+  
+  // Add orchestrator
+  files[repoPath(root, resolve(root, ORCHESTRATOR_BUNDLE))] = {
+    path: resolve(root, ORCHESTRATOR_BUNDLE),
+    relative: repoPath(root, resolve(root, ORCHESTRATOR_BUNDLE)),
+    size: Buffer.byteLength(orchestrator.content, "utf8"),
+    sha256: sha256(orchestrator.content),
+  }
+  
+  for (const phase of phases) {
+    const absPath = resolve(root, phase.path)
+    files[repoPath(root, absPath)] = {
+      path: absPath,
+      relative: repoPath(root, absPath),
+      size: Buffer.byteLength(phase.content, "utf8"),
+      sha256: sha256(phase.content),
+    }
+  }
+  
   const promptManifest: PromptManifest = {
     schema_version: 1,
     generated_by: "tools/prompt-bundler.ts",
@@ -250,6 +270,7 @@ export function buildAll(root: string): { orchestrator: BuildResult; phases: Bui
     bundle: ORCHESTRATOR_BUNDLE,
     bundle_sha256: sha256(orchestrator.content),
     dependencies: orchestrator.dependencies,
+    files,
     phases: Object.fromEntries(
       phases.map((item) => [
         item.path.replace(`${PHASE_OUTPUT_DIR}/`, "").replace(/\.md$/, ""),

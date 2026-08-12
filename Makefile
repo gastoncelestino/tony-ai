@@ -13,12 +13,12 @@ test: check-test-deps check-test-discovery check-prompts test-python test-ts val
 build-prompts: check-test-deps
 	@echo "▶ Building prompt bundles..."
 	@mkdir -p prompts/generated/phases
-	@bun run scripts/build-prompts.ts
+	@bun run tools/build-prompts.ts
 	@echo "✓ Prompt bundles built"
 
 check-prompts:
 	@echo "▶ Checking prompt bundles..."
-	@bun run scripts/build-prompts.ts --check
+	@bun run tools/build-prompts.ts --check
 	@echo "✓ Prompt bundles are up to date"
 
 # Target explícito que ejecuta TODO, incluyendo el Kernel de forma focalizada.
@@ -39,11 +39,11 @@ check-test-deps:
 # nombres incorrecta. La ejecución de test-ts valida además el descubrimiento real.
 check-test-discovery:
 	@set -eu; \
-	invalid_ts=$$(find tests scripts/tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' -print); \
+	invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' -print); \
 	invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' -print); \
 	if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; \
 	if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; \
-	test -n "$$(find tests scripts/tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; \
+	test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; \
 	echo "✓ Test naming/discovery conventions valid"
 
 # Descubre todos los tests Python, incluidos los tests de persistencia,
@@ -79,7 +79,7 @@ test-kernel: check-test-deps check-test-discovery
 # Bun descubre los archivos *.test.ts por convención.
 test-ts: check-test-deps check-test-discovery
 	@echo "▶ Running all TypeScript tests..."
-	@bun test tests scripts/tests
+	@bun test tests
 	@echo "✓ TypeScript tests passed"
 
 check-coverage-deps: check-test-deps
@@ -109,7 +109,7 @@ coverage-python: check-coverage-deps
 coverage-ts: check-test-deps check-test-discovery
 	@echo "▶ Running TypeScript coverage..."
 	@rm -rf coverage-bun
-	@bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests scripts/tests
+	@bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests
 	@test -s coverage-bun/lcov.info
 	@echo "✓ TypeScript coverage report written to coverage-bun/lcov.info"
 
@@ -144,12 +144,12 @@ clean:
 build-prompts: check-test-deps
 	@echo "▶ Building prompt bundles..."
 	@mkdir -p prompts/generated/phases
-	@bun run scripts/build-prompts.ts
+	@bun run tools/build-prompts.ts
 	@echo "✓ Prompt bundles built"
 
 check-prompts:
 	@echo "▶ Checking prompt bundles..."
-	@bun run scripts/build-prompts.ts --check
+	@bun run tools/build-prompts.ts --check
 	@echo "✓ Prompt bundles are up to date"
 
 generate-agents:

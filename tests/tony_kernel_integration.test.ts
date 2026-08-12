@@ -85,7 +85,7 @@ test("real bridge: apply -> BLOCK via python3 -m kernel.cli", async () => {
 
   await expect(
     taskExecuteBeforeHook(
-      task({ phase: "apply" }),
+      task({ phase: "sdd-apply" }),
       { success: true }
     )
   ).rejects.toBeInstanceOf(KernelBlockedError)
@@ -135,9 +135,9 @@ test("real bridge: record_phase_completion funciona", async () => {
     "success"
   )
 
-  await taskExecuteBeforeHook(task({ phase: "spec" }), { success: true })
+  await taskExecuteBeforeHook(task({ phase: "sdd-spec" }), { success: true })
   await taskExecuteAfterHook(
-    task({ phase: "spec", artifacts: artifacts("spec") }),
+    task({ phase: "sdd-spec", artifacts: artifacts("spec") }),
     "success"
   )
 

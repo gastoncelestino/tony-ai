@@ -141,10 +141,10 @@ afterEach(() => {
 const SDD_PHASES = [
   { phase: "explore", kind: "explore", rel: "explore.md" },
   { phase: "propose", kind: "proposal", rel: "proposal.md" },
-  { phase: "spec", kind: "spec", rel: "spec.md" },
+  { phase: "sdd-spec", kind: "spec", rel: "spec.md" },
   { phase: "design", kind: "design", rel: "design.md" },
   { phase: "tasks", kind: "tasks", rel: "tasks.md" },
-  { phase: "apply", kind: "apply-progress", rel: "apply.md" },
+  { phase: "sdd-apply", kind: "apply-progress", rel: "apply.md" },
   { phase: "verify", kind: "verify-report", rel: "verify.md" },
   { phase: "archive", kind: "archive-report", rel: "archive.md" },
 ]
@@ -177,7 +177,7 @@ test("ADVERSARIAL: skip propose -> spec blocked", async () => {
 
   // Try to skip propose and go directly to spec
   await expect(
-    taskExecuteBeforeHook(task({ phase: "spec" }), { success: true })
+    taskExecuteBeforeHook(task({ phase: "sdd-spec" }), { success: true })
   ).rejects.toBeInstanceOf(KernelBlockedError)
 })
 
@@ -191,8 +191,8 @@ test("ADVERSARIAL: skip design -> tasks blocked", async () => {
   await taskExecuteBeforeHook(task({ phase: "propose" }), { success: true })
   await taskExecuteAfterHook(task({ phase: "propose", artifacts: [makeArtifact("proposal", "proposal.md", "v1")] }), "success")
 
-  await taskExecuteBeforeHook(task({ phase: "spec" }), { success: true })
-  await taskExecuteAfterHook(task({ phase: "spec", artifacts: [makeArtifact("spec", "spec.md", "v1")] }), "success")
+  await taskExecuteBeforeHook(task({ phase: "sdd-spec" }), { success: true })
+  await taskExecuteAfterHook(task({ phase: "sdd-spec", artifacts: [makeArtifact("spec", "spec.md", "v1")] }), "success")
 
   // Try to skip design
   await expect(
@@ -271,8 +271,8 @@ test("ADVERSARIAL: tampered spec blocks advancing and archive", async () => {
   await taskExecuteAfterHook(task({ phase: "propose", artifacts: [makeArtifact("proposal", "proposal.md", "v1")] }), "success")
 
   const specArtifact = makeArtifact("spec", "spec.md", "spec v1")
-  await taskExecuteBeforeHook(task({ phase: "spec" }), { success: true })
-  await taskExecuteAfterHook(task({ phase: "spec", artifacts: [specArtifact] }), "success")
+  await taskExecuteBeforeHook(task({ phase: "sdd-spec" }), { success: true })
+  await taskExecuteAfterHook(task({ phase: "sdd-spec", artifacts: [specArtifact] }), "success")
 
   // Tamper the spec file on disk
   tamperArtifact("spec.md", "spec v1 - TAMPERED BY ATTACKER")

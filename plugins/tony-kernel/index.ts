@@ -283,14 +283,16 @@ export function isNonFsmAgent(subAgent: string): boolean {
 
 export function derivePhase(args: Record<string, unknown>): string | null {
   if (typeof args.phase === "string" && args.phase.length > 0) {
-    return args.phase
+    // Strip "sdd-" prefix for kernel compatibility
+    return args.phase.replace(/^sdd-/, "")
   }
 
   if (typeof args.subagent_type === "string") {
     const subAgent = args.subagent_type
 
     if (isKernelPhase(subAgent)) {
-      return subAgent
+      // Strip "sdd-" prefix for kernel compatibility
+      return subAgent.replace(/^sdd-/, "")
     }
 
     if (isNonFsmAgent(subAgent)) {

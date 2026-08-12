@@ -106,6 +106,122 @@
       "sha256": "dac05879230dfdf564c3f711070d61782541fe62e6077861ac0c1698e584c636"
     }
   ],
+  "files": {
+    "prompts/generated/tony-orchestrator.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/tony-orchestrator.md",
+      "relative": "prompts/generated/tony-orchestrator.md",
+      "size": 33040,
+      "sha256": "adce85abc064469442097b366721a338a20215cf6c9eab452ab12e06aa67d0d1"
+    },
+    "prompts/generated/phases/jd-fix-agent.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/jd-fix-agent.md",
+      "relative": "prompts/generated/phases/jd-fix-agent.md",
+      "size": 10461,
+      "sha256": "4dd83190880140f88d5bbe89118d908804447c66a6ff9e075c98c35bd4420564"
+    },
+    "prompts/generated/phases/jd-judge-a.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/jd-judge-a.md",
+      "relative": "prompts/generated/phases/jd-judge-a.md",
+      "size": 23437,
+      "sha256": "df1f52ecb5491a456aa1cc13bee0df89d345befbbed4e4bfefabf08664389d13"
+    },
+    "prompts/generated/phases/jd-judge-b.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/jd-judge-b.md",
+      "relative": "prompts/generated/phases/jd-judge-b.md",
+      "size": 23437,
+      "sha256": "2adb31a1ee44d809cf85262c0fce8ac81b1618fd89903bdd040934c9e19ea9cc"
+    },
+    "prompts/generated/phases/review-readability.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/review-readability.md",
+      "relative": "prompts/generated/phases/review-readability.md",
+      "size": 24341,
+      "sha256": "db5b4df536876dc0cdc622a8a12a67a18f5fe8e1462f9109bbb7b6d1a8a39324"
+    },
+    "prompts/generated/phases/review-refuter.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/review-refuter.md",
+      "relative": "prompts/generated/phases/review-refuter.md",
+      "size": 22272,
+      "sha256": "651133704c1ecff8feafc1f49684f5332039390516258995765ea8696572170f"
+    },
+    "prompts/generated/phases/review-reliability.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/review-reliability.md",
+      "relative": "prompts/generated/phases/review-reliability.md",
+      "size": 24320,
+      "sha256": "78f67a3a1c9884a13895f4989f8941bae6d8eb8baf44885406b9c083cc5bd764"
+    },
+    "prompts/generated/phases/review-resilience.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/review-resilience.md",
+      "relative": "prompts/generated/phases/review-resilience.md",
+      "size": 24311,
+      "sha256": "4cbfdd9a73dd66de00edb2f3e779988eac0047c54281bd17f4c972426e05ec7a"
+    },
+    "prompts/generated/phases/review-risk.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/review-risk.md",
+      "relative": "prompts/generated/phases/review-risk.md",
+      "size": 24309,
+      "sha256": "582d95f1114249c59a2e1a012901fe3cb7106e61d2828ddeed4da18cd22989ae"
+    },
+    "prompts/generated/phases/sdd-apply.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-apply.md",
+      "relative": "prompts/generated/phases/sdd-apply.md",
+      "size": 31843,
+      "sha256": "a11e07613f21844803965e987a2fa20b2b37f771d48b5c3988ef284d10d6a26f"
+    },
+    "prompts/generated/phases/sdd-archive.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-archive.md",
+      "relative": "prompts/generated/phases/sdd-archive.md",
+      "size": 23632,
+      "sha256": "2de39cdf2462e15c116b2274b85c1ddfd7f7c4b45b836e75f4cf18a90e39463e"
+    },
+    "prompts/generated/phases/sdd-design.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-design.md",
+      "relative": "prompts/generated/phases/sdd-design.md",
+      "size": 21505,
+      "sha256": "439ae0fdaf3dcdda1ee72c4ccb18cd58ffb943c37b039601449ab1fc5f9950c8"
+    },
+    "prompts/generated/phases/sdd-explore.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-explore.md",
+      "relative": "prompts/generated/phases/sdd-explore.md",
+      "size": 10547,
+      "sha256": "6d045687b88b0c4adc1e30f6b7b1e2ba5079941a06a71fa8d4e6bfe472ab59b9"
+    },
+    "prompts/generated/phases/sdd-init.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-init.md",
+      "relative": "prompts/generated/phases/sdd-init.md",
+      "size": 21085,
+      "sha256": "3cbb04a84c7ed922e100aa3d0d81684e713c4ff6f77eb7428cefdfd4c6ca1780"
+    },
+    "prompts/generated/phases/sdd-onboard.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-onboard.md",
+      "relative": "prompts/generated/phases/sdd-onboard.md",
+      "size": 18062,
+      "sha256": "7e11d73826f44abe51323172c575c572662c85ccb117eebb51a9298f13228f13"
+    },
+    "prompts/generated/phases/sdd-propose.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-propose.md",
+      "relative": "prompts/generated/phases/sdd-propose.md",
+      "size": 16894,
+      "sha256": "38db39a8d9b63ede2cf2b730f4ad51fa4300beb31b2a8e10f29a01a1ecb9f723"
+    },
+    "prompts/generated/phases/sdd-spec.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-spec.md",
+      "relative": "prompts/generated/phases/sdd-spec.md",
+      "size": 23027,
+      "sha256": "21653d91669b8e2c50c706a77845b5597046d1883ad9a216ba4dcdcc7fbae3de"
+    },
+    "prompts/generated/phases/sdd-tasks.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-tasks.md",
+      "relative": "prompts/generated/phases/sdd-tasks.md",
+      "size": 28639,
+      "sha256": "abc1672c750652fdc63d359dcff46c0cffc3a4442829934fd023b20ed6cc76c2"
+    },
+    "prompts/generated/phases/sdd-verify.md": {
+      "path": "/workspace/7cf8dcfc-72e2-49b9-9795-75440ba1be96/sessions/agent_4f98f49c-edf6-4b31-ae1e-bb87601a81aa/prompts/generated/phases/sdd-verify.md",
+      "relative": "prompts/generated/phases/sdd-verify.md",
+      "size": 22757,
+      "sha256": "fcfb101554045766b82eb6ffd53439d2208c270a7c527c6dfb4bb6ed6c40a68b"
+    }
+  },
   "phases": {
     "jd-fix-agent": {
       "path": "prompts/generated/phases/jd-fix-agent.md",

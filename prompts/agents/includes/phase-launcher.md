@@ -17,19 +17,19 @@ When the orchestrator needs to launch a sub-agent for phase `X`:
 ## Prompt Template
 
 ```
-{file:./sub-agent-context-protocol.md}
+{{include:./sub-agent-context-protocol.md}}
 
-{file:./{include_1}.md}
-{file:./{include_2}.md}
+{{include:./{include_1}.md}}
+{{include:./{include_2}.md}}
 ...
 
 ## Skills to load before work
-{file:./../_shared/sdd-phase-common.md}
-{file:./../_shared/{skill_1}.md}
+{{include:./../_shared/sdd-phase-common.md}}
+{{include:./../_shared/{skill_1}.md}}
 ...
 
 ## Phase-Specific Instructions
-{file:../../sdd/{phase_name}.md}
+{{include:../../sdd/{phase_name}.md}}
 ```
 
 ## Phase Mappings
@@ -71,8 +71,8 @@ When the orchestrator decides to launch a sub-agent for phase `X`:
 
 1. Read `prompts/agents/includes/phase-manifest.json`
 2. Resolve includes for phase `X`
-3. Build prompt by concatenating `{file:./{include}.md}` for each include
-4. Append skills as `## Skills to load before work` + `{file:./../_shared/{skill}.md}`
+3. Build prompt by concatenating `{{include:./{include}.md}}` for each include
+4. Append skills as `## Skills to load before work` + `{{include:./../_shared/{skill}.md}}`
 4. Append phase-specific instructions from `prompts/sdd/{phase}.md` (which now only contains phase-specific logic, no common includes)
 5. Launch sub-agent with constructed prompt
 
