@@ -42,6 +42,7 @@ export type PromptManifest = {
   bundle: string
   bundle_sha256: string
   dependencies: ManifestEntry[]
+  files: Record<string, { relative: string; size: number; sha256: string }>
   phases: Record<string, { path: string; sha256: string; dependencies: ManifestEntry[] }>
 }
 
@@ -243,20 +244,23 @@ export function buildAll(root: string): { orchestrator: BuildResult; phases: Bui
   const manifest = loadManifest(root)
   const orchestrator = buildOrchestrator(root)
   const phases = allPhases(manifest).map((phase) => buildPhase(root, phase))
-  const files: Record<string, { path: string; relative: string; size: number; sha256: string }> = {}
-  
+  // NOTE: intentionally no absolute filesystem `path` field here. This manifest is
+  // committed to the repo and compared byte-for-byte by checkGenerated()/`make
+  // check-prompts`. An absolute path is machine-specific (checkout dir differs
+  // between a dev's clone, Docker, and CI), so embedding one makes the manifest
+  // impossible to reproduce anywhere except the exact machine that generated it.
+  const files: Record<string, { relative: string; size: number; sha256: string }> = {}
+
   // Add orchestrator
   files[repoPath(root, resolve(root, ORCHESTRATOR_BUNDLE))] = {
-    path: resolve(root, ORCHESTRATOR_BUNDLE),
     relative: repoPath(root, resolve(root, ORCHESTRATOR_BUNDLE)),
     size: Buffer.byteLength(orchestrator.content, "utf8"),
     sha256: sha256(orchestrator.content),
   }
-  
+
   for (const phase of phases) {
     const absPath = resolve(root, phase.path)
     files[repoPath(root, absPath)] = {
-      path: absPath,
       relative: repoPath(root, absPath),
       size: Buffer.byteLength(phase.content, "utf8"),
       sha256: sha256(phase.content),
