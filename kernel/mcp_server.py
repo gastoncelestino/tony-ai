@@ -29,7 +29,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from kernel.cli import _build_store, _load, _result_to_dict, _parse_artifact_refs, _parse_evidence
-from kernel.persistence import save_orchestrator, reset_state
+from kernel.persistence import reset_state, update_orchestrator
 
 
 def _json_arg(arg):
@@ -41,23 +41,27 @@ def _json_arg(arg):
 def _can_start_phase(args: dict) -> dict:
     orch = _load()
     result = orch.can_start_phase(args["phase"])
-    save_orchestrator(orch)
     return _result_to_dict(result)
 
 
 def _record_delegation(args: dict) -> dict:
-    orch = _load()
-    orch.record_delegation(args["phase"], args.get("sub_agent", "sub-agent"),
-                           args.get("task_id"))
-    save_orchestrator(orch)
+    update_orchestrator(
+        lambda orch: orch.record_delegation(
+            args["phase"], args.get("sub_agent", "sub-agent"), args.get("task_id")
+        ),
+        artifact_store=_build_store(),
+    )
     return {"ok": True}
 
 
 def _record_phase_completion(args: dict) -> dict:
     raw = _json_arg(args.get("artifacts", []))
-    orch = _load()
-    result = orch.record_phase_completion(args["phase"], _parse_artifact_refs(raw))
-    save_orchestrator(orch)
+    result = update_orchestrator(
+        lambda orch: orch.record_phase_completion(
+            args["phase"], _parse_artifact_refs(raw)
+        ),
+        artifact_store=_build_store(),
+    )
     return _result_to_dict(result)
 
 
@@ -68,24 +72,27 @@ def _verify_phase_checksum(args: dict) -> dict:
 
 
 def _add_task(args: dict) -> dict:
-    orch = _load()
-    orch.add_task(args["task_id"], args["description"], args["phase"])
-    save_orchestrator(orch)
+    update_orchestrator(
+        lambda orch: orch.add_task(args["task_id"], args["description"], args["phase"]),
+        artifact_store=_build_store(),
+    )
     return {"ok": True}
 
 
 def _start_task(args: dict) -> dict:
-    orch = _load()
-    ok = orch.start_task(args["task_id"])
-    save_orchestrator(orch)
+    ok = update_orchestrator(
+        lambda orch: orch.start_task(args["task_id"]),
+        artifact_store=_build_store(),
+    )
     return {"ok": ok}
 
 
 def _complete_task(args: dict) -> dict:
     raw = _json_arg(args.get("evidence", []))
-    orch = _load()
-    result = orch.complete_task(args["task_id"], _parse_evidence(raw))
-    save_orchestrator(orch)
+    result = update_orchestrator(
+        lambda orch: orch.complete_task(args["task_id"], _parse_evidence(raw)),
+        artifact_store=_build_store(),
+    )
     return _result_to_dict(result)
 
 
@@ -222,6 +229,25 @@ def send(msg: dict) -> None:
     sys.stdout.flush()
 
 
+def parse_line(line: str) -> dict:
+    """Parse one JSON-RPC line and return a protocol-level error on bad input."""
+    try:
+        message = json.loads(line)
+    except json.JSONDecodeError as exc:
+        return {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32700, "message": f"Parse error: {exc.msg}"},
+        }
+    if not isinstance(message, dict):
+        return {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32600, "message": "Invalid Request: expected an object"},
+        }
+    return message
+
+
 def handle(msg: dict):
     method = msg.get("method")
     msg_id = msg.get("id")
@@ -293,11 +319,11 @@ def main() -> None:
         line = line.strip()
         if not line:
             continue
-        try:
-            msg = json.loads(line)
-        except json.JSONDecodeError:
+        parsed = parse_line(line)
+        if "error" in parsed and set(parsed) >= {"jsonrpc", "id", "error"}:
+            send(parsed)
             continue
-        response = handle(msg)
+        response = handle(parsed)
         if response is not None:
             send(response)
 

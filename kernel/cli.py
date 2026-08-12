@@ -16,7 +16,7 @@ import os
 import sys
 from typing import Any, Optional
 
-from .persistence import load_orchestrator, save_orchestrator, reset_state
+from .persistence import load_orchestrator, update_orchestrator, reset_state
 from .artifact_store import disk_artifact_store, disk_artifact_hasher
 from .schemas import ArtifactRef, Evidence, EvidenceType
 
@@ -127,9 +127,11 @@ def _main(argv: list) -> None:
         phase = _cmd_arg(args, 0, "phase")
         sub_agent = _cmd_arg(args, 1, "sub_agent")
         task_id = args[2] if len(args) > 2 else None
-        orch = _load()
-        orch.record_delegation(phase, sub_agent, task_id)
-        save_orchestrator(orch)
+        update_orchestrator(
+            lambda orch: orch.record_delegation(phase, sub_agent, task_id),
+            artifact_store=_build_store(),
+            artifact_hasher=_build_hasher(),
+        )
         print(json.dumps({"ok": True}))
         return
 
@@ -150,9 +152,13 @@ def _main(argv: list) -> None:
             except json.JSONDecodeError:
                 print(json.dumps({"error": "evidence must be a JSON array"}), file=sys.stderr)
                 sys.exit(1)
-        orch = _load()
-        result = orch.record_phase_completion(phase, _parse_artifact_refs(raw), _parse_evidence(evidence_raw))
-        save_orchestrator(orch)
+        result = update_orchestrator(
+            lambda orch: orch.record_phase_completion(
+                phase, _parse_artifact_refs(raw), _parse_evidence(evidence_raw)
+            ),
+            artifact_store=_build_store(),
+            artifact_hasher=_build_hasher(),
+        )
         print(json.dumps(_result_to_dict(result)))
         return
 
@@ -173,17 +179,21 @@ def _main(argv: list) -> None:
         task_id = _cmd_arg(args, 0, "task_id")
         description = _cmd_arg(args, 1, "description")
         phase = _cmd_arg(args, 2, "phase")
-        orch = _load()
-        orch.add_task(task_id, description, phase)
-        save_orchestrator(orch)
+        update_orchestrator(
+            lambda orch: orch.add_task(task_id, description, phase),
+            artifact_store=_build_store(),
+            artifact_hasher=_build_hasher(),
+        )
         print(json.dumps({"ok": True}))
         return
 
     if command == "start_task":
         task_id = _cmd_arg(args, 0, "task_id")
-        orch = _load()
-        ok = orch.start_task(task_id)
-        save_orchestrator(orch)
+        ok = update_orchestrator(
+            lambda orch: orch.start_task(task_id),
+            artifact_store=_build_store(),
+            artifact_hasher=_build_hasher(),
+        )
         print(json.dumps({"ok": ok}))
         return
 
@@ -195,9 +205,11 @@ def _main(argv: list) -> None:
         except json.JSONDecodeError:
             print(json.dumps({"error": "evidence must be a JSON array"}), file=sys.stderr)
             sys.exit(1)
-        orch = _load()
-        result = orch.complete_task(task_id, _parse_evidence(raw))
-        save_orchestrator(orch)
+        result = update_orchestrator(
+            lambda orch: orch.complete_task(task_id, _parse_evidence(raw)),
+            artifact_store=_build_store(),
+            artifact_hasher=_build_hasher(),
+        )
         print(json.dumps(_result_to_dict(result)))
         return
 

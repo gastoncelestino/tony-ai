@@ -14,8 +14,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TypeVar
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows fallback
+    fcntl = None
 
 from .schemas import (
     Phase,
@@ -282,6 +288,9 @@ def orchestrator_from_dict(d: dict,
 
 # ─── File helpers ────────────────────────────────────────────────────────────
 
+T = TypeVar("T")
+
+
 def default_state_dir() -> str:
     """Directory for the kernel state file, honoring env override."""
     override = os.environ.get("TONY_KERNEL_STATE_DIR")
@@ -296,14 +305,60 @@ def state_file_path() -> str:
     return os.path.join(d, "kernel-state.json")
 
 
-def save_orchestrator(o: KernelOrchestrator, path: Optional[str] = None) -> str:
-    path = path or state_file_path()
+@contextmanager
+def _state_lock(path: str):
+    """Serialize state mutations for one state file.
+
+    Atomic replacement prevents partial JSON files, but it does not make a
+    load-modify-save sequence atomic. The sidecar lock closes that lost-update
+    window for CLI/MCP callers that use ``update_orchestrator``.
+    """
+    lock_path = path + ".lock"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        if fcntl is not None:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _save_orchestrator_unlocked(o: KernelOrchestrator, path: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(orchestrator_to_dict(o), f, indent=2, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
     return path
+
+
+def save_orchestrator(o: KernelOrchestrator, path: Optional[str] = None) -> str:
+    path = path or state_file_path()
+    with _state_lock(path):
+        return _save_orchestrator_unlocked(o, path)
+
+
+def update_orchestrator(
+    mutator: Callable[[KernelOrchestrator], T],
+    path: Optional[str] = None,
+    artifact_store: Optional[Callable[[ArtifactRef], bool]] = None,
+    artifact_hasher: Optional[Callable[[ArtifactRef], Optional[str]]] = None,
+) -> T:
+    """Atomically load, mutate, persist, and return one state transition."""
+    path = path or state_file_path()
+    with _state_lock(path):
+        orchestrator = load_orchestrator(
+            path,
+            artifact_store=artifact_store,
+            artifact_hasher=artifact_hasher,
+        )
+        result = mutator(orchestrator)
+        _save_orchestrator_unlocked(orchestrator, path)
+        return result
 
 
 def load_orchestrator(path: Optional[str] = None,

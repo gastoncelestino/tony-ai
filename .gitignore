@@ -18,6 +18,8 @@ ENV/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
+coverage-bun/
 htmlcov/
 
 ### Node / Bun ###
@@ -56,5 +58,6 @@ Thumbs.db
 
 ### Varios ###
 *.log
+*.lock
 *.bak
 opencode.json.bak

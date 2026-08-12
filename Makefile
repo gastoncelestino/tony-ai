@@ -1,31 +1,53 @@
 # Makefile para Tony-AI
-# Wrappers de conveniencia sobre docker/ + los tests
+# Wrappers de conveniencia sobre docker/ + tests locales y smoke tests externos.
 #
-# Todos los tests viven en tests/. Los de Python se corren con pytest
-# (unifica los que ya eran unittest.TestCase con los que eran asserts
-# sueltos, sin tocarles la lógica). Los de TypeScript se corren con bun.
+# La suite local usa descubrimiento automático: pytest descubre todos los .py y
+# Bun descubre todos los *.test.ts. Los smoke tests externos quedan separados.
 
-.PHONY: test test-python test-ts test-kernel verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
+.PHONY: test test-python test-ts test-kernel coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
-test: test-python test-ts test-kernel
+test: test-python test-ts validate-config
 
+# Descubre todos los tests Python, incluidos los nuevos tests de persistencia,
+# concurrencia y contrato MCP.
 test-python:
-	@echo "▶ Running Python tests..."
-	@python3 -m pytest tests/test_local_memory_server.py tests/test_code_index_core.py tests/test_judgment_memory_ledger.py -v
+	@echo "▶ Running all Python tests..."
+	@python3 -m pytest tests -q
 	@echo "✓ Python tests passed"
 
+# Target explícito para depurar únicamente el Kernel, sin duplicar esta etapa
+# dentro de `make test`.
 test-kernel:
 	@echo "▶ Running Kernel tests..."
-	@python3 -m pytest tests/test_kernel_state_machine.py tests/test_kernel_integration.py tests/test_kernel_cli.py tests/test_kernel_hardening.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py -v
-	@bun test ./tests/test_tony_kernel_hooks.ts
-	@bun test ./tests/test_tony_kernel_integration.ts
-	@bun test ./tests/test_tony_kernel_e2e.ts
+	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v
+	@bun test tests/tony_kernel_hooks.test.ts
+	@bun test tests/tony_kernel_integration.test.ts
+	@bun test tests/tony_kernel_e2e.test.ts
 	@echo "✓ Kernel tests passed"
 
+# Bun descubre los archivos *.test.ts por convención.
 test-ts:
-	@echo "▶ Running TypeScript tests..."
-	@bun test ./tests/test_judgment_memory_hooks.ts
+	@echo "▶ Running all TypeScript tests..."
+	@bun test tests
 	@echo "✓ TypeScript tests passed"
+
+# Coverage local y artefactos XML/LCOV básicos. El umbral inicial es deliberadamente
+# moderado: sirve para detectar módulos no ejercitados sin bloquear mejoras futuras.
+coverage: coverage-python coverage-ts
+
+coverage-python:
+	@echo "▶ Running Python coverage..."
+	@coverage run --source=kernel,code-index,judgment-memory,local-memory -m pytest tests -q
+	@coverage report -m --fail-under=40
+	@coverage xml -o coverage.xml
+	@echo "✓ Python coverage threshold passed"
+
+coverage-ts:
+	@echo "▶ Running TypeScript coverage..."
+	@rm -rf coverage-bun
+	@bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests
+	@test -s coverage-bun/lcov.info
+	@echo "✓ TypeScript coverage report written to coverage-bun/lcov.info"
 
 verify-qdrant:
 	@echo "▶ Running Qdrant smoke test (requires Ollama + Qdrant running)..."
@@ -51,7 +73,8 @@ docker-down:
 	@cd docker && docker compose down
 
 clean:
-	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db
+	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db coverage.xml
+	@rm -rf coverage-bun
 	@echo "✓ Cleaned local databases"
 
 validate-config:

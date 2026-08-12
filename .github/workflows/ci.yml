@@ -8,9 +8,13 @@ on:
 
 jobs:
   test:
-    name: Test Suite
+    name: Test Suite (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,12 +22,14 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
-          bun-version: latest
+          bun-version: 1.3.14
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install system deps
         run: |
@@ -31,38 +37,26 @@ jobs:
           sudo apt-get install -y -qq make sqlite3
 
       - name: Install Python dev/test dependencies
-        run: |
-          python3 -m pip install -r requirements-dev.txt
+        run: python3 -m pip install -r requirements-dev.txt
 
-      - name: Run Python tests
-        run: |
-          python3 tests/test_local_memory_server.py
-          python3 tests/test_code_index_core.py
-          python3 tests/test_judgment_memory_ledger.py
+      - name: Run complete local suite
+        run: make test
         shell: bash
 
-      - name: Run Kernel tests
-        run: |
-          python3 tests/test_kernel_state_machine.py
-          python3 tests/test_kernel_integration.py
-          python3 tests/test_kernel_cli.py
-          python3 tests/test_kernel_hardening.py
-          python3 tests/test_kernel_enforcement.py
-          python3 tests/test_sdd_flow_e2e.py
-          bun test ./tests/test_tony_kernel_hooks.ts
-          bun test ./tests/test_tony_kernel_integration.ts
-          bun test ./tests/test_tony_kernel_e2e.ts
+      - name: Run Python coverage
+        if: matrix.python-version == '3.12'
+        run: make coverage
         shell: bash
 
-      - name: Run TypeScript tests
-        run: |
-          bun test ./tests/test_judgment_memory_hooks.ts
-        shell: bash
-
-      - name: Validate configuration
-        run: |
-          bun run tools/validate-config.ts
-        shell: bash
+      - name: Upload coverage report
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: |
+            coverage.xml
+            coverage-bun/lcov.info
+          if-no-files-found: error
 
   docker-build:
     name: Docker Build Test

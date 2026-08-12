@@ -1,4 +1,6 @@
 # Tony-AI Python dev/test dependencies
-# Instalá esto para correr la suite de tests/ (pip install -r requirements-dev.txt).
+# Instalar con: python3 -m pip install -r requirements-dev.txt
 
 pytest==8.3.4
+coverage==7.6.10
+pytest-cov==6.0.0

@@ -268,7 +268,33 @@ function extractProjectName(directory: string): string {
 
 // ─── Plugin Export ───────────────────────────────────────────────────────────
 
-export const JudgmentMemory: Plugin = async (ctx) => {
+export interface JudgmentMemoryDeps {
+  semanticSearch: typeof semanticSearch
+  embedTexts: typeof embedTexts
+  ensureCollection: typeof ensureCollection
+  upsertPoints: typeof upsertPoints
+  upsertJudgment: typeof upsertJudgment
+}
+
+const DEFAULT_DEPS: JudgmentMemoryDeps = {
+  semanticSearch,
+  embedTexts,
+  ensureCollection,
+  upsertPoints,
+  upsertJudgment,
+}
+
+type JudgmentMemoryContext = Parameters<Plugin>[0]
+
+/**
+ * Build the real hooks with optional dependency overrides for deterministic
+ * tests. Production keeps using the regular OpenCode plugin entrypoint below.
+ */
+export async function createJudgmentMemory(
+  ctx: JudgmentMemoryContext,
+  overrides: Partial<JudgmentMemoryDeps> = {},
+) {
+  const deps = { ...DEFAULT_DEPS, ...overrides }
   const project = extractProjectName(ctx.directory)
 
   // sessionID -> formatted recall block, consumed once by the next
@@ -293,7 +319,7 @@ export const JudgmentMemory: Plugin = async (ctx) => {
       if (!content || !JD_TRIGGER_RE.test(content)) return
 
       // Use configurable threshold
-      const result = await semanticSearch(project, content, 3)
+      const result = await deps.semanticSearch(project, content, 3)
       if (!result.available || result.hits.length === 0) return
 
       const lines = result.hits
@@ -327,14 +353,14 @@ export const JudgmentMemory: Plugin = async (ctx) => {
       if (PASSIVE_CAPTURE_LOG) {
 		console.error(`[judgment-memory] passive capture: ${rec.final} for task "${rec.task.slice(0, 50)}..."`)
 	  }
-	  upsertJudgment(rec, null)
+	  deps.upsertJudgment(rec, null)
 	  passiveCaptureCount++
 
       try {
-        const [vec] = await embedTexts([`task: ${rec.task}\noutcome: ${rec.final}\nlesson: ${rec.lesson ?? ""}`])
+        const [vec] = await deps.embedTexts([`task: ${rec.task}\noutcome: ${rec.final}\nlesson: ${rec.lesson ?? ""}`])
         const coll = collectionName(rec.project)
-        await ensureCollection(coll, vec.length)
-        await upsertPoints(coll, [
+        await deps.ensureCollection(coll, vec.length)
+        await deps.upsertPoints(coll, [
           {
             id: `passive-${rec.executionId}`,
             vector: vec,
@@ -374,6 +400,8 @@ export const JudgmentMemory: Plugin = async (ctx) => {
     },
   }
 }
+
+export const JudgmentMemory: Plugin = async (ctx) => createJudgmentMemory(ctx)
 
 export default JudgmentMemory
 
