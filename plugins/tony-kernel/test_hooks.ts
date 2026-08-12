@@ -38,6 +38,8 @@ interface FakeOptions {
   scopeAllowed?: boolean
   scopeViolations?: string[]
   checkScopeThrows?: unknown
+  completionAllowed?: boolean
+  completionMissingEvidence?: string[]
 }
 
 function makeFakeClient(options: FakeOptions = {}) {
@@ -90,6 +92,15 @@ function makeFakeClient(options: FakeOptions = {}) {
 
       if (options.completionThrows) {
         throw options.completionThrows
+      }
+
+      const allowed = options.completionAllowed !== false
+      return {
+        decision: allowed ? "phase_complete" : "block_evidence_required",
+        allowed,
+        reason: allowed ? "ok" : "Invalid evidence for phase",
+        missing_artifacts: [],
+        missing_evidence: options.completionMissingEvidence ?? (allowed ? [] : ["fabricated evidence"]),
       }
     },
 
@@ -493,4 +504,25 @@ test("checkScope falla (Kernel caído) -> KernelUnavailableError", async () => {
   ).rejects.toBeInstanceOf(KernelUnavailableError)
 
   expect(calls.recordPhaseCompletion).toEqual([])
+})
+
+test("recordPhaseCompletion bloqueado por evidencia inválida -> KernelBlockedError (no 'success' silencioso)", async () => {
+  const { client, calls } = makeFakeClient({
+    completionAllowed: false,
+    completionMissingEvidence: ["command claim without exit_code"],
+  })
+  __setKernelClientForTests(client)
+
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+        evidence: [{ type: "command", claim: "confío en que anduvo" }],
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  expect(calls.recordPhaseCompletion).toEqual(["spec"])
 })

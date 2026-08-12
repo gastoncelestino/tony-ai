@@ -220,6 +220,44 @@ test("ADVERSARIAL: empty artifacts array -> KernelBlockedError", async () => {
   ).rejects.toBeInstanceOf(KernelBlockedError)
 })
 
+test("ADVERSARIAL: fabricated evidence -> KernelBlockedError, phase NOT marked complete", async () => {
+  __setKernelClientForTests(null)
+
+  await taskExecuteBeforeHook(task({ phase: "explore" }), { success: true })
+  const exploreArtifact = makeArtifact("explore", "explore.md", "explore v1")
+
+  // Evidencia sin exit_code/command reales: Evidence.validate() la marca
+  // inválida en kernel/schemas.py. record_phase_completion debe rechazarla
+  // -> block_evidence_required. Esto debe llegar como excepción real al
+  // caller del hook, no como un "success" silencioso mientras el kernel
+  // queda con la fase en status=running/completed_at=null por debajo.
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        phase: "explore",
+        artifacts: [exploreArtifact],
+        evidence: [{ type: "command", claim: "confío en que los tests pasaron" }],
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  // Confirmamos contra el kernel real que la fase efectivamente NO quedó
+  // marcada como completa (no solo que el hook haya tirado un error).
+  const status = await new Promise<any>((resolve, reject) => {
+    const p = spawn("python3", ["-m", "kernel.cli", "status"], {
+      cwd: REPO_ROOT,
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+    let out = ""
+    p.stdout.on("data", (d) => (out += d.toString()))
+    p.on("close", () => resolve(JSON.parse(out)))
+    p.on("error", reject)
+  })
+  const explorePhase = status.phase_summary.phase_summary.phases.explore
+  expect(explorePhase.completed_at).toBe(null)
+})
+
 // ─── ADVERSARIAL CASE 3: Tampering ───────────────────────────────────────
 
 test("ADVERSARIAL: tampered spec blocks advancing and archive", async () => {

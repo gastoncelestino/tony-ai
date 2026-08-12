@@ -58,7 +58,13 @@ export interface KernelClientLike {
       hash?: string
     }>,
     evidence?: unknown[]
-  ): Promise<void>
+  ): Promise<{
+    decision: string
+    allowed: boolean
+    reason: string
+    missing_artifacts: string[]
+    missing_evidence: string[]
+  }>
   checkScope(
     gitDiff: string,
     allowedFiles: string[]
@@ -136,8 +142,29 @@ class KernelClient implements KernelClientLike {
     await this.runKernelCommand(["record_delegation", phase, subAgent, taskId || ""])
   }
 
-  async recordPhaseCompletion(phase: string, artifacts: Array<{ kind: string; path: string; store: string; hash?: string }>, evidence: unknown[] = []): Promise<void> {
-    await this.runKernelCommand(["record_phase_completion", phase, JSON.stringify(artifacts), JSON.stringify(evidence)])
+  async recordPhaseCompletion(phase: string, artifacts: Array<{ kind: string; path: string; store: string; hash?: string }>, evidence: unknown[] = []): Promise<{
+    decision: string
+    allowed: boolean
+    reason: string
+    missing_artifacts: string[]
+    missing_evidence: string[]
+  }> {
+    // NOTE: kernel.cli's record_phase_completion command exits 0 with a
+    // JSON body even when the decision is a BLOCK (e.g.
+    // block_evidence_required for fabricated evidence, or
+    // block_artifact_invalid). It's not a process-level error, so
+    // runKernelCommand's exit-code check alone won't catch it — the
+    // caller MUST inspect `allowed`/`decision` in the returned body.
+    // Previously this method returned void and discarded that body
+    // entirely, so taskExecuteAfterHook would report success while the
+    // kernel silently left the phase as "running" (never marked
+    // complete). Found via a probe reproducing the fabricated-evidence
+    // e2e case at the real hook layer, not just the CLI layer.
+    const result = await this.runKernelCommand(["record_phase_completion", phase, JSON.stringify(artifacts), JSON.stringify(evidence)])
+    return {
+      ...result,
+      allowed: result.allowed === true,
+    }
   }
 
   async checkScope(gitDiff: string, allowedFiles: string[]): Promise<{
@@ -195,6 +222,15 @@ function phaseTransitionBlockedMessage(result: CanStartPhaseResult): string {
     (result.scope_violations.length > 0 ? `Scope violations: ${result.scope_violations.join(", ")}\n` : "") +
     (result.retry_status && result.retry_status.exhausted ? "\nRetry budget exhausted. Human required.\n" : "") +
     (result.next_action ? `Next action: ${result.next_action}` : "")
+  )
+}
+
+function phaseCompletionBlockedMessage(phase: string, result: { reason: string; missing_artifacts: string[]; missing_evidence: string[] }): string {
+  return (
+    `[Tony Kernel] Phase completion rejected for "${phase}": ${result.reason}\n` +
+    (result.missing_artifacts.length > 0 ? `Missing artifacts: ${result.missing_artifacts.join(", ")}\n` : "") +
+    (result.missing_evidence.length > 0 ? `Invalid/missing evidence: ${result.missing_evidence.join(", ")}\n` : "") +
+    `Kernel state will NOT advance; the next phase will be blocked.`
   )
 }
 
@@ -330,7 +366,11 @@ export async function taskExecuteAfterHook(
       }
     }
 
-    await client.recordPhaseCompletion(phase, artifacts, evidence)
+    await client.recordPhaseCompletion(phase, artifacts, evidence).then((result) => {
+      if (!result.allowed) {
+        throw new KernelBlockedError(phaseCompletionBlockedMessage(phase, result))
+      }
+    })
 
     // Post-phase validation: verify the phase is actually complete in the kernel
     const status = await client.getStatus()
