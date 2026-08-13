@@ -10,55 +10,55 @@ metadata:
   delegate_only: true
 ---
 
-# Purpose
+> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
+> the ORCHESTRATOR — STOP. Delegate to the dedicated `sdd-explore` sub-agent.
 
-Investigate an idea, inspect the relevant codebase, compare approaches, and produce an evidence-based exploration.
+## Executor Override
 
-## Inputs
+If you ARE the `sdd-explore` sub-agent, continue. Do NOT delegate.
+
+## Purpose
+
+Investigate an idea, read codebase, compare approaches. No files created — pure investigation.
+
+## What You Receive
 
 - Topic/question to explore
-- Optional change name
-- Artifact-store mode when persistence is required
+- Optional: change name if part of existing SDD change
 
-## Context boundary
+## Execution Steps
 
-Use only:
-- the question/topic
-- relevant code and configuration
-- prior exploration/discovery only when explicitly relevant
-- relevant project memory when available and required
+### 1. Load Skills & Context
+Follow Section A from `skills/_shared/sdd-phase-common.md` (minimal — no phase skills needed).
 
-Do not load another phase prompt.
-Do not load the full project history.
-Do not load unrelated artifacts.
+### 2. Investigate
+- Read relevant codebase areas
+- Search for similar patterns (`code_search`, `mem_search`)
+- Compare approaches (trade-offs, pros/cons)
+- Check prior decisions in tonymem (`mem_search`)
 
-## Work
+### 3. Synthesize Findings
+Produce exploration report with:
 
-1. Inspect only the codebase areas relevant to the question.
-2. Search for existing patterns, implementations, tests, and constraints.
-3. When prior project decisions are relevant, retrieve only the matching memory/artifact entries.
-4. Compare viable approaches with trade-offs.
-5. Produce an exploration report containing:
-   - Question
-   - Findings
-   - Options
-   - Recommendation
-   - Risks
-6. Persist the `explore` artifact using the common artifact contract when the active artifact-store mode requires persistence.
+| Section | Content |
+|---|---|
+| **Question** | What was investigated |
+| **Findings** | Key discoveries, code pointers |
+| **Options** | Approaches compared with trade-offs |
+| **Recommendation** | Suggested approach with rationale |
+| **Risks** | Known unknowns, technical debt |
 
-## Output
+### 4. Persist Exploration
+Follow Section C from `sdd-phase-common.md`:
+- artifact: `explore`
+- topic_key: `sdd/{change-name}/explore` (or standalone if no change)
+- type: `discovery`
 
-Return the minimal executor envelope:
+### 5. Return Summary
+Return Section D envelope with exploration path, key findings, and next_recommended: `sdd-propose` or `none`.
 
-- status
-- summary
-- artifact path/key
-- next: `sdd-propose` or `none`
-- risks
-
-## Constraints
-
-- No implementation.
-- Cite relevant code pointers for material claims.
-- Flag assumptions explicitly.
-- Do not copy unrelated artifacts into the launch context.
+## Rules
+- No implementation — pure investigation
+- Cite code pointers (file:line) for all claims
+- Flag assumptions explicitly
+- No files created in repo (only tonymem artifacts)

@@ -10,69 +10,66 @@ metadata:
   delegate_only: true
 ---
 
-# Purpose
+> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
+> the ORCHESTRATOR — STOP. Delegate to the dedicated `sdd-tasks` sub-agent.
 
-Break the specification and design into small, implementable task slices.
+## Executor Override
 
-## Inputs
+If you ARE the `sdd-tasks` sub-agent, continue. Do NOT delegate.
+
+## Purpose
+
+Break down specs and design into granular, implementable tasks with clear acceptance criteria.
+
+## What You Receive
 
 - Change name
-- `sdd/{change-name}/spec`
-- `sdd/{change-name}/design`
-- Artifact-store mode
-- Minimal structured status needed for workload and delivery decisions
+- Spec (`sdd/{change-name}/spec`) and Design (`sdd/{change-name}/design`)
+- Structured status with artifact paths
 
-## Context boundary
+## Execution Steps
 
-Read only the specification, design, and status required to plan the tasks.
+### 1. Load Skills & Context
+Follow Section A from `skills/_shared/sdd-phase-common.md`.
+Read spec, design, and structured status.
 
-Do not load:
-- proposal
-- exploration
-- implementation files
-- verify reports
-- archive data
-- unrelated phase prompts
-- complete runtime status contracts
+### 2. Generate Tasks
+Break down into granular tasks with:
 
-## Work
+| Field | Description |
+|---|---|
+| **ID** | Hierarchical (1.1, 1.2, 2.1...) |
+| **Title** | One-line description |
+| **Description** | What to implement, acceptance criteria |
+| **Phase** | Logical grouping (Foundation, Core, Integration, Polish) |
+| **Dependencies** | Task IDs that must complete first |
+| **Files** | Expected new/modified files |
+| **Tests** | Required test scenarios |
 
-1. Read the specification and design.
-2. Create tasks with:
-   - ID
-   - title
-   - implementation description
-   - testable acceptance criteria
-   - logical phase
-   - dependencies
-   - expected files
-   - required tests
-3. Keep each task to one logical commit.
-4. Split a task expected to touch more than 2 files or 200 lines.
-5. Forecast changed lines and implementation risk.
-6. If the forecast exceeds 400 lines or presents high risk, mark the workload as requiring a delivery decision.
-7. When a delivery decision is required, forecast:
-   - `auto-chain`
-   - `ask-on-risk`
-   - `single-pr`
-   - `exception-ok`
-8. Suggest a chain strategy when chaining is required.
-9. Persist the `tasks` artifact using the common artifact contract.
+**Task Granularity Rule**: Each task = 1 logical commit. If a task needs >2 files or >200 lines, split it.
 
-## Output
+### 3. Review Workload Guard
+Forecast total changed lines and risk:
+- If >400 lines OR high risk → forecast `Chained PRs recommended: Yes`
+- Include `400-line budget risk: High/Medium/Low`
+- Set `Decision needed before apply: Yes` if forecast exceeds budget
 
-Return the minimal executor envelope with:
+### 4. Delivery Strategy Forecast
+If workload exceeds budget, forecast:
+- `auto-chain` / `ask-on-risk` / `single-pr` / `exception-ok`
+- Suggest `Chain strategy`: `stacked-to-main` or `feature-branch-chain`
 
-- task count
-- workload forecast
-- delivery recommendation
-- artifact path/key
-- risks
-- next: `sdd-apply`
+### 5. Persist Tasks
+Follow Section C from `sdd-phase-common.md`:
+- artifact: `tasks`
+- topic_key: `sdd/{change-name}/tasks`
+- type: `architecture`
 
-## Constraints
+### 6. Return Summary
+Return Section D envelope with tasks path, task count, workload forecast, and next_recommended: `sdd-apply`.
 
-- Acceptance criteria must be testable.
-- Dependencies must form a DAG.
-- Flag specification/design gaps instead of inventing requirements.
-- Never include unrelated phase instructions or artifacts in the task artifact.
+## Rules
+- Each task = 1 logical commit / PR
+- Tasks MUST have testable acceptance criteria
+- Dependencies MUST form a DAG (no cycles)
+- Flag spec/design gaps as task-level risks

@@ -1,8 +1,8 @@
 ---
 name: sdd-onboard
-description: "Guide a user through SDD onboarding and establish the minimum project/change context."
+description: "Guided end-to-end walkthrough of SDD using your real codebase. Trigger: user wants to learn SDD by doing."
 disable-model-invocation: true
-user-invocable: false
+user-invocable: true
 license: MIT
 metadata:
   author: gentleman-programming
@@ -10,55 +10,59 @@ metadata:
   delegate_only: true
 ---
 
-# Purpose
-Guide onboarding for a project or change and establish only the context required for the next SDD action.
+> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
+> the ORCHESTRATOR — this command is user-invocable. If you are the orchestrator,
+> run the onboarding flow directly. If you are a sub-agent, STOP.
 
-## Inputs
-- User onboarding request
-- Repository/project location
-- Existing SDD state when available
-- Artifact-store mode
-- Structured status when supplied
+## Purpose
 
-## Context boundary
-Inspect only what is required to understand the project's current SDD state.
+Guide the user through a complete SDD cycle using their real codebase. This is a teaching command, not a production phase.
 
-Prefer:
-- README/project documentation relevant to development
-- existing SDD configuration
-- active change metadata
-- existing artifact references
-- targeted repository structure
+## What You Receive
 
-Do not load:
-- every project file
-- all SDD artifacts
-- all phase prompts
-- generated prompt bundles
-- `phase-manifest.json`
-- unrelated skills
-- implementation source unless needed to answer the onboarding question
+- User wants to learn SDD by doing
+- Their real codebase as the training ground
 
-## Work
-1. Determine whether the project already has SDD state.
-2. Identify the active artifact-store mode and relevant project configuration.
-3. Identify active changes and their current state when applicable.
-4. Explain the minimum information needed for the next action.
-5. If onboarding requires creating or updating project/change state, persist only that state using the active artifact-store contract.
-6. Recommend the next appropriate action without executing another SDD phase.
+## Execution Flow
 
-## Output
-Return:
-- status
-- current project/change state
-- relevant artifact paths/keys
-- onboarding findings
-- missing information, if any
-- next recommended action
+### 1. Welcome & Setup
+- Explain SDD in 2 minutes (8 phases, orchestration, memory)
+- Run `/sdd-init` to bootstrap their project
+- Explain artifact stores (tonymem vs openspec)
 
-## Constraints
-- Do not execute another SDD phase.
-- Do not load all phase prompts to explain the workflow.
-- Do not reconstruct generated prompts or manifests.
-- Do not copy unrelated project content into onboarding state.
-- Prefer references and summaries over copied artifact contents.
+### 2. Pick a Real Change
+Help user pick a SMALL real change from their backlog:
+- 1-2 files, 1-2 hours max
+- Has clear requirements
+- Not security-critical
+
+### 3. Run Full Cycle (Interactive)
+Guide through each phase with explanations:
+
+| Phase | Command | What Happens |
+|---|---|---|
+| Explore | `/sdd-explore "topic"` | Investigate codebase, compare approaches |
+| Propose | `/sdd-propose` | Create proposal with business context |
+| Spec | `/sdd-spec` | Write detailed technical spec |
+| Design | `/sdd-design` | Define architecture, data, interfaces |
+| Tasks | `/sdd-tasks` | Break into granular implementable tasks |
+| Apply | `/sdd-apply` | Implement tasks (with TDD if available) |
+| Verify | `/sdd-verify` | Run tests, prove compliance |
+| Archive | `/sdd-archive` | Close change, persist lessons |
+
+At each phase:
+- Explain WHY this phase exists
+- Show the artifact produced
+- Let user review/approve before continuing
+
+### 4. Debrief
+- Review what artifacts were created
+- Show how tonymem remembers decisions
+- Explain how next change reuses context
+- Point to advanced features (Judgment Day, chained PRs, etc.)
+
+## Rules
+- User must approve each phase before continuing
+- Use their REAL codebase — no toy examples
+- Keep first change SMALL (< 2 hours total)
+- Celebrate completion — they just did SDD end-to-end!
