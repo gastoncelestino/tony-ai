@@ -40,13 +40,11 @@ check-test-discovery:
 test-python: check-test-deps check-test-discovery
 	@echo "▶ Running all Python tests..."
 	@if python3 -c 'import pytest' 2>/dev/null; then \
+		echo "▶ pytest disponible; ejecutando suite completa..."; \
 		python3 -m pytest tests -q; \
 	else \
-		echo "⚠ Ejecutando tests standalone (sin pytest)..."; \
-		for f in tests/test_*.py; do \
-			echo "  . $$f"; \
-			python3 "$$f" || exit 1; \
-		done; \
+		echo "⚠ pytest no disponible; usando runner stdlib..."; \
+		python3 tools/run-python-tests.py tests; \
 	fi
 	@echo "✓ Python tests passed"
 
@@ -56,11 +54,11 @@ test-kernel: check-test-deps check-test-discovery
 	@if python3 -c 'import pytest' 2>/dev/null; then \
 		python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v; \
 	else \
-		echo "⚠ Ejecutando kernel tests standalone (sin pytest)..."; \
-		for f in tests/test_kernel_*.py tests/test_sdd_flow_e2e.py; do \
-			echo "  . $$f"; \
-			python3 "$$f" || exit 1; \
-		done; \
+		echo "⚠ pytest no disponible; usando runner stdlib..."; \
+		python3 tools/run-python-tests.py \
+			tests/test_kernel_cli.py \
+			tests/test_kernel_enforcement.py \
+			tests/test_sdd_flow_e2e.py; \
 	fi
 	@bun test tests/tony_kernel_*.test.ts
 	@echo "✓ Focused Kernel tests passed"
