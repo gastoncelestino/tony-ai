@@ -70,29 +70,31 @@ tony-ai/
 ├── README.md                          # Introducción y quickstart
 ├── opencode.json                      # Config de agentes, MCP servers, permisos
 ├── AGENTS.md                          # Reglas de orquestación, idioma, memoria
-├── ARCHITECTURE.md                    # Documentación técnica para entender el proyecto
+├── ARCHITECTURE.md                    # Documentación técnica de arquitectura
 ├── INSTALL.md                         # Guía de instalación detallada
+├── TESTING.md                         # Estrategia y guía de ejecución de pruebas
 ├── Makefile                           # Wrappers de tests, bootstrap, health, docker
-├── requirements-dev.txt               # pytest (para correr tests/)
+├── requirements-dev.txt               # pytest (para desarrollo y CI)
 ├── requirements-optional.txt          # tree-sitter (opt-in)
 │
-├── tests/                             # TODOS los tests del proyecto, centralizados
+├── tests/                             # suite centralizada de tests
 │   ├── test_kernel_state_machine.py   # Tests unitarios FSM + enforcement
 │   ├── test_kernel_integration.py     # Tests de integración plugin ↔ Python
 │   ├── test_kernel_cli.py             # Tests CLI (reset, record_delegation, etc.)
 │   ├── test_kernel_hardening.py       # Tests de hardening (validaciones adversarias)
 │   ├── test_kernel_enforcement.py     # Contrato de enforcement fail-closed
 │   ├── test_sdd_flow_e2e.py           # Flujo aislado explore→archive, 28 checks adversariales
-│   ├── test_tony_kernel_hooks.ts      # Unit tests del plugin (mocked client)
-│   ├── test_tony_kernel_integration.ts# Puente TS → Python real (sin mocks)
-│   ├── test_tony_kernel_e2e.ts        # End-to-end adversarial (flujo completo SDD + 7 ataques)
+│   ├── test_python_test_runner.py     # Cobertura unitaria del runner standalone stdlib
 │   ├── test_local_memory_server.py    # Regression test (MCP framing, UPSERT, FTS)
 │   ├── test_code_index_core.py        # Regression test (mock HTTP, incremental)
 │   ├── test_judgment_memory_ledger.py # Regression test (mock Ollama/Qdrant)
-│   └── test_judgment_memory_hooks.ts  # Test harness para hooks de plugin
+│   ├── judgment_memory_hooks.test.ts  # Test harness TypeScript para hooks
+│   ├── prompt_bundler.test.ts         # Tests del empaquetador de prompts
+│   ├── tony_kernel_e2e.test.ts        # End-to-end adversarial TypeScript
+│   ├── tony_kernel_hooks.test.ts      # Unit tests del plugin TypeScript
+│   └── tony_kernel_integration.test.ts# Puente TS → Python real
 │
 ├── kernel/                            # Tony Kernel — orquestación determinista SDD
-│   ├── __init__.py
 │   ├── cli.py                         # CLI: can_start_phase, record_phase_completion, check_scope, reset, status
 │   ├── orchestrator_integration.py    # Phase controller + artifact gate + scope check + retry budget
 │   ├── state_machine.py               # FSM de fases SDD
@@ -107,73 +109,25 @@ tony-ai/
 │   ├── schemas.py                     # ArtifactRef, DelegationRecord, PhaseCompletion
 │   └── mcp_server.py                  # MCP server para kernel (registrado en opencode.json)
 │
-├── config/
-│   └── tony-memory.yaml               # Referencia documentada de env vars
+├── tools/                             # Herramientas auxiliares y test runners
+│   ├── run-python-tests.py            # Runner de tests Python standalone (solo stdlib)
+│   ├── build-prompts.ts               # CLI para empaquetar prompts de fases
+│   ├── prompt-bundler.ts              # Motor de resolución de includes y skills
+│   └── validate-config.ts             # Validador de opencode.json, prompts, agents y MCP
 │
-├── docker/
-│   ├── docker-compose.yml             # Ollama + Qdrant (backing services)
-│   ├── docker-compose.gpu.yml         # Override opcional NVIDIA
-│   ├── .env.example
-│   └── README.md                      # Servicios de soporte en Linux
-│
-├── scripts/                           # Solo shell — bootstrap y operación
-│   ├── setup.sh                       # Bootstrap idempotente
-│   ├── health.sh                      # Verificación end-to-end
-│   └── calibrate-ctx.sh               # Sincroniza num_ctx de Ollama con opencode.json/DCP
-│
-├── tools/
-│   └── validate-config.ts             # Valida opencode.json, prompts, agents, MCP, skills
-│
-├── plugins/
+├── plugins/                           # Plugins para OpenCode
 │   ├── tonymem.ts                     # Hook OpenCode: auto-guardar sesiones + prompts
 │   ├── qdrant.ts                      # Cliente REST Qdrant + Ollama (Bun)
 │   ├── judgment-memory.ts             # Bridge: recall antes de JD, captura después
-│   └── tony-kernel/                   # Tony Kernel plugin (deterministic SDD enforcement)
-│       └── index.ts                   # Hook entry: before/after phase checks
+│   └── tony-kernel/                   # Tony Kernel plugin (enforcement determinista)
+│       └── index.ts                   # Hook entry: checks antes y después de fases
 │
-├── prompts/
-│   └── sdd/                           # Prompts de fases SDD (uno por fase)
-│       ├── sdd-explore.md
-│       ├── sdd-propose.md
-│       ├── sdd-spec.md
-│       ├── sdd-design.md
-│       ├── sdd-tasks.md
-│       ├── sdd-apply.md
-│       ├── sdd-verify.md
-│       ├── sdd-archive.md
-│       ├── sdd-init.md
-│       └── sdd-onboard.md
+├── prompts/                           # Definiciones de prompts y bundles
+│   ├── sdd/                           # Prompts de fases SDD (explore, propose, spec, etc.)
+│   └── generated/                     # Bundles de prompts materializados
 │
-├── skills/
-│   ├── _shared/                       # Protocolos comunes a todas las fases SDD
-│   │   ├── SKILL.md
-│   │   ├── sdd-phase-common.md        # Secciones A-E: skill loading, retrieval,
-│   │   │                            # persistence, return envelope, review workload
-│   │   ├── openspec-convention.md     # Directorios, paths, delta spec sections
-│   │   ├── tonymem-convention.md      # Topic keys, mem_save/mem_search contracts
-│   │   ├── sdd-status-contract.md     # Schema de structured status
-│   │   ├── persistence-contract.md    # Contratos de persistencia por artifact store
-│   │   ├── review-ledger-contract.md  # Contrato de review ledger para Judgment Day
-│   │   └── skill-resolver.md          # Skill registry protocol
-│   ├── sdd-explore/
-│   ├── sdd-propose/
-│   ├── sdd-spec/
-│   ├── sdd-design/
-│   ├── sdd-tasks/
-│   ├── sdd-apply/
-│   ├── sdd-verify/
-│   ├── sdd-archive/
-│   ├── sdd-init/
-│   ├── sdd-onboard/
-│   ├── judgment-day/
-│   ├── chained-pr/
-│   ├── branch-pr/
-│   ├── work-unit-commits/
-│   ├── comment-writer/
-│   ├── issue-creation/
-│   ├── go-testing/
-│   ├── cognitive-doc-design/
-│   └── skill-creator/
+├── skills/                            # Skills registradas y protocolos comunes
+│   └── _shared/                       # sdd-phase-common, tonymem-convention, openspec-convention
 │
 ├── local-memory/                      # TonyMem — MCP server (8 tools)
 │   ├── server.py
@@ -187,16 +141,13 @@ tony-ai/
 ├── judgment-memory/                   # Judgment Day <-> TonyMem bridge
 │   ├── ledger.py                      # SQLite ledger + normalize + embed + Qdrant
 │   ├── server.py                      # jd_recall / jd_record / jd_history / jd_stats
-│   ├── schema.json                    # Shape de un judgment record
-│   ├── scripts/
-│   │   └── verify-qdrant.ts           # Smoke test del cliente TS real
 │   └── README.md
 │
-└── .opencode/
-    └── dcp.jsonc                      # Config de DCP (plugin externo)
+└── docker/                            # Entorno de soporte (Ollama + Qdrant)
+    └── docker-compose.yml
 ```
 
-> Todos los tests viven en `tests/`, corridos con `pytest tests/` (Python) o `bun test tests/*.ts` (TypeScript) — ver [`## Comandos`](#comandos) y el `Makefile`.
+> **Estrategia de Tests**: Los tests Python pueden ejecutarse mediante `pytest tests/` (desarrollo/CI) o con el runner standalone sin dependencias `python3 tools/run-python-tests.py tests`. Los tests TypeScript usan `bun test tests`. Ver [`TESTING.md`](TESTING.md) y el `Makefile`.
 
 
 ## Comandos

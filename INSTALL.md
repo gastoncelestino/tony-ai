@@ -163,22 +163,23 @@ make test            # Ejecutar todos los tests
 ```
 
 
-# 5. Correr el suite de tests
-## 5.1 Correr tests de Python + TypeScript. 
+# 5. Correr la suite de tests
+## 5.1 Ejecución recomendada
 ```bash
-make test            # Tests completos (Python + TypeScript + Kernel)
-make test-python     # Solo tests Python
-make test-ts         # Solo tests TypeScript
-make test-kernel     # Solo tests Kernel (state machine + integration + e2e adversarial)
-make verify-qdrant   # Smoke test pipeline real
-make health          # Verificar servicios
-make clean           # Borrar bases SQLite locales
-make docker-up       # Iniciar servicios Docker
-make docker-down     # Detener servicios Docker
+make test                            # Suite completa (Python + TypeScript + Kernel)
+pytest tests                         # Suite Python con Pytest (desarrollo y CI)
+python3 tools/run-python-tests.py tests # Runner Python standalone (sin dependencias, solo stdlib)
+make test-ts                         # Solo tests TypeScript
+make test-kernel                     # Solo tests Kernel
+```
+
+## 5.2 Targets auxiliares del Makefile
+```bash
+make verify-qdrant   # Smoke test del pipeline de Qdrant/Ollama
+make health          # Verificar estado de los servicios
 make validate-config # Validar opencode.json + prompts + skills
 make build-prompts    # Regenerar bundles de prompts
 make check-prompts    # Validar que los bundles estén actualizados
-make generate-agents  # Sincronizar agents de opencode.json con phase-manifest.json
 ```
 
 ## 5.2 Comandos OpenCode (slash commands)

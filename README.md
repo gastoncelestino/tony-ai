@@ -265,15 +265,7 @@ gga run --pr-mode    # revisar todos los cambios del PR vs main
 gga run --no-cache   # ignorar cache y revisar todo
 ```
 
-Después, cada `git commit` dispara automáticamente la revisión de los archivos staged. Para revisar sin commitear:
-
 ## Agradecimientos
-Algunos conceptos de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.  
+Algunos conceptos de SDD, orquestador, prompts, skills y comandos se basan en el repositorio `gentle-ai` de Alan Buscaglia (`The Gentleman`), a quien agradecemos por su contenido y aportes a la comunidad.
 
-Se agregaron componentes como componentes como `Code Indexer` (RAG semántico), `TonyMem` (base de datos SQLite), `Judgment Day` (SQLite, Qdrant para juicios y Ollama con modelos locales) y `Tony Kernel` (orquestación determinista de fases SDD con validación de artifacts, scope guard y detección de tampering).
-
-La intención es descargar este repositorio en la carpeta global `~/.opencode/` → correr un único instalador `scripts/setup.sh`, verificar la instalación `scripts/health.sh` → tener mas control de los archivos para una mejora contínua.
-
-Se trató de documentar lo más posible, por si querés modificar algo de tu interés.
-
-Muchas gracias
+Se incorporaron subsistemas propios como `Code Indexer` (RAG semántico), `TonyMem` (memoria en SQLite WAL), `Judgment Memory` (ledger y recall de juicios con Ollama y Qdrant) y `Tony Kernel` (orquestación determinista de fases SDD con gates de artefactos, scope guard y detección de tampering).
