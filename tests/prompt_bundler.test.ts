@@ -215,6 +215,52 @@ describe('prompt bundler', () => {
     ).toContain('prompts/generated/phases/demo.md');
   });
 
+ 
+  test('--phase rejects an unknown phase before writing artifacts', () => {
+    writeAll(fixtureRoot);
+
+    const manifestPath = join(
+      fixtureRoot,
+      'prompts/generated/prompt-manifest.json',
+    );
+
+    const orchestratorPath = join(
+      fixtureRoot,
+      'prompts/generated/tony-orchestrator.md',
+    );
+
+    const manifestBefore = readFileSync(manifestPath, 'utf8');
+    const orchestratorBefore = readFileSync(orchestratorPath, 'utf8');
+
+    writeFixtureFile(
+      'prompts/agents/includes/nested/b.md',
+      'B changed but phase is invalid\n',
+    );
+
+    const process = Bun.spawnSync(
+      [
+        'bun',
+        'run',
+        join(repoRoot, 'tools/build-prompts.ts'),
+        '--phase',
+        'does-not-exist',
+      ],
+      {
+        cwd: fixtureRoot,
+      },
+    );
+
+    expect(process.exitCode).not.toBe(0);
+
+    const stderr = new TextDecoder().decode(process.stderr);
+
+    expect(stderr).toContain('unknown phase: does-not-exist');
+
+    expect(readFileSync(manifestPath, 'utf8')).toBe(manifestBefore);
+    expect(readFileSync(orchestratorPath, 'utf8')).toBe(orchestratorBefore);
+  });
+
+
   test('--phase rejects an unknown phase before writing artifacts', () => {
     writeAll(fixtureRoot);
 

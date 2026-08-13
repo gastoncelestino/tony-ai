@@ -6,23 +6,11 @@
 
 .PHONY: test test-all build-prompts check-prompts check-test-deps check-test-discovery check-coverage-deps test-python test-ts test-kernel coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config generate-agents
 
-# Suite normal de validación.
-# Incluye discovery, prompts, Python, TypeScript y configuración.
+# Este target es la suite completa. test-kernel es un target focalizado y no se
+# invoca aquí para evitar ejecutar dos veces los mismos tests del Kernel.
 test: check-test-deps check-test-discovery check-prompts test-python test-ts validate-config
 
-build-prompts: check-test-deps
-	@echo "▶ Building prompt bundles..."
-	@mkdir -p prompts/generated/phases
-	@bun run tools/build-prompts.ts
-	@echo "✓ Prompt bundles built"
-
-check-prompts: check-test-deps
-	@echo "▶ Checking prompt bundles..."
-	@bun run tools/build-prompts.ts --check
-	@echo "✓ Prompt bundles are up to date"
-
-# Alias explícito para la suite completa.
-# test ya descubre los tests del Kernel; test-kernel queda como target focalizado.
+# Target explícito que ejecuta TODO, incluyendo el Kernel de forma focalizada.
 test-all: test test-kernel
 
 check-test-deps:
@@ -37,27 +25,18 @@ check-test-deps:
 	@echo "✓ Test dependencies available (o fallback activo)"
 
 # Evita que un archivo nuevo quede fuera de pytest o Bun por una convención de
-# nombres incorrecta.
+# nombres incorrecta. La ejecución de test-ts valida además el descubrimiento real.
 check-test-discovery:
 	@set -eu; \
 	invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' -print); \
 	invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' -print); \
-	if [ -n "$$invalid_ts" ]; then \
-		echo "ERROR: TypeScript tests no descubribles:"; \
-		echo "$$invalid_ts"; \
-		exit 1; \
-	fi; \
-	if [ -n "$$invalid_py" ]; then \
-		echo "ERROR: Python tests no descubribles:"; \
-		echo "$$invalid_py"; \
-		exit 1; \
-	fi; \
-	test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { \
-		echo "ERROR: no hay tests TypeScript descubribles"; \
-		exit 1; \
-	}; \
+	if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; \
+	if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; \
+	test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; \
 	echo "✓ Test naming/discovery conventions valid"
 
+# Descubre todos los tests Python, incluidos los tests de persistencia,
+# concurrencia y contrato MCP.
 test-python: check-test-deps check-test-discovery
 	@echo "▶ Running all Python tests..."
 	@if python3 -c 'import pytest' 2>/dev/null; then \
@@ -71,7 +50,7 @@ test-python: check-test-deps check-test-discovery
 	fi
 	@echo "✓ Python tests passed"
 
-# Target focalizado para debugging del Kernel.
+# Target explícito para depurar únicamente el Kernel, sin duplicarlo en `make test`.
 test-kernel: check-test-deps check-test-discovery
 	@echo "▶ Running focused Kernel tests..."
 	@if python3 -c 'import pytest' 2>/dev/null; then \
@@ -86,6 +65,7 @@ test-kernel: check-test-deps check-test-discovery
 	@bun test tests/tony_kernel_*.test.ts
 	@echo "✓ Focused Kernel tests passed"
 
+# Bun descubre los archivos *.test.ts por convención.
 test-ts: check-test-deps check-test-discovery
 	@echo "▶ Running all TypeScript tests..."
 	@bun test tests
@@ -100,6 +80,8 @@ check-coverage-deps: check-test-deps
 	fi
 	@echo "✓ Coverage dependencies available"
 
+# Coverage local y artefactos XML/LCOV básicos. El umbral inicial es deliberadamente
+# moderado: sirve para detectar módulos no ejercitados sin bloquear mejoras futuras.
 coverage: check-coverage-deps coverage-python coverage-ts
 
 coverage-python: check-coverage-deps
@@ -143,6 +125,17 @@ clean:
 	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db coverage.xml
 	@rm -rf coverage-bun
 	@echo "✓ Cleaned local databases"
+
+build-prompts: check-test-deps
+	@echo "▶ Building prompt bundles..."
+	@mkdir -p prompts/generated/phases
+	@bun run tools/build-prompts.ts
+	@echo "✓ Prompt bundles built"
+
+check-prompts:
+	@echo "▶ Checking prompt bundles..."
+	@bun run tools/build-prompts.ts --check
+	@echo "✓ Prompt bundles are up to date"
 
 generate-agents:
 	@echo "▶ Generating opencode.json agents from phase-manifest.json..."

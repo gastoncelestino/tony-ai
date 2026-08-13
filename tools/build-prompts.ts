@@ -37,9 +37,8 @@ if (import.meta.main) {
         usage();
       }
 
-      // --phase es una operación de rebuild completo, no un build parcial.
-      // Primero resolvemos el árbol en memoria y validamos que la fase exista.
-      // Sólo después escribimos cualquier artefacto.
+      // --phase es una validación/selección de fase, pero el build es siempre
+      // completo para mantener todos los bundles, hashes y manifest sincronizados.
       const built = buildAll(root);
 
       if (!Object.prototype.hasOwnProperty.call(built.manifest.phases, phase)) {
