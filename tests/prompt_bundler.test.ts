@@ -215,7 +215,6 @@ describe('prompt bundler', () => {
     ).toContain('prompts/generated/phases/demo.md');
   });
 
- 
   test('--phase rejects an unknown phase before writing artifacts', () => {
     writeAll(fixtureRoot);
 
@@ -258,59 +257,6 @@ describe('prompt bundler', () => {
 
     expect(readFileSync(manifestPath, 'utf8')).toBe(manifestBefore);
     expect(readFileSync(orchestratorPath, 'utf8')).toBe(orchestratorBefore);
-  });
-
-
-  test('--phase rejects an unknown phase before writing artifacts', () => {
-    writeAll(fixtureRoot);
-
-    const manifestBefore = readFileSync(
-      join(fixtureRoot, 'prompts/generated/prompt-manifest.json'),
-      'utf8',
-    );
-
-    const orchestratorBefore = readFileSync(
-      join(fixtureRoot, 'prompts/generated/tony-orchestrator.md'),
-      'utf8',
-    );
-
-    writeFixtureFile(
-      'prompts/agents/includes/nested/b.md',
-      'B changed but phase is invalid\n',
-    );
-
-    const process = Bun.spawnSync(
-      [
-        'bun',
-        'run',
-        join(repoRoot, 'tools/build-prompts.ts'),
-        '--phase',
-        'does-not-exist',
-      ],
-      {
-        cwd: fixtureRoot,
-      },
-    );
-
-    expect(process.exitCode).not.toBe(0);
-
-    const stderr = new TextDecoder().decode(process.stderr);
-
-    expect(stderr).toContain('unknown phase: does-not-exist');
-
-    expect(
-      readFileSync(
-        join(fixtureRoot, 'prompts/generated/prompt-manifest.json'),
-        'utf8',
-      ),
-    ).toBe(manifestBefore);
-
-    expect(
-      readFileSync(
-        join(fixtureRoot, 'prompts/generated/tony-orchestrator.md'),
-        'utf8',
-      ),
-    ).toBe(orchestratorBefore);
   });
 
   test('produces byte-identical output for unchanged inputs', () => {
