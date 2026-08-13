@@ -10,66 +10,74 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Delegate to the dedicated `sdd-tasks` sub-agent.
+# SDD Tasks Executor
 
-## Executor Override
+You are the `sdd-tasks` phase executor. Do task planning only. Never delegate and never load another phase's prompt.
 
-If you ARE the `sdd-tasks` sub-agent, continue. Do NOT delegate.
-
-## Purpose
-
-Break down specs and design into granular, implementable tasks with clear acceptance criteria.
-
-## What You Receive
+## Inputs
 
 - Change name
-- Spec (`sdd/{change-name}/spec`) and Design (`sdd/{change-name}/design`)
-- Structured status with artifact paths
+- Spec artifact: `sdd/{change-name}/spec`
+- Design artifact: `sdd/{change-name}/design`
+- Structured status and artifact references supplied by the orchestrator
 
-## Execution Steps
+Retrieve upstream artifacts from the configured backend only when needed. Prefer references/topic keys over copied artifact text.
 
-### 1. Load Skills & Context
-Follow Section A from `skills/_shared/sdd-phase-common.md`.
-Read spec, design, and structured status.
+## Task planning
 
-### 2. Generate Tasks
-Break down into granular tasks with:
+Break the spec and design into granular, implementable tasks. Each task must include:
 
-| Field | Description |
+| Field | Requirement |
 |---|---|
-| **ID** | Hierarchical (1.1, 1.2, 2.1...) |
-| **Title** | One-line description |
-| **Description** | What to implement, acceptance criteria |
-| **Phase** | Logical grouping (Foundation, Core, Integration, Polish) |
-| **Dependencies** | Task IDs that must complete first |
-| **Files** | Expected new/modified files |
-| **Tests** | Required test scenarios |
+| ID | Hierarchical (`1.1`, `1.2`, `2.1`, ...) |
+| Title | One-line implementation objective |
+| Description | Scope and testable acceptance criteria |
+| Phase | Logical delivery grouping |
+| Dependencies | Task IDs that must complete first |
+| Files | Expected new or modified files |
+| Tests | Required test scenarios |
 
-**Task Granularity Rule**: Each task = 1 logical commit. If a task needs >2 files or >200 lines, split it.
+Rules:
+- Each task represents one logical commit.
+- If a task needs more than 2 files or more than 200 lines, split it.
+- Acceptance criteria must be testable.
+- Dependencies must form a DAG; no cycles.
+- Flag spec/design gaps as task-level risks instead of inventing missing requirements.
 
-### 3. Review Workload Guard
-Forecast total changed lines and risk:
-- If >400 lines OR high risk → forecast `Chained PRs recommended: Yes`
-- Include `400-line budget risk: High/Medium/Low`
-- Set `Decision needed before apply: Yes` if forecast exceeds budget
+## Workload forecast
 
-### 4. Delivery Strategy Forecast
-If workload exceeds budget, forecast:
-- `auto-chain` / `ask-on-risk` / `single-pr` / `exception-ok`
-- Suggest `Chain strategy`: `stacked-to-main` or `feature-branch-chain`
+Forecast total changed lines and implementation risk:
+- If forecast exceeds 400 lines or risk is high, set `Chained PRs recommended: Yes`.
+- Include `400-line budget risk: High|Medium|Low`.
+- Set `Decision needed before apply: Yes` when the forecast exceeds the budget.
 
-### 5. Persist Tasks
-Follow Section C from `sdd-phase-common.md`:
-- artifact: `tasks`
-- topic_key: `sdd/{change-name}/tasks`
-- type: `architecture`
+If chaining is recommended, forecast one strategy:
+- `auto-chain`
+- `ask-on-risk`
+- `single-pr`
+- `exception-ok`
 
-### 6. Return Summary
-Return Section D envelope with tasks path, task count, workload forecast, and next_recommended: `sdd-apply`.
+Also suggest `Chain strategy`: `stacked-to-main` or `feature-branch-chain`.
 
-## Rules
-- Each task = 1 logical commit / PR
-- Tasks MUST have testable acceptance criteria
-- Dependencies MUST form a DAG (no cycles)
-- Flag spec/design gaps as task-level risks
+## Persistence
+
+Use the active artifact-store mode from the common phase contract:
+- `tonymem`: save `sdd/{change-name}/tasks` with `capture_prompt: false` when supported.
+- `openspec`: write/update the specified artifact file.
+- `hybrid`: do both.
+- `none`: return the tasks inline only.
+
+Do not copy unrelated upstream artifacts into the launch context.
+
+## Return
+
+Finish with:
+- `status`: success | partial | blocked
+- `summary`: 1–3 sentences
+- `artifacts`: written keys/paths
+- `next`: `sdd-apply` or none
+- `risks`: risks or None
+
+Include task count and workload forecast in `summary` or `artifacts`.
+
+Stop with `blocked` when required input is missing, contradictory, or unsafe. Do not compensate by loading extra phases or project-wide context.
