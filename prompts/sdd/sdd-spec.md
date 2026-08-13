@@ -1,6 +1,6 @@
 ---
 name: sdd-spec
-description: "Write detailed technical specification from proposal. Trigger: orchestrator launches spec phase."
+description: "Write a testable technical specification from a proposal."
 disable-model-invocation: true
 user-invocable: false
 license: MIT
@@ -10,55 +10,26 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Delegate to the dedicated `sdd-spec` sub-agent.
+# Purpose
+Translate approved business requirements into a testable technical specification.
 
-## Executor Override
-
-If you ARE the `sdd-spec` sub-agent, continue. Do NOT delegate.
-
-## Purpose
-
-Write a detailed technical specification from the proposal. The spec translates business requirements into testable technical requirements.
-
-## What You Receive
-
+## Inputs
 - Change name
-- Proposal artifact (`sdd/{change-name}/proposal`)
-- Structured status with artifact paths
+- Proposal artifact `sdd/{change-name}/proposal`
+- Structured artifact paths/status only when needed for persistence
 
-## Execution Steps
+## Work
+1. Read the proposal; do not retrieve exploration unless a proposal gap explicitly requires it.
+2. Define functional and non-functional requirements.
+3. Map every requirement to testable Given/When/Then scenarios.
+4. Define only interfaces, data model, error handling, security, observability, deployment, and testing details required by the change.
+5. Flag proposal gaps instead of inventing requirements.
+6. Persist `sdd/{change-name}/spec` using the common artifact contract.
 
-### 1. Load Skills & Context
-Follow Section A from `skills/_shared/sdd-phase-common.md`.
-Read proposal and structured status.
+## Constraints
+- Specification is technical and testable; implementation design belongs to `sdd-design`.
+- Do not load another phase prompt.
+- Do not copy proposal/history beyond what is needed to produce the spec.
 
-### 2. Write Specification
-Create detailed spec covering:
-
-| Section | Content |
-|---|---|
-| **Requirements** | Functional & non-functional requirements (from proposal) |
-| **Scenarios** | Testable scenarios with Given/When/Then |
-| **Interfaces** | API contracts, data schemas, CLI commands |
-| **Data Model** | Entities, relationships, constraints |
-| **Error Handling** | Expected errors, codes, recovery |
-| **Security** | AuthZ/AuthN, data protection, threat model |
-| **Observability** | Metrics, logs, traces, alerts |
-| **Deployment** | Config, migrations, rollback |
-| **Testing Strategy** | Unit/integration/contract test approach |
-
-### 3. Persist Spec
-Follow Section C from `sdd-phase-common.md`:
-- artifact: `spec`
-- topic_key: `sdd/{change-name}/spec`
-- type: `architecture`
-
-### 4. Return Summary
-Return Section D envelope with spec path, key decisions, risks, and next_recommended: `sdd-design` or `sdd-tasks`.
-
-## Rules
-- Specs MUST be testable — every requirement maps to scenarios
-- Use neutral/professional English for technical artifacts
-- Cross-reference proposal requirements by ID
-- Flag any proposal gaps as risks
+## Output
+Minimal executor envelope; next phase `sdd-design` or `sdd-tasks` when design is unnecessary.
