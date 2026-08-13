@@ -280,6 +280,8 @@ def test_local_memory_server():
         print("\nALL ASSERTIONS PASSED")
     finally:
         shutil.rmtree(_TMP, ignore_errors=True)
+        os.environ.pop("LOCAL_MEMORY_DB", None)
+
 
 
 if __name__ == "__main__":

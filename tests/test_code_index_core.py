@@ -176,6 +176,12 @@ def test_code_index_core():
         print("\nALL ASSERTIONS PASSED")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+        try:
+            server.shutdown()
+            server.server_close()
+        except Exception:
+            pass
+
 
 
 def test_treesitter_chunking():
