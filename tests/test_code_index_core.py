@@ -169,9 +169,13 @@ def test_code_index_core():
             core.embed_texts(["x"], base_url="http://127.0.0.1:1")
             raise AssertionError("expected RuntimeError for unreachable Ollama")
         except RuntimeError as exc:
-            assert "health check" in str(exc), exc
+            # The error can come from _ensure_ollama_alive (contains "health check") or
+            # from the embed call itself (contains "for embeddings"); both are valid
+            # fail-fast paths. We verify the type and latency, not the exact wording.
+            assert "Could not reach Ollama" in str(exc), exc
         elapsed = time.monotonic() - start
         assert elapsed < 5, f"fail-fast took {elapsed:.1f}s, expected < 5s"
+
 
         print("\nALL ASSERTIONS PASSED")
     finally:
