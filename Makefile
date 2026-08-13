@@ -84,7 +84,13 @@ coverage: check-coverage-deps coverage-python coverage-ts
 
 coverage-python: check-coverage-deps
 	@echo "▶ Running Python coverage..."
-	@coverage run --source=kernel,code-index,judgment-memory,local-memory -m pytest tests -q
+	@if python3 -c 'import pytest' 2>/dev/null; then \
+		echo "▶ pytest disponible; ejecutando coverage con pytest..."; \
+		coverage run --source=kernel,code-index,judgment-memory,local-memory -m pytest tests -q; \
+	else \
+		echo "⚠ pytest no disponible; ejecutando coverage con runner stdlib..."; \
+		coverage run --source=kernel,code-index,judgment-memory,local-memory tools/run-python-tests.py tests; \
+	fi
 	@coverage report -m --fail-under=40
 	@coverage xml -o coverage.xml
 	@echo "✓ Python coverage threshold passed"
