@@ -507,7 +507,6 @@ function main(): void {
   checkPermissions()
   checkMcpServers()
   checkFileReferences()
-  checkPromptSourceTokens()
   checkSharedReferences()
   checkAgentReferences()
 
