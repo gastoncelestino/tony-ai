@@ -1,3 +1,11 @@
+# Scope: review and Judgment Day
+
+This contract is specific to review and Judgment Day execution.
+
+It is not part of the common SDD phase context. Load it only for review phases, Judgment Day judge phases, or another explicit review-gate operation that requires the review ledger.
+
+Normal SDD planning and implementation phases must not load this contract.
+
 # Review Ledger, Transaction, and Persistence Contract
 
 Shared contract for both review lineages this project runs: ordinary 4R

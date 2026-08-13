@@ -1,3 +1,11 @@
+# Scope: infrastructure reference
+
+This document is an infrastructure reference for artifact-store and runtime persistence behavior.
+
+It is not common SDD phase context. SDD phase executors must use `sdd-phase-common.md` for the minimal persistence contract and load the specialized OpenSpec or TonyMem convention only when their active artifact-store mode requires it.
+
+Do not inject this complete contract into every phase launch.
+
 # Persistence Contract (shared across all SDD skills)
 
 ## Mode Resolution

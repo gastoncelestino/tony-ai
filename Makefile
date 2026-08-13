@@ -1,126 +1,90 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre tests locales y smoke tests externos.
-#
-# La suite local usa descubrimiento automático: pytest descubre todos los .py y
-# Bun descubre todos los *.test.ts. Los smoke tests externos quedan separados.
 
-.PHONY: test test-all build-prompts check-prompts check-test-deps check-test-discovery check-coverage-deps test-python test-ts test-kernel coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config generate-agents
+.PHONY: test: check-test-deps check-test-discovery check-prompts check-phase-context check-launcher test-python test-ts validate-config
 
-# Este target es la suite completa. test-kernel es un target focalizado y no se
-# invoca aquí para evitar ejecutar dos veces los mismos tests del Kernel.
 test: check-test-deps check-test-discovery check-prompts test-python test-ts validate-config
-
-# Target explícito que ejecuta TODO, incluyendo el Kernel de forma focalizada.
 test-all: test test-kernel
 
 check-test-deps:
-	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then \
-		echo "✓ pytest disponible"; \
-	else \
-		echo "⚠ pytest no disponible; usando test runners standalone"; \
-		echo "  Para instalarlo: python3 -m pip install -r requirements-dev.txt"; \
-	fi
-	@command -v bun >/dev/null 2>&1 || \
-		(echo "ERROR: falta Bun. Instalá Bun antes de ejecutar los tests TypeScript."; exit 1)
-	@echo "✓ Test dependencies available (o fallback activo)"
+	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
+	@command -v bun >/dev/null 2>&1 || (echo "ERROR: falta Bun."; exit 1)
 
-# Evita que un archivo nuevo quede fuera de pytest o Bun por una convención de
-# nombres incorrecta. La ejecución de test-ts valida además el descubrimiento real.
 check-test-discovery:
+	@set -eu; invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' -print); invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' -print); if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; echo "✓ Test naming/discovery conventions valid"
+
+check-prompts:
 	@set -eu; \
-	invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' -print); \
-	invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' -print); \
-	if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; \
-	if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; \
-	test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; \
-	echo "✓ Test naming/discovery conventions valid"
+	test ! -d prompts/generated || { echo "ERROR: prompts/generated no debe existir en dev"; exit 1; }; \
+	test ! -f prompts/agents/includes/phase-manifest.json || { echo "ERROR: phase-manifest.json no debe existir en dev"; exit 1; }; \
+	grep -q '"prompt": "./prompts/agents/tony-orchestrator.md"' opencode.json || { echo "ERROR: orchestrator debe usar el prompt fuente"; exit 1; }; \
+	for phase in sdd-init sdd-onboard sdd-explore sdd-propose sdd-spec sdd-design sdd-tasks sdd-apply sdd-verify sdd-archive; do \
+		grep -q "\"prompt\": \"./prompts/sdd/$$phase.md\"" opencode.json || { echo "ERROR: $$phase no apunta a su prompt fuente"; exit 1; }; \
+	done; \
+	echo "✓ Phase prompts are plain, source-controlled, and non-generated"
 
-# Descubre todos los tests Python, incluidos los tests de persistencia,
-# concurrencia y contrato MCP.
+check-phase-context:
+	@set -eu; \
+	for forbidden in persistence-contract.md sdd-status-contract.md skill-resolver.md review-ledger-contract.md; do \
+		if grep -R -n --include='sdd-*.md' "$$forbidden" prompts/sdd 2>/dev/null; then \
+			echo "ERROR: $$forbidden no debe formar parte del contexto directo de los SDD phase prompts"; \
+			exit 1; \
+		fi; \
+	done; \
+	if grep -R -n --include='sdd-*.md' 'phase-manifest.json\|prompts/generated\|{{include:' prompts/sdd 2>/dev/null; then \
+		echo "ERROR: un phase prompt todavía referencia el mecanismo de prompts generado/dinámico"; \
+		exit 1; \
+	fi; \
+	echo "✓ SDD phase prompts keep infrastructure/review contracts out of direct context"
+
+check-launcher:
+	@set -eu; \
+	test -f prompts/agents/includes/phase-launcher.md || { echo "ERROR: falta phase-launcher.md"; exit 1; }; \
+	if grep -n 'phase-manifest.json\|prompts/generated\|{{include:' prompts/agents/includes/phase-launcher.md 2>/dev/null; then \
+		echo "ERROR: phase-launcher.md todavía referencia el sistema de composición eliminado"; \
+		exit 1; \
+	fi; \
+	echo "✓ Phase launcher uses routing/delegation only"
+
 test-python: check-test-deps check-test-discovery
-	@echo "▶ Running all Python tests..."
-	@if python3 -c 'import pytest' 2>/dev/null; then \
-		echo "▶ pytest disponible; ejecutando suite completa..."; \
-		python3 -m pytest tests -q; \
-	else \
-		echo "⚠ pytest no disponible; usando runner stdlib..."; \
-		python3 tools/run-python-tests.py tests; \
-	fi
-	@echo "✓ Python tests passed"
+	@python3 -m pytest tests -q 2>/dev/null || python3 tools/run-python-tests.py tests
 
-# Target explícito para depurar únicamente el Kernel, sin duplicarlo en `make test`.
 test-kernel: check-test-deps check-test-discovery
-	@echo "▶ Running focused Kernel tests..."
-	@if python3 -c 'import pytest' 2>/dev/null; then \
-		python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v; \
-	else \
-		echo "⚠ pytest no disponible; usando runner stdlib..."; \
-		python3 tools/run-python-tests.py \
-			tests/test_kernel_cli.py \
-			tests/test_kernel_enforcement.py \
-			tests/test_sdd_flow_e2e.py; \
-	fi
+	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tools/run-python-tests.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
 	@bun test tests/tony_kernel_*.test.ts
-	@echo "✓ Focused Kernel tests passed"
 
-# Bun descubre los archivos *.test.ts por convención.
 test-ts: check-test-deps check-test-discovery
-	@echo "▶ Running all TypeScript tests..."
 	@bun test tests
-	@echo "✓ TypeScript tests passed"
 
 check-coverage-deps: check-test-deps
-	@if python3 -c 'import coverage; print("coverage", coverage.__version__)' 2>/dev/null; then \
-		echo "✓ coverage disponible"; \
-	else \
-		echo "ERROR: coverage no disponible; ejecutá: python3 -m pip install -r requirements-dev.txt" >&2; \
-		exit 1; \
-	fi
-	@echo "✓ Coverage dependencies available"
+	@python3 -c 'import coverage; print("coverage", coverage.__version__)'
 
-# Coverage local y artefactos XML/LCOV básicos. El umbral inicial es deliberadamente
-# moderado: sirve para detectar módulos no ejercitados sin bloquear mejoras futuras.
 coverage: check-coverage-deps coverage-python coverage-ts
 
 coverage-python: check-coverage-deps
-	@echo "▶ Running Python coverage..."
-	@if python3 -c 'import pytest' 2>/dev/null; then \
-		echo "▶ pytest disponible; ejecutando coverage con pytest..."; \
-		coverage run --source=kernel,code-index,judgment-memory,local-memory -m pytest tests -q; \
-	else \
-		echo "⚠ pytest no disponible; ejecutando coverage con runner stdlib..."; \
-		coverage run --source=kernel,code-index,judgment-memory,local-memory tools/run-python-tests.py tests; \
-	fi
+	@coverage run --source=kernel,code-index,judgment-memory,local-memory -m pytest tests -q || coverage run --source=kernel,code-index,judgment-memory,local-memory tools/run-python-tests.py tests
 	@coverage report -m --fail-under=40
 	@coverage xml -o coverage.xml
-	@echo "✓ Python coverage threshold passed"
 
 coverage-ts: check-test-deps check-test-discovery
-	@echo "▶ Running TypeScript coverage..."
 	@rm -rf coverage-bun
 	@bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests
 	@test -s coverage-bun/lcov.info
-	@echo "✓ TypeScript coverage report written to coverage-bun/lcov.info"
 
 verify-qdrant:
-	@echo "▶ Running Qdrant smoke test (requires Ollama + Qdrant running)..."
 	@cd judgment-memory && bun run scripts/verify-qdrant.ts
-	@echo "✓ Qdrant smoke test passed"
 
 verify-sdd-flow:
-	@echo "▶ Running full SDD flow (explore→archive) adversarial verification..."
 	@python3 tests/test_sdd_flow_e2e.py
-	@echo "✓ SDD flow verification passed"
 
 bootstrap:
 	@bash scripts/setup.sh
 
 health:
-	@bash scripts/health.sh
+	@bash scripts/shealth.sh
 
 docker-up:
-	@cd docker && docker compose up -d
-	@cd docker && docker compose logs -f ollama-pull
+	@cd docker && docker compose up -d && docker compose logs -f ollama-pull
 
 docker-down:
 	@cd docker && docker compose down
@@ -128,25 +92,6 @@ docker-down:
 clean:
 	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db coverage.xml
 	@rm -rf coverage-bun
-	@echo "✓ Cleaned local databases"
-
-build-prompts: check-test-deps
-	@echo "▶ Building prompt bundles..."
-	@mkdir -p prompts/generated/phases
-	@bun run tools/build-prompts.ts
-	@echo "✓ Prompt bundles built"
-
-check-prompts:
-	@echo "▶ Checking prompt bundles..."
-	@bun run tools/build-prompts.ts --check
-	@echo "✓ Prompt bundles are up to date"
-
-generate-agents:
-	@echo "▶ Generating opencode.json agents from phase-manifest.json..."
-	@bun run scripts/generate-opencode-agents.ts
-	@echo "✓ opencode.json agents synchronized"
 
 validate-config:
-	@echo "▶ Validating configuration..."
 	@bun run tools/validate-config.ts
-	@echo "✓ Configuration valid"

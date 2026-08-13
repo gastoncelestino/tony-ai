@@ -1,3 +1,11 @@
+# Scope: runtime status reference
+
+This document defines the complete persisted SDD status/state model used by runtime orchestration, recovery, lifecycle gates, and status handling.
+
+It is not common SDD phase context.
+
+Phase executors should receive only the minimal structured status fields required by their phase, such as change name, artifact-store mode, dependency state, apply state, delivery/workload decision, or action context. Do not inject the complete status schema into a phase unless that phase explicitly requires it.
+
 # SDD Status and Instructions Contract
 
 Shared OpenSpec-style contract for SDD commands and phase skills. Use this before acting on a change so orchestration does not guess state, paths, or edit scope.

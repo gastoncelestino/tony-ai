@@ -1,6 +1,6 @@
 ---
 name: sdd-archive
-description: "Close change and persist final state. Trigger: orchestrator launches archive after verify passes."
+description: "Close a verified SDD change and persist final state."
 disable-model-invocation: true
 user-invocable: false
 license: MIT
@@ -10,73 +10,27 @@ metadata:
   delegate_only: true
 ---
 
-> **ORCHESTRATOR GATE**: If you loaded this skill via the `skill()` tool, you are
-> the ORCHESTRATOR — STOP. Delegate to the dedicated `sdd-archive` sub-agent.
+# Purpose
+Close the change after verification and create the final archive report.
 
-## Executor Override
-
-If you ARE the `sdd-archive` sub-agent, continue. Do NOT delegate.
-
-## Purpose
-
-Close the change and persist final state. Reconcile artifacts, produce final report.
-
-## What You Receive
-
+## Inputs
 - Change name
-- All artifacts (proposal, spec, design, tasks, apply-progress, verify-report)
-- Structured status with artifact paths
+- Task completion/apply status
+- `verify-report`
+- Artifact paths for proposal/spec/design/tasks/apply-progress when available
 
-## Execution Steps
+## Work
+1. Require `applyState: all_done` and verify verdict `PASS` or `PASS WITH WARNINGS`.
+2. Confirm all tasks are complete and no blocking reasons remain.
+3. Read only the artifact summaries/sections needed to reconcile final state; do not reload full history unnecessarily.
+4. Reconcile tasks, apply-progress, and verify-report.
+5. Produce `archive-report` covering change summary, deliverables, verification, deviations, lessons, and follow-ups.
+6. Persist `sdd/{change-name}/archive-report` using the common artifact contract.
 
-### 1. Load Skills & Context
-Follow Section A from `skills/_shared/sdd-phase-common.md`.
-Read all artifacts and structured status.
+## Constraints
+- Critical verification issues or incomplete tasks block archive.
+- Missing optional proposal/spec/design is reported and requires the applicable project policy/user decision.
+- Do not load another phase prompt.
 
-### 2. Verify Archive Readiness
-- `applyState: all_done` (all tasks complete)
-- `verify-report` verdict: `PASS` or `PASS WITH WARNINGS`
-- All tasks marked `[x]` in tasks artifact
-- No `blockedReasons` in status
-
-If any check fails → return `blocked` with missing items.
-
-### 3. Reconcile Artifacts
-- Ensure tasks artifact shows all tasks `[x]`
-- Ensure `apply-progress` reflects all completed tasks
-- Ensure `verify-report` verdict matches task completion
-
-### 4. Produce Archive Report
-Create `archive-report` with:
-
-| Section | Content |
-|---|---|
-| **Change Summary** | Name, mode, dates, duration |
-| **Deliverables** | Files changed, artifacts produced |
-| **Verification** | Verdict, test summary, coverage |
-| **Deviations** | Design/spec deviations with rationale |
-| **Lessons** | What worked, what didn't, reusable patterns |
-| **Follow-ups** | Known issues, tech debt, future work |
-
-### 5. Persist Archive
-Follow Section C from `sdd-phase-common.md`:
-- artifact: `archive-report`
-- topic_key: `sdd/{change-name}/archive-report`
-- type: `architecture`
-
-### 6. Return Summary
-Return Section D envelope with archive path, final verdict, and next_recommended: `none` (change complete).
-
-## Strict-vs-OpenSpec Archive Policy
-
-OpenSpec permits archiving with incomplete artifacts after user confirmation. This project is stricter by default:
-
-- Incomplete implementation tasks block archive unless proven complete
-- CRITICAL issues in `verify-report` always block archive
-- Missing proposal/spec/design reported; archive continues only with explicit user choice
-- Archive records what was missing
-
-## Rules
-- Do NOT archive with CRITICAL verify issues
-- Do NOT archive with unchecked tasks (unless exceptional reconciliation with proof)
-- Archive report is the final source of truth for the change
+## Output
+Minimal executor envelope with final verdict and next phase `none`.

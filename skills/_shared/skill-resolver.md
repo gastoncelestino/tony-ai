@@ -1,3 +1,11 @@
+# Scope: delegator protocol
+
+This protocol is for the orchestrator or another component that delegates work to sub-agents.
+
+SDD phase executors must not load this file as normal phase context. Phase executors do not resolve skills for other agents, launch other phases, or construct phase prompts.
+
+The delegator owns skill resolution and passes only the exact skill paths required by the target phase.
+
 ﻿# Skill Resolver — Universal Protocol
 
 Any agent that **delegates work to sub-agents** MUST use this protocol to resolve relevant skills and pass them safely.
