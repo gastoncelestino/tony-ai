@@ -1,6 +1,5 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs"
 import { resolve } from "node:path"
-import { checkGenerated, ORCHESTRATOR_BUNDLE } from "./prompt-bundler"
 
 const ROOT = resolve(process.cwd())
 const OPENCODE_JSON = resolve(ROOT, "opencode.json")
@@ -34,48 +33,73 @@ function checkJsonSyntax(): void {
   }
 }
 
-function extractFileReferences(text: string): Array<{ file: string; context: string }> {
+function extractFileReferences(
+  text: string,
+): Array<{ file: string; context: string }> {
   const regex = /\{file:([^}]+)\}/g
   const refs: Array<{ file: string; context: string }> = []
   let match
+
   while ((match = regex.exec(text)) !== null) {
     refs.push({
       file: match[1],
-      context: text.slice(Math.max(0, match.index - 30), match.index + 50),
+      context: text.slice(
+        Math.max(0, match.index - 30),
+        match.index + 50,
+      ),
     })
   }
+
   return refs
 }
 
-function extractSharedReferences(text: string): Array<{ path: string; context: string }> {
+function extractSharedReferences(
+  text: string,
+): Array<{ path: string; context: string }> {
   const regex = /(?:skills\/_shared|\.\.\/_shared)\/[^\s)`'"]+/g
   const refs: Array<{ path: string; context: string }> = []
   let match
+
   while ((match = regex.exec(text)) !== null) {
     refs.push({
       path: match[0],
-      context: text.slice(Math.max(0, match.index - 30), match.index + 50),
+      context: text.slice(
+        Math.max(0, match.index - 30),
+        match.index + 50,
+      ),
     })
   }
+
   return refs
 }
 
-function extractAgentReferences(text: string): Array<{ agent: string; context: string }> {
-  const regex = /agent\.([a-z][a-z0-9_-]*[a-z0-9])(?![a-z0-9_.-])/g
+function extractAgentReferences(
+  text: string,
+): Array<{ agent: string; context: string }> {
+  const regex =
+    /agent\.([a-z][a-z0-9_-]*[a-z0-9])(?![a-z0-9_.-])/g
+
   const refs: Array<{ agent: string; context: string }> = []
   let match
+
   while ((match = regex.exec(text)) !== null) {
     if (match[1].includes("<") || match[1].includes(">")) continue
+
     refs.push({
       agent: match[1],
-      context: text.slice(Math.max(0, match.index - 30), match.index + 50),
+      context: text.slice(
+        Math.max(0, match.index - 30),
+        match.index + 50,
+      ),
     })
   }
+
   return refs
 }
 
 function checkFileReferences(): void {
   let config: Record<string, unknown>
+
   try {
     const content = readFileSync(OPENCODE_JSON, "utf-8")
     config = JSON.parse(content)
@@ -84,12 +108,20 @@ function checkFileReferences(): void {
   }
 
   const allRefs: Array<{ file: string; context: string }> = []
-  const agents = (config.agent ?? {}) as Record<string, { prompt?: string }>
+  const agents = (config.agent ?? {}) as Record<
+    string,
+    { prompt?: string }
+  >
+
   for (const [agentName, agentConfig] of Object.entries(agents)) {
     if (typeof agentConfig.prompt === "string") {
       const refs = extractFileReferences(agentConfig.prompt)
+
       for (const ref of refs) {
-        allRefs.push({ ...ref, context: `agent ${agentName}: ${ref.context}` })
+        allRefs.push({
+          ...ref,
+          context: `agent ${agentName}: ${ref.context}`,
+        })
       }
     }
   }
@@ -99,9 +131,11 @@ function checkFileReferences(): void {
     return
   }
 
-  const uniqueFiles = new Set(allRefs.map(r => r.file))
+  const uniqueFiles = new Set(allRefs.map((r) => r.file))
+
   for (const file of uniqueFiles) {
     const fullPath = resolve(ROOT, file)
+
     if (existsSync(fullPath)) {
       ok(`{file:${file}} exists`)
     } else {
@@ -110,47 +144,41 @@ function checkFileReferences(): void {
   }
 }
 
-function checkGeneratedPromptBundles(): void {
-  try {
-    const drift = checkGenerated(ROOT)
-    if (drift.length > 0) {
-      for (const error of drift) fail(error)
-      return
-    }
-
-    const bundle = readFileSync(resolve(ROOT, ORCHESTRATOR_BUNDLE), "utf-8")
-    if (bundle.includes("{{include:") || /\{file:[^}]+\}/.test(bundle)) {
-      fail(`${ORCHESTRATOR_BUNDLE} contains unresolved include tokens`)
-      return
-    }
-
-    ok("Materialized prompt bundles exist, are current, and contain no unresolved tokens")
-  } catch (error) {
-    fail(`Prompt bundle validation failed — ${error}`)
-  }
-}
-
 function checkPromptSourceTokens(): void {
   const sourceRoot = resolve(ROOT, "prompts/agents")
   const pending: string[] = []
+
   const visit = (directory: string): void => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    for (const entry of readdirSync(directory, {
+      withFileTypes: true,
+    })) {
       const file = resolve(directory, entry.name)
+
       if (entry.isDirectory()) {
         visit(file)
       } else if (entry.isFile() && entry.name.endsWith(".md")) {
         const content = readFileSync(file, "utf-8")
-        if (content.match(/\{file:[^}]+\}/)) pending.push(file)
+
+        if (content.match(/\{file:[^}]+\}/)) {
+          pending.push(file)
+        }
       }
     }
   }
+
   if (!existsSync(sourceRoot)) {
     fail("prompts/agents/ directory not found")
     return
   }
+
   visit(sourceRoot)
+
   if (pending.length > 0) {
-    for (const file of pending) fail(`${file}: native {file:...} token remains in source prompt; use {{include:...}} or plain documentation`)
+    for (const file of pending) {
+      fail(
+        `${file}: native {file:...} token remains in source prompt; use plain documentation`,
+      )
+    }
   } else {
     ok("Prompt sources contain no native nested {file:...} references")
   }
@@ -163,14 +191,25 @@ function checkSharedReferences(): void {
   }
 
   const entries = readdirSync(PROMPTS_DIR)
-  const promptFiles = entries.filter(f => f.endsWith(".md") && !f.endsWith("SKILL.md"))
+  const promptFiles = entries.filter(
+    (file) => file.endsWith(".md") && !file.endsWith("SKILL.md"),
+  )
 
   const allRefs: Array<{ path: string; context: string }> = []
+
   for (const file of promptFiles) {
-    const content = readFileSync(resolve(PROMPTS_DIR, file), "utf-8")
+    const content = readFileSync(
+      resolve(PROMPTS_DIR, file),
+      "utf-8",
+    )
+
     const refs = extractSharedReferences(content)
+
     for (const ref of refs) {
-      allRefs.push({ ...ref, context: `${file}: ${ref.context}` })
+      allRefs.push({
+        ...ref,
+        context: `${file}: ${ref.context}`,
+      })
     }
   }
 
@@ -179,9 +218,11 @@ function checkSharedReferences(): void {
     return
   }
 
-  const uniquePaths = new Set(allRefs.map(r => r.path))
+  const uniquePaths = new Set(allRefs.map((r) => r.path))
+
   for (const path of uniquePaths) {
     const fullPath = resolve(ROOT, path)
+
     if (existsSync(fullPath)) {
       ok(`${path} exists`)
     } else {
@@ -192,6 +233,7 @@ function checkSharedReferences(): void {
 
 function checkAgentReferences(): void {
   let config: Record<string, unknown>
+
   try {
     const content = readFileSync(OPENCODE_JSON, "utf-8")
     config = JSON.parse(content)
@@ -199,19 +241,30 @@ function checkAgentReferences(): void {
     return
   }
 
-  const agents = Object.keys((config.agent ?? {}) as Record<string, unknown>)
+  const agents = Object.keys(
+    (config.agent ?? {}) as Record<string, unknown>,
+  )
+
   if (agents.length === 0) {
     warn("No agents defined in opencode.json")
     return
   }
 
   const allRefs: Array<{ agent: string; context: string }> = []
-  const agentConfigs = (config.agent ?? {}) as Record<string, { prompt?: string }>
+  const agentConfigs = (config.agent ?? {}) as Record<
+    string,
+    { prompt?: string }
+  >
+
   for (const [agentName, agentConfig] of Object.entries(agentConfigs)) {
     if (typeof agentConfig.prompt === "string") {
       const refs = extractAgentReferences(agentConfig.prompt)
+
       for (const ref of refs) {
-        allRefs.push({ ...ref, context: `agent ${agentName}: ${ref.context}` })
+        allRefs.push({
+          ...ref,
+          context: `agent ${agentName}: ${ref.context}`,
+        })
       }
     }
   }
@@ -223,16 +276,19 @@ function checkAgentReferences(): void {
 
   const seen = new Set<string>()
   const agentSet = new Set(agents)
+
   for (const ref of allRefs) {
     if (seen.has(ref.agent)) continue
     seen.add(ref.agent)
 
-    // Skip generated bundles and config references
-    if (ref.context.includes("prompts/generated/")) continue
     if (ref.agent === "md") continue
 
-    // Skip if this ref is a prefix of another ref that exists
-    const isPrefix = agents.some(a => a !== ref.agent && a.startsWith(ref.agent + "-"))
+    const isPrefix = agents.some(
+      (agent) =>
+        agent !== ref.agent &&
+        agent.startsWith(ref.agent + "-"),
+    )
+
     if (isPrefix) {
       continue
     }
@@ -240,13 +296,16 @@ function checkAgentReferences(): void {
     if (agentSet.has(ref.agent)) {
       ok(`agent.${ref.agent} exists in opencode.json`)
     } else {
-      fail(`agent.${ref.agent} referenced in prompt but not found in opencode.json`)
+      fail(
+        `agent.${ref.agent} referenced in prompt but not found in opencode.json`,
+      )
     }
   }
 }
 
 function checkDefaultAgent(): void {
   let config: Record<string, unknown>
+
   try {
     const content = readFileSync(OPENCODE_JSON, "utf-8")
     config = JSON.parse(content)
@@ -254,22 +313,31 @@ function checkDefaultAgent(): void {
     return
   }
 
-  const defaultAgent = (config as { default_agent?: string }).default_agent
+  const defaultAgent = (
+    config as { default_agent?: string }
+  ).default_agent
+
   if (!defaultAgent) {
     warn("No default_agent defined in opencode.json")
     return
   }
 
-  const agents = Object.keys((config.agent ?? {}) as Record<string, unknown>)
+  const agents = Object.keys(
+    (config.agent ?? {}) as Record<string, unknown>,
+  )
+
   if (agents.includes(defaultAgent)) {
     ok(`default_agent "${defaultAgent}" exists in agents`)
   } else {
-    fail(`default_agent "${defaultAgent}" not found in agents`)
+    fail(
+      `default_agent "${defaultAgent}" not found in agents`,
+    )
   }
 }
 
 function checkPermissions(): void {
   let config: Record<string, unknown>
+
   try {
     const content = readFileSync(OPENCODE_JSON, "utf-8")
     config = JSON.parse(content)
@@ -284,20 +352,52 @@ function checkPermissions(): void {
 
   ok("permission block exists in opencode.json")
 
-  const allowedTools = new Set(["bash", "edit", "read", "write", "task", "question"])
-  const agents = (config.agent ?? {}) as Record<string, { permission?: { task?: Record<string, string> } }>
+  const allowedTools = new Set([
+    "bash",
+    "edit",
+    "read",
+    "write",
+    "task",
+    "question",
+  ])
+
+  const agents = (config.agent ?? {}) as Record<
+    string,
+    {
+      permission?: {
+        task?: Record<string, string>
+      }
+    }
+  >
+
   const agentNames = new Set(Object.keys(agents))
+
   for (const [agentName, agentConfig] of Object.entries(agents)) {
-    if (agentConfig.permission?.task && typeof agentConfig.permission.task === "object") {
+    if (
+      agentConfig.permission?.task &&
+      typeof agentConfig.permission.task === "object"
+    ) {
       const taskPerms = agentConfig.permission.task
+
       for (const perm of Object.keys(taskPerms)) {
         if (perm === "*") continue
-        // Allow references to other agents (sub-agent delegation)
+
         if (agentNames.has(perm)) continue
-        // Allow known sub-agent names that may not be in this config (extensibility)
-        if (perm.startsWith("sdd-") || perm.startsWith("review-") || perm.startsWith("jd-") || perm === "explore" || perm === "general") continue
+
+        if (
+          perm.startsWith("sdd-") ||
+          perm.startsWith("review-") ||
+          perm.startsWith("jd-") ||
+          perm === "explore" ||
+          perm === "general"
+        ) {
+          continue
+        }
+
         if (!allowedTools.has(perm)) {
-          warn(`agent.${agentName} has unusual task permission: ${perm}`)
+          warn(
+            `agent.${agentName} has unusual task permission: ${perm}`,
+          )
         }
       }
     }
@@ -306,6 +406,7 @@ function checkPermissions(): void {
 
 function checkMcpServers(): void {
   let config: Record<string, unknown>
+
   try {
     const content = readFileSync(OPENCODE_JSON, "utf-8")
     config = JSON.parse(content)
@@ -320,10 +421,16 @@ function checkMcpServers(): void {
 
   ok("MCP block exists in opencode.json")
 
-  const mcp = config.mcp as Record<string, Record<string, unknown>>
+  const mcp = config.mcp as Record<
+    string,
+    Record<string, unknown>
+  >
+
   for (const [serverName, serverConfig] of Object.entries(mcp)) {
     if (!serverConfig.command && !serverConfig.url) {
-      fail(`MCP server "${serverName}" missing command or url`)
+      fail(
+        `MCP server "${serverName}" missing command or url`,
+      )
     }
   }
 }
@@ -333,12 +440,14 @@ function checkSkillsDirectory(): void {
     fail("skills/ directory not found")
     return
   }
+
   ok("skills/ directory exists")
 
   if (!existsSync(SHARED_DIR)) {
     fail("skills/_shared/ directory not found")
     return
   }
+
   ok("skills/_shared/ directory exists")
 }
 
@@ -347,75 +456,42 @@ function checkPromptsDirectory(): void {
     fail("prompts/sdd/ directory not found")
     return
   }
+
   ok("prompts/sdd/ directory exists")
 
   const entries = readdirSync(PROMPTS_DIR)
-  const promptFiles = entries.filter(f => f.endsWith(".md") && !f.endsWith("SKILL.md"))
+  const promptFiles = entries.filter(
+    (file) =>
+      file.endsWith(".md") && !file.endsWith("SKILL.md"),
+  )
+
   if (promptFiles.length === 0) {
     warn("No .md files found in prompts/sdd/")
     return
   }
+
   ok(`Found ${promptFiles.length} prompt files in prompts/sdd/`)
 }
 
 function checkScripts(): void {
-  const scripts = ["scripts/setup.sh", "scripts/health.sh"]
+  const scripts = [
+    "scripts/setup.sh",
+    "scripts/health.sh",
+  ]
+
   for (const script of scripts) {
     const fullPath = resolve(ROOT, script)
+
     if (!existsSync(fullPath)) {
       fail(`${script} not found`)
     } else {
       const mode = statSync(fullPath).mode
+
       if ((mode & 0o111) === 0) {
         warn(`${script} exists but is not executable`)
       } else {
         ok(`${script} exists and executable`)
       }
-    }
-  }
-}
-
-function checkAgentBundleContract(): void {
-  const manifestPath = resolve(ROOT, "prompts/generated/prompt-manifest.json")
-  if (!existsSync(manifestPath)) {
-    warn("prompt-manifest.json not found; skipping agent-bundle contract check")
-    return
-  }
-
-  const opencode = JSON.parse(readFileSync(OPENCODE_JSON, "utf-8"))
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"))
-
-  const phaseAgents = new Set<string>()
-  const bundlePhases = new Set<string>()
-
-  for (const [name, config] of Object.entries(opencode.agent ?? {})) {
-    const prompt = (config as { prompt?: string }).prompt
-    if (typeof prompt === "string" && prompt.includes("prompts/generated/phases/")) {
-      const match = prompt.match(/prompts\/generated\/phases\/([^/]+)\.md/)
-      if (match) {
-        phaseAgents.add(match[1])
-      }
-    }
-  }
-
-  for (const relPath of Object.keys(manifest.files ?? {})) {
-    const match = relPath.match(/^prompts\/generated\/phases\/([^/]+)\.md$/)
-    if (match) {
-      bundlePhases.add(match[1])
-    }
-  }
-
-  const missingAgents = [...bundlePhases].filter(p => !phaseAgents.has(p))
-  const missingBundles = [...phaseAgents].filter(p => !bundlePhases.has(p))
-
-  if (missingAgents.length === 0 && missingBundles.length === 0) {
-    ok(`Agent-bundle contract valid (${phaseAgents.size} phases)`)
-  } else {
-    if (missingAgents.length > 0) {
-      fail(`Phases without agent in opencode.json: ${missingAgents.join(", ")}`)
-    }
-    if (missingBundles.length > 0) {
-      fail(`Agents without bundle in prompt-manifest.json: ${missingBundles.join(", ")}`)
     }
   }
 }
@@ -431,25 +507,33 @@ function main(): void {
   checkPermissions()
   checkMcpServers()
   checkFileReferences()
-  checkGeneratedPromptBundles()
   checkPromptSourceTokens()
   checkSharedReferences()
   checkAgentReferences()
-  checkAgentBundleContract()
 
   console.log("\n=== Summary ===")
+
   if (errors === 0) {
     if (warnings === 0) {
       console.log("\x1b[32m✓ All checks passed!\x1b[0m")
     } else {
-      console.log(`\x1b[32m✓ All checks passed (${warnings} warning(s))\x1b[0m`)
+      console.log(
+        `\x1b[32m✓ All checks passed (${warnings} warning(s))\x1b[0m`,
+      )
     }
+
     process.exit(0)
   } else {
-    console.log(`\x1b[31m✗ ${errors} error(s) found\x1b[0m`)
+    console.log(
+      `\x1b[31m✗ ${errors} error(s) found\x1b[0m`,
+    )
+
     if (warnings > 0) {
-      console.log(`\x1b[33m⚠ ${warnings} warning(s) found\x1b[0m`)
+      console.log(
+        `\x1b[33m⚠ ${warnings} warning(s) found\x1b[0m`,
+      )
     }
+
     process.exit(1)
   }
 }
