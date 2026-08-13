@@ -63,6 +63,7 @@ Thumbs.db
 opencode.json.bak
 
 ### Prompt build artifacts ###
-prompts/generated/
+# prompts/generated/ is intentionally versioned: it is the canonical runtime
+# artifact produced by the prompt bundler. Never edit it by hand.
 .zip-build/
 build-prompts-p0.zip
