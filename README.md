@@ -15,6 +15,37 @@ TonyMem guarda decisiones y contexto entre sesiones, code-index te deja buscar "
 A nivel técnico, el stack pide Python 3.10+, Bun, Ollama, Qdrant y opcionalmente Docker para levantar los servicios auxiliares.  
 Los modelos por defecto son: qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, y embeddings con bge-m3 y nomic-embed-text. 
 
+```mermaid
+flowchart TD
+    U["Proyecto / pedido del usuario"] --> P["Planning Engine<br/>Qwen3-Coder 30B"]
+    P --> I["Implementation<br/>OmniCoder 9B"]
+
+    I --> R4["Revisión 4R<br/>DeepSeek-R1 14B"]
+    I -.->|"explícito: juzgar esto"| JD["Judgment Day<br/>DeepSeek-R1 + Qwen3-Coder"]
+
+    JDM["TonyMem Recall<br/>jd_recall"] -.->|"antes de juzgar"| JD
+    JD -.->|"después: terminal state"| JDR["jd_record<br/>ledger + Qdrant"]
+
+    R4 --> V["Verify<br/>sdd-verify"]
+    JD --> V
+    V --> A["Archive<br/>Ornith 9B"]
+
+    P -.->|"consulta / guarda"| CTX
+    I -.->|"consulta / guarda"| CTX
+    V -.->|"consulta / guarda"| CTX
+
+    subgraph CTX["Servicios de contexto"]
+        direction TB
+        TM["TonyMem<br/>memoria de decisiones"]
+        CI["Code Indexer<br/>búsqueda semántica de código"]
+        QD["Qdrant<br/>vector store"]
+        DCP["DCP<br/>poda continua de contexto"]
+    end
+
+    TM -.->|"shared SQLite file"| TM2["local-memory/server.py"]
+    CI -.->|"HTTP API"| QD
+    DCP -.->|"plugin global"| OC["OpenCode"]
+```
 
 ## ¿Qué es SDD?
 Spec-Driven Development es un enfoque estructurado para construir cambios en software a través de ocho fases:
@@ -65,37 +96,23 @@ Spec-Driven Development es un enfoque estructurado para construir cambios en sof
           SQLite              para embeddings       para juicios
 ```
 
-## Cómo funciona?
+## Idea central
+La resolución programática ocurre durante el **build**, no dentro del modelo ni durante la ejecución de OpenCode. `phase-manifest.json` es la fuente de composición; `prompt-bundler.ts` resuelve sus includes y materializa archivos finales; `opencode.json` conecta cada nombre de agente con su bundle; finalmente, `tony-orchestrator` solo selecciona el `subagent_type` correcto.
+
+>El orquestador decide **qué agente ejecutar**. OpenCode carga el prompt materializado definido para ese agente. El bundler decide **qué contenido recibe** ese agente.
+
 ```mermaid
-flowchart TD
-    U["Proyecto / pedido del usuario"] --> P["Planning Engine<br/>Qwen3-Coder 30B"]
-    P --> I["Implementation<br/>OmniCoder 9B"]
-
-    I --> R4["Revisión 4R<br/>DeepSeek-R1 14B"]
-    I -.->|"explícito: juzgar esto"| JD["Judgment Day<br/>DeepSeek-R1 + Qwen3-Coder"]
-
-    JDM["TonyMem Recall<br/>jd_recall"] -.->|"antes de juzgar"| JD
-    JD -.->|"después: terminal state"| JDR["jd_record<br/>ledger + Qdrant"]
-
-    R4 --> V["Verify<br/>sdd-verify"]
-    JD --> V
-    V --> A["Archive<br/>Ornith 9B"]
-
-    P -.->|"consulta / guarda"| CTX
-    I -.->|"consulta / guarda"| CTX
-    V -.->|"consulta / guarda"| CTX
-
-    subgraph CTX["Servicios de contexto"]
-        direction TB
-        TM["TonyMem<br/>memoria de decisiones"]
-        CI["Code Indexer<br/>búsqueda semántica de código"]
-        QD["Qdrant<br/>vector store"]
-        DCP["DCP<br/>poda continua de contexto"]
-    end
-
-    TM -.->|"shared SQLite file"| TM2["local-memory/server.py"]
-    CI -.->|"HTTP API"| QD
-    DCP -.->|"plugin global"| OC["OpenCode"]
+flowchart LR
+    A["phase-manifest.json"] --> B["build-prompts.ts"]
+    B --> C["prompt-bundler.ts"]
+    C --> D["prompts/generated/tony-orchestrator.md"]
+    C --> E["prompts/generated/phases/{phase}.md"]
+    C --> F["prompt-manifest.json + prompt-snapshot.json"]
+    G["opencode.json"] --> D
+    G --> E
+    H["Usuario"] --> I["tony-orchestrator"]
+    I -->|"Task subagent_type: sdd-apply"| G
+    E --> J["Subagente de fase"]
 ```
 
 # Requisitos
@@ -250,209 +267,6 @@ gga run --no-cache   # ignorar cache y revisar todo
 
 Después, cada `git commit` dispara automáticamente la revisión de los archivos staged. Para revisar sin commitear:
 
-## Integración de resolución programática por fase con OpenCode
-
-### Idea central
-
-La resolución programática ocurre durante el **build**, no dentro del modelo ni durante la ejecución de OpenCode. `phase-manifest.json` es la fuente de composición; `prompt-bundler.ts` resuelve sus includes y materializa archivos finales; `opencode.json` conecta cada nombre de agente con su bundle; finalmente, `tony-orchestrator` solo selecciona el `subagent_type` correcto.
-
-> El orquestador decide **qué agente ejecutar**. OpenCode carga el prompt materializado definido para ese agente. El bundler decide **qué contenido recibe** ese agente.
-
-```mermaid
-flowchart LR
-    A[phase-manifest.json] --> B[build-prompts.ts]
-    B --> C[prompt-bundler.ts]
-    C --> D[prompts/generated/tony-orchestrator.md]
-    C --> E[prompts/generated/phases/<phase>.md]
-    C --> F[prompt-manifest.json + prompt-snapshot.json]
-    G[opencode.json] --> D
-    G --> E
-    H[Usuario] --> I[tony-orchestrator]
-    I -->|Task subagent_type: sdd-apply| G
-    G --> E
-    E --> J[Subagente de fase]
-```
-
-## 1. Manifiesto: fuente de composición por fase
-
-El archivo `prompts/agents/includes/phase-manifest.json` declara qué includes, skills y prompt específico corresponden a cada fase.
-
-## 2. Resolver programáticamente el prompt de una fase
-
-`tools/prompt-bundler.ts` expone `buildPhase(root, phase)`, que:
-
-1. carga `phase-manifest.json`
-2. expande includes base + específicos con deduplicación
-3. expande skills compartidas desde `skills/_shared/`
-4. concatena el prompt de fase específico (`prompts/sdd/<phase>.md` o `prompts/agents/phase-prompts/<phase>.md`)
-5. valida que no queden tokens sin resolver
-6. registra dependencias con SHA-256
-
-El contrato de salida (`BuildResult`) incluye `path`, `content` y `dependencies[]`.
-
-## 3. Materializar el orquestador y todas las fases
-
-`tools/build-prompts.ts` genera el conjunto completo para evitar que el manifiesto, el snapshot y los bundles queden desalineados.
-
-```bash
-make build-prompts     # regenera bundles + manifest + snapshot
-make check-prompts     # valida hashes y existencia
-```
-
-`check-prompts` compara el estado actual de disco contra lo que debería existir; si algún include cambió sin rebuild, falla.
-
-## 4. Configuración de OpenCode
-
-En `opencode.json`, cada agente de fase apunta a su bundle materializado:
-
-```json
-{
-  "agent": {
-    "tony-orchestrator": {
-      "prompt": "{file:./prompts/generated/tony-orchestrator.md}"
-    },
-    "sdd-apply": {
-      "prompt": "{file:./prompts/generated/phases/sdd-apply.md}"
-    }
-  }
-}
-```
-
-OpenCode resuelve el campo `prompt` del agente seleccionado. Por eso la llamada `Task` no debe pegar el contenido completo del bundle en el contexto de la tarea.
-
-## 5. Cómo debe delegar `tony-orchestrator`
-
-El bundle raíz debe contener reglas como estas:
-
-```md
-## Dynamic Sub-Agent Launching
-
-When launching a configured OpenCode sub-agent for phase `X`:
-
-1. Use `subagent_type: "X"` in the `Task` call.
-2. OpenCode loads `agent.X.prompt` from `opencode.json`.
-3. Do not paste the complete materialized bundle into the task context.
-4. Pass only the work request, artifacts, scope, and evidence contract.
-5. Never ask the sub-agent to resolve includes or load phase-manifest.json.
-```
-
-Una delegación concreta desde el orquestador debería verse conceptualmente así:
-
-```json
-{
-  "subagent_type": "sdd-apply",
-  "description": "Implementar las tareas del cambio activo",
-  "prompt": "Ejecutá las tareas aprobadas de la fase apply. Usá TDD si el contexto de sdd-init indica strict_tdd=true.",
-  "artifacts": [
-    {
-      "kind": "tasks",
-      "path": "sdd/cambio/tasks",
-      "store": "tonymem",
-      "hash": "..."
-    }
-  ],
-  "allowedFiles": ["src/**", "tests/**"],
-  "evidence": [],
-  "phase": "apply"
-}
-```
-
-El valor importante para OpenCode es `subagent_type: "sdd-apply"`. El valor `phase: "apply"` es metadata para el Kernel y la evidencia; no es el mecanismo que carga el prompt.
-
-## 6. Flujo con el Kernel
-
-Para las ocho fases SDD core, el plugin de Tony Kernel intercepta la delegación:
-
-```ts
-const args = input.arguments as Record<string, unknown>
-const requestedPhase = derivePhase(args)
-
-if (requestedPhase === null) return // agente de protocolo fuera del FSM
-
-const result = await client.canStartPhase(requestedPhase)
-if (!result.allowed) {
-  throw new KernelBlockedError("Phase transition blocked")
-}
-
-await client.recordDelegation(requestedPhase, "sub-agent")
-```
-
-Después de la ejecución, el hook de completion valida artifacts, evidencia, scope y estado de la fase antes de registrar `recordPhaseCompletion`.
-
-Los agentes `review-*`, `jd-*`, `sdd-init` y `sdd-onboard` deben estar explícitamente clasificados como agentes conocidos fuera del FSM. Un `subagent_type` desconocido sigue siendo bloqueado por `KernelBlockedError` (fail-closed).
-
-## 7. Snapshot y drift
-
-El build produce:
-
-```text
-prompts/generated/prompt-manifest.json
-prompts/generated/prompt-snapshot.json
-```
-
-`prompt-manifest.json` registra SHA-256 por dependencia para detectar drift. `prompt-snapshot.json` registra el resultado final de cada bundle materializado:
-
-```json
-{
-  "schema_version": 1,
-  "generated_by": "tools/prompt-bundler.ts",
-  "orchestrator": {
-    "path": "prompts/generated/tony-orchestrator.md",
-    "sha256": "...",
-    "bytes": 32033,
-    "lines": 416
-  },
-  "phases": {
-    "sdd-apply": {
-      "path": "prompts/generated/phases/sdd-apply.md",
-      "sha256": "...",
-      "bytes": 31843,
-      "lines": 718
-    }
-  }
-}
-```
-
-La validación debe fallar si cualquiera de estos artefactos está ausente o desactualizado:
-
-```bash
-make build-prompts
-make check-prompts
-make test-all
-make coverage
-```
-
-En CI conviene ejecutar `make check-prompts` explícitamente antes de `make test-all`, y publicar el manifest y el snapshot como artifacts de la ejecución.
-
-## 8. Reducción segura del prompt raíz
-
-No conviene eliminar del root todo bloque grande indiscriminadamente. Debe permanecer el contexto que el orquestador necesita antes de delegar: routing, Kernel, permisos, estrategia de artifacts, contrato de resultados, deduplicación, skill resolution y handoff dinámico.
-
-Los bloques específicos de executor o review deben vivir en el bundle de fase. Una reducción segura consiste en retirar includes duplicados y reemplazarlos por un handoff corto cuando la regla dependa de memoria o del estado de la sesión. Después de cada reducción se deben ejecutar `make check-prompts`, los tests del bundler y la suite completa.
-
-## 9. Checklist final
-
-```bash
-bun run tools/build-prompts.ts
-bun run tools/build-prompts.ts --check
-bun test tests/prompt_bundler.test.ts
-bun run tools/validate-config.ts
-make test-all
-make coverage
-git diff --check
-```
-
-Si todo pasa, los cambios se pueden agregar y commitear:
-
-```bash
-git add .github/workflows/ci.yml Makefile TESTING.md prompts tests tools
-
-git commit -m "feat: harden prompt graph, snapshot and phase resolution"
-git push origin dev
-```
-
-
-## Agradecimientos
 ## Agradecimientos
 Algunos conceptos de SDD, orchestator, prompts, skills y commands, se basan en el repositorio de github `gentle-ai` de Alan Buscaglia `The Gentleman`, especial agradecimiento por todo el contenido que comparte y su esfuerzo para ayudar a la comunidad.  
 

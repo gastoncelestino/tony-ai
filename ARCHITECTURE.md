@@ -275,28 +275,6 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 - **Skill registry**: las skills se resuelven una vez por sesión desde el registry y se inyectan como rutas exactas en cada sub-agente, no se buscan ad-hoc.
 
 ## Integración de resolución programática por fase con OpenCode
-
-### Idea central
-
-La resolución programática ocurre durante el **build**, no dentro del modelo ni durante la ejecución de OpenCode. `phase-manifest.json` es la fuente de composición; `prompt-bundler.ts` resuelve sus includes y materializa archivos finales; `opencode.json` conecta cada nombre de agente con su bundle; finalmente, `tony-orchestrator` solo selecciona el `subagent_type` correcto.
-
-> El orquestador decide **qué agente ejecutar**. OpenCode carga el prompt materializado definido para ese agente. El bundler decide **qué contenido recibe** ese agente.
-
-```mermaid
-flowchart LR
-    A[phase-manifest.json] --> B[build-prompts.ts]
-    B --> C[prompt-bundler.ts]
-    C --> D[prompts/generated/tony-orchestrator.md]
-    C --> E[prompts/generated/phases/<phase>.md]
-    C --> F[prompt-manifest.json + prompt-snapshot.json]
-    G[opencode.json] --> D
-    G --> E
-    H[Usuario] --> I[tony-orchestrator]
-    I -->|Task subagent_type: sdd-apply| G
-    G --> E
-    E --> J[Subagente de fase]
-```
-
 ## 1. Manifiesto: fuente de composición por fase
 
 El archivo `prompts/agents/includes/phase-manifest.json` declara qué includes, skills y prompt específico corresponden a cada fase.
@@ -475,8 +453,6 @@ git commit -m "feat: harden prompt graph, snapshot and phase resolution"
 git push origin dev
 ```
 
-
-## Principios de diseño
 ## Notas
 - `AGENTS.md` define convenciones de orquestación, reglas de respuesta y patrones de uso de memoria/indexación esperados por el ecosistema de agentes circundante.
 - `opencode.json` está presente en la raíz del repositorio, indicando que el repo está pensado para integrarse con una configuración de MCP/tooling compatible con OpenCode.
