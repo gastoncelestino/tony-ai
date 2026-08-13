@@ -10,17 +10,6 @@
 # invoca aquí para evitar ejecutar dos veces los mismos tests del Kernel.
 test: check-test-deps check-test-discovery check-prompts test-python test-ts validate-config
 
-build-prompts: check-test-deps
-	@echo "▶ Building prompt bundles..."
-	@mkdir -p prompts/generated/phases
-	@bun run tools/build-prompts.ts
-	@echo "✓ Prompt bundles built"
-
-check-prompts:
-	@echo "▶ Checking prompt bundles..."
-	@bun run tools/build-prompts.ts --check
-	@echo "✓ Prompt bundles are up to date"
-
 # Target explícito que ejecuta TODO, incluyendo el Kernel de forma focalizada.
 test-all: test test-kernel
 
