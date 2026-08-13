@@ -103,8 +103,8 @@ bun run tools/validate-config.ts
 - Drift después de editar `skills/_shared/*.md`: ejecutar `make build-prompts` y verificar con `make check-prompts`.
 
 ### CI
-
-En CI el orden recomendado es:
+CI fija Bun `1.3.14` y prueba Python 3.10, 3.11 y 3.12. Cada versión ejecuta `make test`; Python 3.12 genera además los reportes de cobertura. La build Docker continúa en un job separado.
+Elorden recomendado es:
 
 ```bash
 make check-prompts
@@ -115,7 +115,6 @@ make coverage
 `check-prompts` es barato y detecta desvíos antes de correr la suite completa. Los reportes deben publicar `prompt-manifest.json` y `prompt-snapshot.json` como artifacts.
 
 ## Smoke tests externos
-## Smoke tests externos
 
 Los tests que requieren servicios reales quedan separados de la suite local:
 
@@ -125,7 +124,3 @@ make health
 ```
 
 Estos comandos necesitan los servicios configurados por el proyecto. Un fallo de conectividad, modelo o contenedor debe clasificarse como fallo de infraestructura y no como fallo de la suite unitaria.
-
-## CI
-
-CI fija Bun `1.3.14` y prueba Python 3.10, 3.11 y 3.12. Cada versión ejecuta `make test`; Python 3.12 genera además los reportes de cobertura. La build Docker continúa en un job separado.
