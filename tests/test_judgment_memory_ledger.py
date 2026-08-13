@@ -129,7 +129,8 @@ RECORD_B = {
 def test_judgment_memory_ledger():
     server = HTTPServer(("127.0.0.1", 0), MockHandler)
     port = server.server_port
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    server_thread = threading.Thread(target=server.serve_forever, daemon=False)
+    server_thread.start()
     base = f"http://127.0.0.1:{port}"
 
     tmp = tempfile.mkdtemp()
@@ -217,6 +218,8 @@ def test_judgment_memory_ledger():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
         server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

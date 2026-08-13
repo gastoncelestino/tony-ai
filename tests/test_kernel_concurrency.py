@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,12 +14,20 @@ from kernel.persistence import load_orchestrator, save_orchestrator, update_orch
 
 
 def _concurrent_task_worker(state_path: str, task_id: str, ready: multiprocessing.synchronize.Event, start: multiprocessing.synchronize.Event) -> None:
-    ready.set()
-    start.wait(timeout=30)
-    update_orchestrator(
-        lambda orch: orch.add_task(task_id, f"description for {task_id}", "explore"),
-        path=state_path,
-    )
+    try:
+        print(f"[{task_id}] worker started", file=sys.stderr, flush=True)
+        ready.set()
+        print(f"[{task_id}] ready signal sent", file=sys.stderr, flush=True)
+        start.wait(timeout=30)
+        print(f"[{task_id}] start signal received, updating orchestrator", file=sys.stderr, flush=True)
+        update_orchestrator(
+            lambda orch: orch.add_task(task_id, f"description for {task_id}", "explore"),
+            path=state_path,
+        )
+        print(f"[{task_id}] task added successfully", file=sys.stderr, flush=True)
+    except Exception as e:
+        print(f"[{task_id}] ERROR: {e}", file=sys.stderr, flush=True)
+        raise
 
 
 class TestKernelConcurrency(unittest.TestCase):
@@ -44,7 +53,21 @@ class TestKernelConcurrency(unittest.TestCase):
         for process in processes:
             process.start()
         try:
-            self.assertTrue(all(event.wait(timeout=30) for event in ready_events))
+            print(f"\n[main] waiting for {worker_count} workers to be ready...", flush=True)
+            ready_results = []
+            for idx, event in enumerate(ready_events):
+                is_ready = event.wait(timeout=30)
+                ready_results.append((f"task-{idx}", is_ready))
+                if not is_ready:
+                    print(f"[main] TIMEOUT: task-{idx} did not signal ready", flush=True)
+            
+            all_ready = all(r[1] for r in ready_results)
+            if not all_ready:
+                failed = [r[0] for r in ready_results if not r[1]]
+                print(f"[main] {len(failed)} workers failed to ready: {failed}", flush=True)
+            self.assertTrue(all_ready, f"Some workers did not become ready: {ready_results}")
+            
+            print(f"[main] all {worker_count} workers ready, starting test", flush=True)
             start.set()
             for process in processes:
                 process.join(timeout=30)
