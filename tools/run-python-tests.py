@@ -58,18 +58,16 @@ def resolve_test_files(paths: Iterable[str]) -> list[Path]:
 
 
 def module_name_for(path: Path, index: int) -> str:
-    """Return an importable module name for multiprocessing ``spawn``.
+    root = repo_root()
+    try:
+        rel = path.relative_to(root)
+        return ".".join(rel.with_suffix("").parts)
+    except ValueError:
+        parent_str = str(path.parent)
+        if parent_str not in sys.path:
+            sys.path.insert(0, parent_str)
+        return path.stem
 
-    Spawned children import process targets by module name. A synthetic name
-    that only exists in ``sys.modules`` works in the parent process but cannot
-    be imported by a child process. Test filenames are already valid module
-    names by convention, so use the filename stem and make its parent
-    directory importable.
-    """
-    safe_stem = "".join(char if char.isalnum() or char == "_" else "_" for char in path.stem)
-    if not safe_stem.isidentifier():
-        raise RunnerError(f"test filename is not importable as a module: {path}")
-    return safe_stem
 
 
 def detect_unsupported_source(path: Path) -> None:
@@ -94,15 +92,6 @@ def detect_unsupported_source(path: Path) -> None:
 def import_test_module(path: Path, index: int) -> types.ModuleType:
     detect_unsupported_source(path)
     module_name = module_name_for(path, index)
-    parent = str(path.parent)
-    if parent not in sys.path:
-        sys.path.insert(0, parent)
-    existing = sys.modules.get(module_name)
-    if existing is not None and Path(getattr(existing, "__file__", "")).resolve() != path:
-        raise RunnerError(
-            f"test module name collision for {path}: {module_name!r} is already loaded "
-            f"from {getattr(existing, "__file__", "<unknown>")}"
-        )
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
         raise RunnerError(f"cannot create import spec for: {path}")
