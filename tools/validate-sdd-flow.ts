@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { execFileSync } from "node:child_process"
 import { resolve } from "node:path"
 
 const ROOT = resolve(process.cwd())
+const PYTHON = process.env.TONY_PYTHON ?? "python3"
 let passed = 0
 let failed = 0
 let skipped = 0
@@ -70,7 +71,6 @@ function checkRequiredFiles(): void {
 
 function checkOrchestrator(): void {
   const prompt = read("prompts/agents/tony-orchestrator.md")
-
   const phaseRef = "{file:./phase-capabilities.md}"
   const forbidden = [
     "prompts/sdd/",
@@ -162,16 +162,16 @@ function checkPermissions(): void {
   }
 
   const expectedAllows: Record<string, string[]> = {
-    "sdd-explore": ["code-index_*", "tonymem_*"] ,
-    "sdd-design": ["code-index_*", "tonymem_*"] ,
-    "sdd-apply": ["code-index_*", "tonymem_*"] ,
-    "sdd-verify": ["code-index_*", "tonymem_*"] ,
-    "sdd-propose": ["tonymem_*"] ,
-    "sdd-spec": ["tonymem_*"] ,
-    "sdd-tasks": ["tonymem_*"] ,
-    "sdd-archive": ["tonymem_*"] ,
-    "sdd-init": ["tonymem_*"] ,
-    "sdd-onboard": ["tonymem_*"] ,
+    "sdd-explore": ["code-index_*", "tonymem_*"],
+    "sdd-design": ["code-index_*", "tonymem_*"],
+    "sdd-apply": ["code-index_*", "tonymem_*"],
+    "sdd-verify": ["code-index_*", "tonymem_*"],
+    "sdd-propose": ["tonymem_*"],
+    "sdd-spec": ["tonymem_*"],
+    "sdd-tasks": ["tonymem_*"],
+    "sdd-archive": ["tonymem_*"],
+    "sdd-init": ["tonymem_*"],
+    "sdd-onboard": ["tonymem_*"],
   }
 
   for (const [agent, allows] of Object.entries(expectedAllows)) {
@@ -249,7 +249,7 @@ function checkConfigValidator(): void {
 
 function checkTests(): void {
   run("bun", ["test"], "Bun test suite")
-  run("python", ["-m", "pytest"], "Python pytest suite")
+  run(PYTHON, ["-m", "pytest"], "Python pytest suite")
 }
 
 function checkRuntimeAvailability(): void {
