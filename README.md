@@ -13,12 +13,12 @@ El Tony Kernel intercepta cada transición de fase: valida artifacts, verifica c
 TonyMem guarda decisiones y contexto entre sesiones, code-index te deja buscar "por significado" dentro del repo, y judgment-memory recuerda revisiones anteriores parecidas para no arrancar siempre desde cero.  
 
 A nivel técnico, el stack pide Python 3.10+, Bun, Ollama, Qdrant y opcionalmente Docker para levantar los servicios auxiliares.  
-Los modelos por defecto son: qwen3-coder:30b, carstenuhlig/omnicoder-9b, deepseek-r1:14b, ornith:9b, y embeddings con bge-m3 y nomic-embed-text. 
+Los modelos por defecto son: qwen3-coder:30b, carstenuhlig/omnicoder-2-9b:q4_k_m, deepseek-r1:14b, ornith:9b, y embeddings con bge-m3 y nomic-embed-text. 
 
 ```mermaid
 flowchart TD
     U["Proyecto / pedido del usuario"] --> P["Planning Engine<br/>Qwen3-Coder 30B"]
-    P --> I["Implementation<br/>OmniCoder 9B"]
+    P --> I["Implementation<br/>OmniCoder 2 9B Q4_K_M"]
 
     I --> R4["Revisión 4R<br/>DeepSeek-R1 14B"]
     I -.->|"explícito: juzgar esto"| JD["Judgment Day<br/>DeepSeek-R1 + Qwen3-Coder"]
