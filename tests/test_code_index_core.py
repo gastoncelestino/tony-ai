@@ -163,7 +163,7 @@ def test_code_index_core():
         status = core.index_status(tmp, "demo", base_url_qdrant=base)
         print(status)
         assert status["collection_exists"] is True
-        assert status["files_indexed"] == 1  # only a.py left after b.py deletion
+        assert status["files_indexed"] == 1
 
         print("--- fail-fast health check: dead Ollama port fails in seconds, not 120s ---")
         start = time.monotonic()
@@ -186,11 +186,11 @@ def test_code_index_core():
 
 
 def test_treesitter_chunking():
-    """Test that tree-sitter chunking produces correct boundaries."""
+    """Tree-sitter chunking must produce structural, non-regex boundaries."""
     import importlib.util
-    if importlib.util.find_spec("tree_sitter") is None:
-        print("  [SKIP] tree-sitter not installed — regex chunking is the default")
-        return
+    assert importlib.util.find_spec("tree_sitter") is not None
+    assert importlib.util.find_spec("tree_sitter_language_pack") is not None
+
     content = '''
 import os
 
@@ -206,12 +206,12 @@ def standalone():
     return 42
 '''
     lines = content.split("\n")
-    chunks = chunk_lines(lines, ".py")
-    assert len(chunks) >= 4, f"Expected >= 4 chunks, got {len(chunks)}"
-    for start, end in chunks:
-        chunk_text = "\n".join(lines[start:end+1])
-        assert not chunk_text.rstrip().endswith("def "), f"Chunk cuts through function"
-    print(f"  [PASS] tree-sitter chunking: {len(chunks)} chunks from nested Python")
+    chunks = chunk_lines(lines, ".py", chunker="tree-sitter")
+    assert len(chunks) >= 2, f"Expected >= 2 structural chunks, got {len(chunks)}"
+    texts = ["\n".join(lines[start:end + 1]) for start, end in chunks]
+    assert any("class MyClass" in text and "method_a" in text and "method_b" in text for text in texts)
+    assert any("def standalone" in text for text in texts)
+    print(f"  [PASS] tree-sitter chunking: {len(chunks)} structural chunks from nested Python")
 
 
 if __name__ == "__main__":
