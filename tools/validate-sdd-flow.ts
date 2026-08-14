@@ -27,6 +27,18 @@ function skip(message: string): void {
   console.warn(`${YELLOW}SKIP${RESET} ${message}`)
 }
 
+function colorizeTestSummary(output: string): string {
+  return output
+    .split("\n")
+    .map((line) => {
+      if (/^\d+ pass$/.test(line.trim())) return line.replace(/^(\d+ pass)/, `${GREEN}$1${RESET}`)
+      if (/^\d+ fail$/.test(line.trim())) return line.replace(/^(\d+ fail)/, `${RED}$1${RESET}`)
+      if (/^\d+ expect\(\) calls$/.test(line.trim())) return line.replace(/^(\d+ expect\(\) calls)/, `${YELLOW}$1${RESET}`)
+      return line
+    })
+    .join("\n")
+}
+
 function file(path: string): string {
   return resolve(ROOT, path)
 }
@@ -41,10 +53,13 @@ function exists(path: string): boolean {
 
 function run(command: string, args: string[], label: string): boolean {
   try {
-    execFileSync(command, args, { cwd: ROOT, stdio: "inherit" })
+    const output = execFileSync(command, args, { cwd: ROOT, encoding: "utf8" })
+    if (output) console.log(colorizeTestSummary(output))
     ok(label)
     return true
-  } catch {
+  } catch (error) {
+    const output = typeof error === "object" && error !== null && "stdout" in error ? (error as { stdout?: Buffer | string }).stdout : undefined
+    if (output) console.log(colorizeTestSummary(String(output)))
     fail(`${label} (exit code indicates failure)`)
     return false
   }
@@ -282,9 +297,9 @@ function main(): void {
   checkRuntimeAvailability()
 
   console.log("\n=== Result ===")
-  console.log(`PASS: ${passed}`)
-  console.log(`FAIL: ${failed}`)
-  console.log(`SKIP: ${skipped}`)
+  console.log(`${GREEN}PASS: ${passed}${RESET}`)
+  console.log(`${RED}FAIL: ${failed}${RESET}`)
+  console.log(`${YELLOW}SKIP: ${skipped}${RESET}`)
 
   if (failed > 0) {
     console.error(`${RED}\nSDD architecture audit FAILED.${RESET}`)
