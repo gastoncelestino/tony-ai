@@ -12,7 +12,7 @@ Tony-AI requiere todos estos componentes para una instalación completa:
 - **GGA (Gentleman Guardian Angel)** — code review obligatorio antes de commit.
 - **tree-sitter + tree-sitter-language-pack** — chunking estructural obligatorio del Code Indexer.
 
-El bootstrap oficial no tiene dependencias opcionales. `setup.sh` falla si cualquiera de estos requisitos no está disponible.
+El bootstrap oficial no admite dependencias alternativas. `setup.sh` falla si cualquiera de estos requisitos no está disponible.
 
 Qdrant es obligatorio porque Code Indexer y Judgment Memory lo utilizan.
 
