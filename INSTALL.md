@@ -1,62 +1,54 @@
-# Tony-AI - Instalación detallada
+# Tony-AI - Instalación
 
-# 0. Requisitos
-- **Python 3.10+** para los servidores MCP en Python.
-- **Bun** para los scripts de verificación basados en TypeScript y plugins.
-- **OpenCode CLI** (instalador oficial: https://opencode.ai)
-- **Ollama** (https://ollama.com/download)
-- **Docker** (opcional, para correr Qdrant + Ollama como servicios)
-- **GGA** (opcional, para code review antes de commit — https://github.com/Gentleman-Programming/gentleman-guardian-angel)
+## 0. Requisitos obligatorios
 
-## Para características semánticas (code-index y judgment-memory)
-- **Qdrant** corriendo localmente o remotamente.
-- La capa de memoria local funciona sin Ollama ni Qdrant. La búsqueda semántica de código y el recall de juicios requieren ambos servicios.
+Tony-AI requiere todos estos componentes para una instalación completa:
 
-# 1. Clonar repositorio
+- **Python 3.10+** — servidores MCP y tooling Python.
+- **Bun** — scripts TypeScript y plugins.
+- **OpenCode CLI** — orquestador SDD.
+- **Ollama** — ejecución de los modelos locales.
+- **Docker + Docker Compose** — servicios de soporte, especialmente Qdrant.
+- **GGA (Gentleman Guardian Angel)** — code review obligatorio antes de commit.
+- **tree-sitter + tree-sitter-languages** — chunking estructural obligatorio del Code Indexer.
+
+No hay dependencias opcionales en el bootstrap oficial. `setup.sh` falla si cualquiera de estos requisitos no está disponible.
+
+Qdrant es obligatorio porque Code Indexer y Judgment Memory lo utilizan.
+
+## 1. Clonar
+
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
 cd tony-ai
+git checkout dev
 ```
 
-# 2. Instalación automática (recomendada)
+## 2. Bootstrap automático
+
 ```bash
-./scripts/setup.sh    # Verifica dependencias, levanta servicios si hace falta, descarga modelos, configura .env
-./scripts/health.sh   # Verificar estado del sistema
+./scripts/setup.sh
 ```
 
-`setup.sh` hace:
-1. Verifica dependencias (Python, Bun, OpenCode CLI, Docker)
-2. Verifica Ollama + Qdrant: si ya responden no toca nada; si falta uno, Docker levanta **solo ese servicio**. Esto permite combinar Ollama nativo con Qdrant en Docker sin conflictos de puertos.
-3. Descarga los modelos de Ollama (requiere Ollama respondiendo): qwen3-coder:30b, carstenuhlig/omnicoder-9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text
-4. Instala `requirements-dev.txt` (pytest) y configura `.env.example`
-5. Regenera `opencode.json` con rutas portables usando `TONY_REPO_ROOT`
-6. Instala el pre-commit hook de prompt bundles (`.githooks/pre-commit`)
+El bootstrap:
 
-`health.sh` verifica:
-1. OpenCode config válida
-2. Los 4 MCP servers arrancan (TonyMem, Code Indexer, Judgment Memory, Tony Kernel)
-3. Ollama responde y tiene los modelos
-4. Qdrant responde
-5. Pipeline de embeddings funcional
+1. valida Python 3.10+, Bun, OpenCode CLI, Docker, Ollama y GGA;
+2. valida e instala las dependencias Python de desarrollo, incluyendo tree-sitter;
+3. comprueba Ollama y Qdrant;
+4. usa Docker para levantar únicamente los servicios que falten;
+5. descarga `qwen3-coder:30b`, `carstenuhlig/omnicoder-2-9b:q4_k_m`, `deepseek-r1:14b`, `ornith:9b`, `bge-m3` y `nomic-embed-text`;
+6. configura `.env.example` con `TONY_INDEX_CHUNKER=tree-sitter`;
+7. regenera `opencode.json` con rutas portables y el chunker obligatorio.
 
-# 3. Instalación manual (si no hiciste la instalación automática)
-## 3.1 Copiar configuración de OpenCode
-```bash
-mkdir -p ~/.opencode/plugins
-cp opencode.json ~/.opencode/
-cp AGENTS.md ~/.opencode/
-cp plugins/tonymem.ts ~/.opencode/plugins/
-cp plugins/qdrant.ts ~/.opencode/plugins/
-cp plugins/judgment-memory.ts ~/.opencode/plugins/
-cp plugins/tony-kernel/index.ts ~/.opencode/plugins/
-```
+Podés ejecutar el bootstrap varias veces; `ollama pull` y la configuración son idempotentes.
 
-## 3.2 Configurar variables de entorno
+## 3. Configuración manual
+
 ```bash
 cp .env.example .env
 ```
 
-Editá `.env` y ajustá `TONY_REPO_ROOT` a la ruta absoluta de tu clone:
+Ajustá `TONY_REPO_ROOT` a la ruta absoluta del clone:
 
 ```env
 TONY_REPO_ROOT=/home/tu-usuario/proyectos/tony-ai
@@ -64,225 +56,164 @@ TONY_OLLAMA_URL=http://localhost:11434
 TONY_QDRANT_URL=http://localhost:6333
 JUDGMENT_EMBED_MODEL=nomic-embed-text
 CODE_EMBED_MODEL=bge-m3
-TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-9b
-TONY_INDEX_CHUNKER=regex
+TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-2-9b:q4_k_m
+TONY_INDEX_CHUNKER=tree-sitter
 ```
 
-Si usás Zsh:
-```bash
-echo 'export TONY_REPO_ROOT="'"$(pwd)"'"' >> ~/.zshrc
-source ~/.zshrc
-```
+## 4. Servicios
 
-Si usás Bash:
-```bash
-echo 'export TONY_REPO_ROOT="'"$(pwd)"'"' >> ~/.bashrc
-source ~/.bashrc
-```
+Ollama puede estar instalado de forma nativa o ejecutarse mediante Docker, pero debe responder en `TONY_OLLAMA_URL`. Qdrant se ejecuta normalmente mediante Docker.
 
-## 3.3 Iniciar servicios de soporte
-Si ya tenés Ollama nativo corriendo, **no levantes el servicio `ollama` de Docker** porque ambos usan el puerto 11434. En ese caso alcanza con:
+Si Ollama ya corre de forma nativa, no levantes otro Ollama sobre el puerto 11434:
 
 ```bash
 cd docker
 docker compose up -d qdrant
 ```
 
-Si no tenés ninguno de los dos servicios:
+Si ninguno está corriendo:
 
 ```bash
 cd docker
 docker compose up -d ollama qdrant
 ```
 
-Deberías ver los servicios disponibles en `docker compose ps`.
+Verificación:
 
-## 3.4 Descargar modelos de Ollama
-## 3.4.1 Modelos grandes (descargan lentamente)
 ```bash
-ollama pull qwen3-coder:30b
-ollama pull deepseek-r1:14b
-```
-## 3.4.2 Modelo de implementación
-```bash
-ollama pull carstenuhlig/omnicoder-9b
-ollama pull ornith:9b
-```
-## 3.4.3 Modelos pequeños (rápidos)
-```bash
-ollama pull bge-m3
-ollama pull nomic-embed-text
+curl http://localhost:11434/api/tags
+curl http://localhost:6333/readyz
+docker compose ps
 ```
 
-## 3.5 Instalar GGA (opcional — code review antes de commit)
+## 5. GGA
 
-GGA valida los archivos staged contra `AGENTS.md` en cada commit. Es una
-herramienta externa que se instala una sola vez.
+GGA es obligatorio. Debe existir como `gga` en `PATH` antes de considerar terminado el bootstrap.
 
-Necesitás 4 archivos del repo
-[gentleman-guardian-angel](https://github.com/Gentleman-Programming/gentleman-guardian-angel):
+Una instalación típica desde el repositorio de GGA deja el ejecutable en `~/.local/bin/gga` y sus librerías en `~/.local/share/gga/lib`. Asegurate de que `~/.local/bin` esté en `PATH` y verificá:
 
 ```bash
-# Crear directorios destino
-mkdir -p ~/.local/bin
-mkdir -p ~/.local/share/gga/lib
-
-# Copiar los 4 archivos (cambiá la ruta al repo descargado)
-cp ~/gentleman-guardian-angel/bin/gga            ~/.local/bin/gga
-cp ~/gentleman-guardian-angel/lib/providers.sh  ~/.local/share/gga/lib/providers.sh
-cp ~/gentleman-guardian-angel/lib/cache.sh      ~/.local/share/gga/lib/cache.sh
-cp ~/gentleman-guardian-angel/lib/pr_mode.sh    ~/.local/share/gga/lib/pr_mode.sh
-
-# Permisos de ejecución
-chmod +x ~/.local/bin/gga ~/.local/share/gga/lib/*.sh
-
-# Si venís de Windows (CRLF), convertir a LF:
-dos2unix ~/.local/bin/gga ~/.local/share/gga/lib/providers.sh ~/.local/share/gga/lib/cache.sh ~/.local/share/gga/lib/pr_mode.sh
-
-# Verificar
 gga --version
 ```
 
-Si `~/.local/bin` no está en tu PATH:
+## 6. tree-sitter
+
+Tree-sitter es obligatorio porque Code Indexer usa chunking estructural en lugar del chunker regex. Las dependencias están en `requirements-dev.txt`:
+
 ```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
+python3 -m pip install -r requirements-dev.txt
+python3 -c 'import tree_sitter, tree_sitter_languages; print("tree-sitter OK")'
 ```
 
-# 4. Verificar instalación
+No configures `TONY_INDEX_CHUNKER=regex` en una instalación soportada de Tony-AI.
+
+## 7. Verificación
+
 ```bash
-make health          # Verificación end-to-end
-make test            # Ejecutar todos los tests
+make health
+make test
+make validate-config
 ```
 
-# 5. Correr la suite de tests
-## 5.1 Ejecución recomendada
+También podés ejecutar la suite Python directamente:
+
 ```bash
-make test                            # Suite completa (Python + TypeScript + Kernel)
-pytest tests                         # Suite Python con Pytest (desarrollo y CI)
-python3 tools/run-python-tests.py tests # Runner Python standalone (sin dependencias, solo stdlib)
-make test-ts                         # Solo tests TypeScript
-make test-kernel                     # Solo tests Kernel
+pytest tests
+python3 tools/run-python-tests.py tests
 ```
 
-## 5.2 Targets auxiliares del Makefile
-```bash
-make verify-qdrant   # Smoke test del pipeline de Qdrant/Ollama
-make health          # Verificar estado de los servicios
-make validate-config # Validar opencode.json + prompts + MCP
+## 8. Modelos de Ollama
+
+El bootstrap instala estos modelos:
+
+```text
+qwen3-coder:30b
+carstenuhlig/omnicoder-2-9b:q4_k_m
+deepseek-r1:14b
+ornith:9b
+bge-m3
+nomic-embed-text
 ```
 
-## 5.2 Comandos OpenCode (slash commands)
-```bash
-/sdd-init                      # Inicializar contexto SDD
-/sdd-new <description>         # Nuevo change con planificación automática
-/sdd-explore <task>            # Investigar una idea
-/sdd-propose                   # Crear propuesta PRD
-/sdd-spec                      # Especificación técnica detallada
-/sdd-design                    # Diseño técnico y estructuras de datos
-/sdd-tasks                     # Generar tareas de implementación
-/sdd-apply                     # Implementar tareas pendientes
-/sdd-verify                    # Validar implementación contra specs
-/sdd-archive                   # Cerrar change y persistir estado final
-/memory-search "query"         # Buscar decisiones anteriores
-/memory-stats                  # Estadísticas de memoria por proyecto
-/judgment-history              # Ver histórico de juicios
-juzgar esto                    # Activar Judgment Day (revisión adversarial)
-```
+El modelo de implementación canónico es `carstenuhlig/omnicoder-2-9b:q4_k_m`.
 
-## 5.3 Verificar el pipeline real de Qdrant/Ollama
+## 9. OpenCode
+
+Los MCP servers se ejecutan desde `opencode.json` usando `TONY_REPO_ROOT`:
+
 ```bash
 opencode mcp list
 ```
 
-## 5.4 Correr el indexador de código
+El Code Indexer debe mostrar `TONY_INDEX_CHUNKER=tree-sitter`.
+
+## 10. Tests principales
+
+| Componente | Test |
+|---|---|
+| Bootstrap y requisitos | `tests/test_setup.py` |
+| Code Indexer | `tests/test_code_index_core.py` |
+| Judgment Memory | `tests/test_judgment_memory_ledger.py` |
+| Tony Kernel | `tests/test_kernel_state_machine.py` |
+| Kernel integration | `tests/test_kernel_integration.py` |
+| SDD E2E | `tests/test_sdd_flow_e2e.py` |
+| TypeScript | `make test-ts` |
+
+`tests/test_setup.py` verifica además que el modelo OmniCoder 2 y tree-sitter sean los valores canónicos y que no reaparezcan referencias legacy.
+
+## 11. Troubleshooting
+
+### Python no cumple la versión
+
 ```bash
-cd code-index
-python3 core.py index --path /ruta/al/repo --project mi-proyecto
-python3 core.py search --query "manejo de reintentos HTTP" --project mi-proyecto
-python3 core.py status --path /ruta/al/repo --project mi-proyecto
+python3 --version
 ```
 
-## 5.5 Correr tests de judgment-memory
+Debe ser Python 3.10 o superior.
+
+### Falta Bun, OpenCode o GGA
+
 ```bash
-python3 -m pytest tests/test_judgment_memory_ledger.py
+command -v bun
+command -v opencode
+command -v gga
 ```
 
-## 5.6 Correr local-memory manualmente
+Los tres deben devolver una ruta.
+
+### Docker no responde
+
 ```bash
-cd local-memory
-python3 server.py
+docker info
+docker compose version
 ```
 
-| Componente | Test | Qué cubre |
-|------------|------|-----------|
-| TonyMem server | `local-memory/server.py` (manual JSON-RPC) | Sesión completa: save, search, context, session-summary, prompt-capture, lifecycle |
-| TonyMem plugin | `plugins/tonymem.ts` (tipado `tsc`) | Tipado contra stubs |
-| Code Indexer | `tests/test_code_index_core.py` | Chunking + mock HTTP end-to-end |
-| DCP config | `dcp.schema.json` | Schema completo |
-| Judgment Day Memory Bridge | `tests/test_judgment_memory_ledger.py` | Mock Ollama+Qdrant |
-| Judgment Day Memory Bridge | `tests/test_judgment_memory_hooks.ts` | Hooks de plugin |
-| Judgment Day Memory Bridge | `judgment-memory/scripts/verify-qdrant.ts` | Smoke test contra servicios reales |
-| Tony Kernel | `tests/test_kernel_state_machine.py` | FSM, phase gate, artifacts y scope |
-| Tony Kernel | `tests/test_kernel_integration.py` | Integration tests |
-| Tony Kernel | `tests/test_tony_kernel_e2e.ts` | End-to-end adversarial |
-| Tony Kernel | `tests/test_sdd_flow_e2e.py` | Flujo explore→archive |
-| Bootstrap | `tests/test_setup.py` | Sintaxis, detección de servicios y referencias de modelos |
+El daemon debe estar activo.
 
-# 6. Troubleshooting
+### Ollama no responde
 
-## OpenCode no encuentra los MCP servers
-Verificá que `opencode.json` no tenga rutas absolutas:
-```bash
-grep -E '/home/[a-zA-Z0-9_]+/' opencode.json
-```
-Si encuentra algo, corré `make bootstrap` para regenerar las rutas con `{env:TONY_REPO_ROOT}`.
-
-## Ollama no responde
 ```bash
 curl http://localhost:11434/api/tags
 ```
-Si no responde, iniciá el servicio:
+
+Si usás Ollama nativo:
+
 ```bash
 ollama serve
 ```
-O con Docker:
-```bash
-cd docker && docker compose up -d ollama
-```
 
-## Qdrant no responde
+### Qdrant no responde
+
 ```bash
 curl http://localhost:6333/readyz
-```
-Si no responde, iniciá el servicio:
-```bash
 cd docker && docker compose up -d qdrant
 ```
 
-## Falla el smoke test de embeddings
-Verificá que los modelos estén descargados:
+### tree-sitter no se puede importar
+
 ```bash
-ollama list | grep bge-m3
-ollama list | grep nomic-embed-text
-```
-Si no están, descargalos:
-```bash
-ollama pull bge-m3
-ollama pull nomic-embed-text
+python3 -m pip install -r requirements-dev.txt
+python3 -c 'import tree_sitter, tree_sitter_languages'
 ```
 
-## Error: "module not found" en Python
-Los servidores MCP usan solo stdlib — no requieren `pip install` ni dependencias externas.
-
-Si te faltan módulos como `tree_sitter`, es porque activaste `TONY_INDEX_CHUNKER=tree-sitter`. Instalá las dependencias opcionales:
-```bash
-pip install -r requirements-optional.txt
-```
-O volver al chunker por defecto (regex, stdlib):
-```bash
-export TONY_INDEX_CHUNKER=regex
-```
-
-## Los comandos /sdd-* no aparecen en autocompletado
-Reiniciá OpenCode CLI después de copiar `opencode.json` y `AGENTS.md` a `~/.opencode/`.
+No cambies el chunker a regex para ocultar el problema: tree-sitter es un requisito obligatorio.
