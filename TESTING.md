@@ -83,43 +83,38 @@ El test usa SQLite temporal y un servidor HTTP local compatible con los endpoint
 
 El plugin también expone `createJudgmentMemory(ctx, overrides)` para pruebas que necesiten reemplazar dependencias concretas sin mocks globales. El entrypoint de producción continúa siendo `JudgmentMemory(ctx)`.
 
-## Bundles materializados de prompts
+## Configuración y prompts SDD
 
-La documentación técnica completa está en `ARCHITECTURE.md`. Acá se resumen los puntos relevantes para testing:
-
-- `phase-manifest.json` es la fuente única de composición por fase.
-- `tools/prompt-bundler.ts` expande includes y skills en build-time; `tools/build-prompts.ts` es la CLI.
-- Los bundles se escriben en `prompts/generated/phases/<phase>.md` y el orquestador en `prompts/generated/tony-orchestrator.md`.
-- `prompt-manifest.json` y `prompt-snapshot.json` registran SHA-256 y tamaño para detectar drift.
+La suite valida directamente la configuración de OpenCode y los prompts fuente. No existe un paso de generación de bundles antes de ejecutar los tests.
 
 ### Checks recomendados
 
 ```bash
-make build-prompts       # genera el bundle raíz y los 18 bundles de fase
-make check-prompts       # falla si falta un bundle, hay drift o quedan tokens sin resolver
-bun test tests/prompt_bundler.test.ts
 bun run tools/validate-config.ts
+make test
 ```
 
-`make test` incluye `make check-prompts`, por lo que modificar un include o skill sin regenerar los bundles bloquea la suite local y CI. El pre-commit hook ejecuta `make check-prompts` antes de cada commit.
+`validate-config.ts` comprueba, entre otras cosas:
+
+- sintaxis y estructura de `opencode.json`;
+- existencia de agentes y prompts configurados;
+- referencias `{file:...}`;
+- referencias a recursos compartidos;
+- configuración MCP;
+- convenciones de discovery de tests.
+
+`make test` ejecuta la suite Python, TypeScript y la validación de configuración.
 
 ### Errores comunes
 
-- `{file:...}` pendiente en `prompts/agents/tony-orchestrator.md`, `dynamic-launcher.md` o `phase-launcher.md`: migrar a `{{include:...}}` o marcar como documentación plana.
-- Agentes en `opencode.json` sin bundle en `prompt-manifest.json`: ejecutar `make build-prompts` o `make generate-agents`.
-- Drift después de editar `skills/_shared/*.md`: ejecutar `make build-prompts` y verificar con `make check-prompts`.
+- Referencia `{file:...}` a un archivo inexistente: corregir el path en `opencode.json` o en el prompt correspondiente.
+- Agente configurado sin prompt fuente válido: agregar o corregir el archivo referenciado.
+- Referencia a un prompt generado o manifest eliminado: migrar al prompt fuente correspondiente.
+- Test TypeScript o Python con nombre no descubrible: corregir el nombre según las convenciones del proyecto.
 
 ### CI
+
 CI fija Bun `1.3.14` y prueba Python 3.10, 3.11 y 3.12. Cada versión ejecuta `make test`; Python 3.12 genera además los reportes de cobertura. La build Docker continúa en un job separado.
-Elorden recomendado es:
-
-```bash
-make check-prompts
-make test-all
-make coverage
-```
-
-`check-prompts` es barato y detecta desvíos antes de correr la suite completa. Los reportes deben publicar `prompt-manifest.json` y `prompt-snapshot.json` como artifacts.
 
 ## Smoke tests externos
 

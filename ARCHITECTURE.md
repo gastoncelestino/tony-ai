@@ -49,7 +49,7 @@ Este patrón permite un acceso directo al archivo SQLite en modo **WAL**, que es
 - **Judgment Memory** — Puente entre Judgment Day y TonyMem. Persiste juicios en SQLite (`judgment-memory/ledger.py`) y los indexa en Qdrant (`jdmem_{project}`) para recall semántico.
 
 ### Protocolos compartidos
-- **SDD Phase Common** (`skills/_shared/sdd-phase-common.md`) — Contrato de salida estructurado (Section D) que todas las fases SDD deben devolver: `status`, `executive_summary`, `artifacts`, `next_recommended`, `risks`, `skill_resolution`.
+- **SDD Phase Common** (`skills/_shared/sdd-phase-common.md`) — Contrato común mínimo para ejecutores SDD: disciplina de contexto, persistencia de artifacts, contrato de retorno y reglas de seguridad.
 - **TonyMem Convention** (`skills/_shared/tonymem-convention.md`) — Topic keys, contratos de `mem_save`/`mem_get_observation`/`mem_search`/`mem_review`, aislamiento por proyecto, manejo de concurrencia, lifecycle de memorias (active/proven/needs_review).
 - **OpenSpec Convention** (`skills/_shared/openspec-convention.md`) — Directorios, paths y delta spec sections para artifacts en filesystem.
 - **Skill Resolver** (`skills/_shared/skill-resolver.md`) — Protocolo de resolución de skills desde el registry.
@@ -89,7 +89,6 @@ tony-ai/
 │   ├── test_code_index_core.py        # Regression test (mock HTTP, incremental)
 │   ├── test_judgment_memory_ledger.py # Regression test (mock Ollama/Qdrant)
 │   ├── judgment_memory_hooks.test.ts  # Test harness TypeScript para hooks
-│   ├── prompt_bundler.test.ts         # Tests del empaquetador de prompts
 │   ├── tony_kernel_e2e.test.ts        # End-to-end adversarial TypeScript
 │   ├── tony_kernel_hooks.test.ts      # Unit tests del plugin TypeScript
 │   └── tony_kernel_integration.test.ts# Puente TS → Python real
@@ -111,8 +110,6 @@ tony-ai/
 │
 ├── tools/                             # Herramientas auxiliares y test runners
 │   ├── run-python-tests.py            # Runner de tests Python standalone (solo stdlib)
-│   ├── build-prompts.ts               # CLI para empaquetar prompts de fases
-│   ├── prompt-bundler.ts              # Motor de resolución de includes y skills
 │   └── validate-config.ts             # Validador de opencode.json, prompts, agents y MCP
 │
 ├── plugins/                           # Plugins para OpenCode
@@ -122,9 +119,12 @@ tony-ai/
 │   └── tony-kernel/                   # Tony Kernel plugin (enforcement determinista)
 │       └── index.ts                   # Hook entry: checks antes y después de fases
 │
-├── prompts/                           # Definiciones de prompts y bundles
-│   ├── sdd/                           # Prompts de fases SDD (explore, propose, spec, etc.)
-│   └── generated/                     # Bundles de prompts materializados
+├── prompts/                           # Prompts fuente y contratos de agentes
+│   ├── agents/                         # Orquestador, routing y agentes de review/Judgment Day
+│   │   ├── tony-orchestrator.md       # Orquestador SDD mínimo
+│   │   ├── phase-capabilities.md      # Mapa de routing por capacidad
+│   │   └── phase-prompts/             # Reviewers y agentes Judgment Day
+│   └── sdd/                            # Prompts directos de las fases SDD
 │
 ├── skills/                            # Skills registradas y protocolos comunes
 │   └── _shared/                       # sdd-phase-common, tonymem-convention, openspec-convention
@@ -225,92 +225,80 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 - **Prompt separation**: los prompts de orquestación y fases viven en `prompts/sdd/` como archivos `.md` referenciados desde `opencode.json`, no inline en JSON.
 - **Skill registry**: las skills se resuelven una vez por sesión desde el registry y se inyectan como rutas exactas en cada sub-agente, no se buscan ad-hoc.
 
-## Integración de resolución programática por fase con OpenCode
-## 1. Manifiesto: fuente de composición por fase
+## Integración de agentes SDD con OpenCode
 
-El archivo `prompts/agents/includes/phase-manifest.json` declara qué includes, skills y prompt específico corresponden a cada fase.
+### 1. Prompts fuente
 
-## 2. Resolver programáticamente el prompt de una fase
+Los agentes SDD usan directamente sus prompts fuente. No existe una etapa de generación o materialización de bundles.
 
-`tools/prompt-bundler.ts` expone `buildPhase(root, phase)`, que:
+- `prompts/agents/tony-orchestrator.md`: coordinación mínima del workflow.
+- `prompts/agents/phase-capabilities.md`: mapa de capacidades y routing.
+- `prompts/agents/phase-launcher.md`: contrato mínimo de lanzamiento.
+- `prompts/sdd/<phase>.md`: instrucciones específicas de cada fase SDD.
+- `prompts/agents/phase-prompts/*.md`: reviewers y agentes de Judgment Day.
+- `skills/_shared/sdd-phase-common.md`: contrato común de los ejecutores SDD.
 
-1. carga `phase-manifest.json`
-2. expande includes base + específicos con deduplicación
-3. expande skills compartidas desde `skills/_shared/`
-4. concatena el prompt de fase específico (`prompts/sdd/<phase>.md` o `prompts/agents/phase-prompts/<phase>.md`)
-5. valida que no queden tokens sin resolver
-6. registra dependencias con SHA-256
+### 2. Configuración de OpenCode
 
-El contrato de salida (`BuildResult`) incluye `path`, `content` y `dependencies[]`.
+`opencode.json` conecta cada agente directamente con su prompt fuente mediante `{file:...}`.
 
-## 3. Materializar el orquestador y todas las fases
-
-`tools/build-prompts.ts` genera el conjunto completo para evitar que el manifiesto, el snapshot y los bundles queden desalineados.
-
-```bash
-make build-prompts     # regenera bundles + manifest + snapshot
-make check-prompts     # valida hashes y existencia
-```
-
-`check-prompts` compara el estado actual de disco contra lo que debería existir; si algún include cambió sin rebuild, falla.
-
-## 4. Configuración de OpenCode
-
-En `opencode.json`, cada agente de fase apunta a su bundle materializado:
+Conceptualmente:
 
 ```json
 {
   "agent": {
     "tony-orchestrator": {
-      "prompt": "{file:./prompts/generated/tony-orchestrator.md}"
+      "prompt": "{file:./prompts/agents/tony-orchestrator.md}"
     },
     "sdd-apply": {
-      "prompt": "{file:./prompts/generated/phases/sdd-apply.md}"
+      "prompt": "{file:./prompts/sdd/sdd-apply.md}"
     }
   }
 }
 ```
 
-OpenCode resuelve el campo `prompt` del agente seleccionado. Por eso la llamada `Task` no debe pegar el contenido completo del bundle en el contexto de la tarea.
+OpenCode resuelve el prompt del agente seleccionado. El orquestador no debe copiar el prompt completo del ejecutor dentro de la delegación.
 
-## 5. Cómo debe delegar `tony-orchestrator`
+### 3. Contexto mínimo y delegación
 
-El bundle raíz debe contener reglas como estas:
+`tony-orchestrator` mantiene únicamente el contexto necesario para enrutar el workflow:
 
-```md
-## Dynamic Sub-Agent Launching
+1. entiende el estado SDD actual;
+2. consulta `phase-capabilities.md` para determinar la capacidad correspondiente;
+3. selecciona el agente de fase;
+4. delega únicamente la información necesaria para iniciar esa fase;
+5. recibe el resultado estructurado y decide el siguiente paso.
 
-When launching a configured OpenCode sub-agent for phase `X`:
+El orquestador no carga prompts de ejecutores para decidir el routing, no ejecuta trabajo de fase inline y no copia artifacts completos en la delegación. Los ejecutores recuperan sus artifacts upstream desde el backend configurado cuando su fase los necesita.
 
-1. Use `subagent_type: "X"` in the `Task` call.
-2. OpenCode loads `agent.X.prompt` from `opencode.json`.
-3. Do not paste the complete materialized bundle into the task context.
-4. Pass only the work request, artifacts, scope, and evidence contract.
-5. Never ask the sub-agent to resolve includes or load phase-manifest.json.
+### 4. Separación entre SDD y Review/Judgment Day
+
+Los agentes SDD y los agentes de review/Judgment Day tienen responsabilidades independientes.
+
+- Los agentes `review-*` inspeccionan dimensiones específicas de una implementación y son read-only.
+- `review-refuter` valida únicamente las inferencias suministradas y no agrega findings.
+- `jd-judge-a` y `jd-judge-b` ejecutan contratos de juicio independientes.
+- `jd-fix-agent` aplica únicamente correcciones confirmadas.
+
+Estos agentes no forman parte del contexto común de ejecución de las fases SDD.
+
+### 5. Disciplina de contexto
+
+La arquitectura evita generar prompts agregados para cada fase.
+
+```text
+orchestrator
+    ↓
+routing data only
+    ↓
+phase agent
+    ↓
+phase prompt + required upstream artifacts
+    ↓
+phase result
 ```
 
-Una delegación concreta desde el orquestador debería verse conceptualmente así:
-
-```json
-{
-  "subagent_type": "sdd-apply",
-  "description": "Implementar las tareas del cambio activo",
-  "prompt": "Ejecutá las tareas aprobadas de la fase apply. Usá TDD si el contexto de sdd-init indica strict_tdd=true.",
-  "artifacts": [
-    {
-      "kind": "tasks",
-      "path": "sdd/cambio/tasks",
-      "store": "tonymem",
-      "hash": "..."
-    }
-  ],
-  "allowedFiles": ["src/**", "tests/**"],
-  "evidence": [],
-  "phase": "apply"
-}
-```
-
-El valor importante para OpenCode es `subagent_type: "sdd-apply"`. El valor `phase: "apply"` es metadata para el Kernel y la evidencia; no es el mecanismo que carga el prompt.
+El objetivo es que cada modelo reciba el mínimo contexto efectivo necesario para completar su responsabilidad.
 
 ## 6. Flujo con el Kernel
 
@@ -334,79 +322,19 @@ Después de la ejecución, el hook de completion valida artifacts, evidencia, sc
 
 Los agentes `review-*`, `jd-*`, `sdd-init` y `sdd-onboard` deben estar explícitamente clasificados como agentes conocidos fuera del FSM. Un `subagent_type` desconocido sigue siendo bloqueado por `KernelBlockedError` (fail-closed).
 
-## 7. Snapshot y drift
-
-El build produce:
-
-```text
-prompts/generated/prompt-manifest.json
-prompts/generated/prompt-snapshot.json
-```
-
-`prompt-manifest.json` registra SHA-256 por dependencia para detectar drift. `prompt-snapshot.json` registra el resultado final de cada bundle materializado:
-
-```json
-{
-  "schema_version": 1,
-  "generated_by": "tools/prompt-bundler.ts",
-  "orchestrator": {
-    "path": "prompts/generated/tony-orchestrator.md",
-    "sha256": "...",
-    "bytes": 32033,
-    "lines": 416
-  },
-  "phases": {
-    "sdd-apply": {
-      "path": "prompts/generated/phases/sdd-apply.md",
-      "sha256": "...",
-      "bytes": 31843,
-      "lines": 718
-    }
-  }
-}
-```
-
-La validación debe fallar si cualquiera de estos artefactos está ausente o desactualizado:
+## 7. Checklist de configuración
 
 ```bash
-make build-prompts
-make check-prompts
-make test-all
-make coverage
-```
-
-En CI conviene ejecutar `make check-prompts` explícitamente antes de `make test-all`, y publicar el manifest y el snapshot como artifacts de la ejecución.
-
-## 8. Reducción segura del prompt raíz
-
-No conviene eliminar del root todo bloque grande indiscriminadamente. Debe permanecer el contexto que el orquestador necesita antes de delegar: routing, Kernel, permisos, estrategia de artifacts, contrato de resultados, deduplicación, skill resolution y handoff dinámico.
-
-Los bloques específicos de executor o review deben vivir en el bundle de fase. Una reducción segura consiste en retirar includes duplicados y reemplazarlos por un handoff corto cuando la regla dependa de memoria o del estado de la sesión. Después de cada reducción se deben ejecutar `make check-prompts`, los tests del bundler y la suite completa.
-
-## 9. Checklist final
-
-```bash
-bun run tools/build-prompts.ts
-bun run tools/build-prompts.ts --check
-bun test tests/prompt_bundler.test.ts
 bun run tools/validate-config.ts
-make test-all
-make coverage
+make test
 git diff --check
 ```
 
-Si todo pasa, los cambios se pueden agregar y commitear:
-
-```bash
-git add .github/workflows/ci.yml Makefile TESTING.md prompts tests tools
-
-git commit -m "feat: harden prompt graph, snapshot and phase resolution"
-git push origin dev
-```
+`validate-config.ts` valida la configuración de OpenCode, las referencias `{file:...}`, los recursos compartidos, los agentes y la configuración MCP. La suite no depende de prompts generados.
 
 ## Notas
 - `AGENTS.md` define convenciones de orquestación, reglas de respuesta y patrones de uso de memoria/indexación esperados por el ecosistema de agentes circundante.
 - `opencode.json` está presente en la raíz del repositorio, indicando que el repo está pensado para integrarse con una configuración de MCP/tooling compatible con OpenCode.
 - El setup de Docker es solo para **Ollama** y **Qdrant**; los servidores MCP en Python están pensados para correr directamente sobre stdio en lugar de dentro de contenedores.
 - Los prompts de fases SDD usan el patrón `{file:./prompts/sdd/<phase>.md}` para mantener `opencode.json` limpio y los prompts editables sin tocar JSON.
-- `skills/_shared/` contiene los protocolos comunes que todas las fases SDD cargan: `sdd-phase-common.md` (secciones A-E), `tonymem-convention.md`, `openspec-convention.md`, `sdd-status-contract.md`, `persistence-contract.md`, `review-ledger-contract.md`, y `skill-resolver.md`.
+- `skills/_shared/` contiene contratos reutilizables; cada fase carga solo los recursos que su prompt requiere.
