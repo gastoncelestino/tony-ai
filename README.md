@@ -491,8 +491,8 @@ gga run --no-cache   # ignorar cache y revisar todo
 ## Documentación
 [INSTALL.md](INSTALL.md) — instalación y configuración detallada.  
 [ARCHITECTURE.md](ARCHITECTURE.md) — arquitectura interna y componentes.  
-[AGENTS.md](AGENTS.md) — define las reglas de comportamiento y desarrollo que deben seguir los agentes que trabajan sobre `Tony-AI`.  
-[TESTING.md](TESTING.md) — es la guía oficial de estrategia y ejecución de pruebas de `Tony-AI`.  
+[AGENTS.md](AGENTS.md) — define las reglas de comportamiento y desarrollo que deben seguir los agentes.  
+[TESTING.md](TESTING.md) — es la guía oficial de estrategia y ejecución de pruebas.  
 
 ## Estado del proyecto
 `Tony-AI` está diseñado para ejecutarse localmente, manteniendo los modelos, memoria y datos semánticos bajo control del entorno del desarrollador.
