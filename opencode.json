@@ -1,3 +1,4 @@
+
 {
   "agent": {
     "sdd-apply": {"prompt": "{file:./prompts/sdd/sdd-apply.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
