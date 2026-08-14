@@ -10,9 +10,9 @@ Tony-AI requiere todos estos componentes para una instalación completa:
 - **Ollama** — ejecución de los modelos locales.
 - **Docker + Docker Compose** — servicios de soporte, especialmente Qdrant.
 - **GGA (Gentleman Guardian Angel)** — code review obligatorio antes de commit.
-- **tree-sitter + tree-sitter-languages** — chunking estructural obligatorio del Code Indexer.
+- **tree-sitter + tree-sitter-language-pack** — chunking estructural obligatorio del Code Indexer.
 
-No hay dependencias opcionales en el bootstrap oficial. `setup.sh` falla si cualquiera de estos requisitos no está disponible.
+El bootstrap oficial no tiene dependencias opcionales. `setup.sh` falla si cualquiera de estos requisitos no está disponible.
 
 Qdrant es obligatorio porque Code Indexer y Judgment Memory lo utilizan.
 
@@ -33,7 +33,7 @@ git checkout dev
 El bootstrap:
 
 1. valida Python 3.10+, Bun, OpenCode CLI, Docker, Ollama y GGA;
-2. valida e instala las dependencias Python de desarrollo, incluyendo tree-sitter;
+2. valida e instala las dependencias Python de desarrollo, incluyendo tree-sitter y tree-sitter-language-pack;
 3. comprueba Ollama y Qdrant;
 4. usa Docker para levantar únicamente los servicios que falten;
 5. descarga `qwen3-coder:30b`, `carstenuhlig/omnicoder-2-9b:q4_k_m`, `deepseek-r1:14b`, `ornith:9b`, `bge-m3` y `nomic-embed-text`;
@@ -98,11 +98,11 @@ gga --version
 
 ## 6. tree-sitter
 
-Tree-sitter es obligatorio porque Code Indexer usa chunking estructural en lugar del chunker regex. Las dependencias están en `requirements-dev.txt`:
+Tree-sitter es obligatorio porque Code Indexer usa chunking estructural. Las dependencias están en `requirements-dev.txt`:
 
 ```bash
 python3 -m pip install -r requirements-dev.txt
-python3 -c 'import tree_sitter, tree_sitter_languages; print("tree-sitter OK")'
+python3 -c 'import tree_sitter, tree_sitter_language_pack; print("tree-sitter OK")'
 ```
 
 No configures `TONY_INDEX_CHUNKER=regex` en una instalación soportada de Tony-AI.
@@ -213,7 +213,7 @@ cd docker && docker compose up -d qdrant
 
 ```bash
 python3 -m pip install -r requirements-dev.txt
-python3 -c 'import tree_sitter, tree_sitter_languages'
+python3 -c 'import tree_sitter, tree_sitter_language_pack'
 ```
 
 No cambies el chunker a regex para ocultar el problema: tree-sitter es un requisito obligatorio.
