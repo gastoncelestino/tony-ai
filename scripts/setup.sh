@@ -18,6 +18,9 @@ ok() { printf "  \033[32mok\033[0m   %s\n" "$1"; PASS=$((PASS+1)); }
 bad() { printf "  \033[31mFAIL\033[0m %s\n" "$1"; FAIL=$((FAIL+1)); }
 hdr() { printf "\n\033[1m-- %s --\033[0m\n" "$1"; }
 
+# User-local executables installed by pip and GGA live here.
+export PATH="${HOME}/.local/bin:${PATH}"
+
 hdr "Python"
 if command -v python3 >/dev/null 2>&1; then
   PY_VER="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
@@ -40,7 +43,38 @@ hdr "Ollama CLI"
 if command -v ollama >/dev/null 2>&1; then ok "ollama $(ollama --version 2>/dev/null | head -1 || echo instalado)"; else bad "ollama CLI no esta en PATH (https://ollama.com/download)"; fi
 
 hdr "GGA"
-if command -v gga >/dev/null 2>&1; then ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"; else bad "gga no esta en PATH (Gentleman Guardian Angel). Instala GGA y asegurate de que ~/.local/bin este en PATH."; fi
+if command -v gga >/dev/null 2>&1; then
+  ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"
+else
+  printf "  . GGA no esta instalado; clonando repositorio oficial ...\n"
+  GGA_DIR="${TMPDIR:-/tmp}/gentleman-guardian-angel"
+  if ! command -v git >/dev/null 2>&1; then
+    bad "git no esta instalado; no se puede instalar GGA"
+  else
+    if [[ -d "${GGA_DIR}/.git" ]]; then
+      printf "  . repositorio GGA ya existe en %s\n" "${GGA_DIR}"
+    elif [[ -e "${GGA_DIR}" ]]; then
+      bad "${GGA_DIR} existe pero no es un repositorio GGA"
+    elif git clone https://github.com/Gentleman-Programming/gentleman-guardian-angel.git "${GGA_DIR}"; then
+      ok "repositorio GGA clonado"
+    else
+      bad "no se pudo clonar GGA"
+    fi
+    if [[ -d "${GGA_DIR}/.git" ]]; then
+      printf "  . ejecutando ./install.sh ...\n"
+      if (cd "${GGA_DIR}" && ./install.sh); then
+        export PATH="${HOME}/.local/bin:${PATH}"
+        if command -v gga >/dev/null 2>&1; then
+          ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"
+        else
+          bad "GGA se instalo pero gga no esta en PATH; revisa ~/.local/bin"
+        fi
+      else
+        bad "la instalacion de GGA fallo"
+      fi
+    fi
+  fi
+fi
 
 hdr "Servicios de soporte (Ollama + Qdrant)"
 OLLAMA_UP=0; QDRANT_UP=0
