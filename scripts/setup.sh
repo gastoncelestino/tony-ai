@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # scripts/setup.sh — bootstrap idempotente para tony-ai.
-# Valida Python/Bun/OpenCode/Docker, levanta Ollama+Qdrant via Docker si no
-# hay nada corriendo (respeta instalacion nativa), baja TODOS los modelos,
-# y regenera opencode.json con rutas relativas via {env:TONY_REPO_ROOT}.
+# Valida Python/Bun/OpenCode/Docker, levanta Ollama+Qdrant via Docker solo para
+# los servicios que realmente faltan (respeta instalaciones nativas), baja
+# TODOS los modelos, y regenera opencode.json con rutas relativas.
 #
 # Uso:  ./scripts/setup.sh        (o `make bootstrap`)
 # Re-correr es seguro: ollama pull es idempotente y opencode.json solo
-# se reescribe si encuentra una ruta absoluta residual (/home/<user>/.../server.py).
+# se reescribe si encuentra una ruta absoluta residual.
 
 set -euo pipefail
 
@@ -17,6 +17,7 @@ PYTHON_MIN_MINOR=10
 
 JUDGMENT_EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
 CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
+IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-carstenuhlig/omnicoder-9b}"
 OLLAMA_URL="${TONY_OLLAMA_URL:-http://localhost:11434}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
 
@@ -64,38 +65,68 @@ else
   printf "  \033[33mwarn\033[0m docker no encontrado - asume Ollama/Qdrant nativos\n"
 fi
 
-# 4b. Servicios de soporte: auto-levantar Docker solo si no hay nada corriendo
-#     (respeta a quien ya tiene Ollama/Qdrant nativos o levantados a mano).
+# 4b. Servicios de soporte: levanta SOLO los servicios que no responden.
+#     Esto permite, por ejemplo, Ollama nativo + Qdrant en Docker sin intentar
+#     bindear 11434 por segunda vez.
 hdr "Servicios de soporte (Ollama + Qdrant)"
 OLLAMA_UP=0; QDRANT_UP=0
 curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1 && OLLAMA_UP=1
 curl -sf -m 5 "${QDRANT_URL}/readyz" >/dev/null 2>&1 && QDRANT_UP=1
 
-if [[ "${OLLAMA_UP}" -eq 1 && "${QDRANT_UP}" -eq 1 ]]; then
-  ok "Ollama y Qdrant ya responden - no se levanta nada (modo nativo/ya activo)"
-elif [[ "${DOCKER_AVAILABLE}" -eq 1 ]]; then
-  if [[ -f "${REPO_ROOT}/docker/docker-compose.yml" ]]; then
-    printf "  . docker compose up -d ollama qdrant ...\n"
-    if docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" up -d ollama qdrant >/dev/null 2>&1; then
-      wait_for() {
-        local url="$1" name="$2" timeout="${3:-60}" elapsed=0
-        while [[ "${elapsed}" -lt "${timeout}" ]]; do
-          curl -sf -m 3 "${url}" >/dev/null 2>&1 && return 0
-          sleep 3; elapsed=$((elapsed+3))
-        done
-        return 1
-      }
-      printf "  . esperando que Ollama/Qdrant arranquen (hasta 60s) ...\n"
-      wait_for "${OLLAMA_URL}/api/tags" "Ollama" 60 && ok "Ollama arriba via Docker" || bad "Ollama no respondio tras 60s"
-      wait_for "${QDRANT_URL}/readyz"   "Qdrant" 60 && ok "Qdrant arriba via Docker" || bad "Qdrant no respondio tras 60s"
+if [[ "${OLLAMA_UP}" -eq 1 ]]; then
+  ok "Ollama ya responde en ${OLLAMA_URL} - no se levanta container Ollama"
+fi
+if [[ "${QDRANT_UP}" -eq 1 ]]; then
+  ok "Qdrant ya responde en ${QDRANT_URL} - no se levanta container Qdrant"
+fi
+
+SERVICES_TO_START=()
+[[ "${OLLAMA_UP}" -eq 0 ]] && SERVICES_TO_START+=(ollama)
+[[ "${QDRANT_UP}" -eq 0 ]] && SERVICES_TO_START+=(qdrant)
+
+if [[ "${#SERVICES_TO_START[@]}" -gt 0 ]]; then
+  if [[ "${DOCKER_AVAILABLE}" -eq 1 ]]; then
+    if [[ -f "${REPO_ROOT}/docker/docker-compose.yml" ]]; then
+      printf "  . docker compose up -d %s ...\n" "${SERVICES_TO_START[*]}"
+      COMPOSE_ERR="$(mktemp)"
+      if docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" up -d "${SERVICES_TO_START[@]}" 2>"${COMPOSE_ERR}"; then
+        rm -f "${COMPOSE_ERR}"
+        wait_for() {
+          local url="$1" timeout="${2:-60}" elapsed=0
+          while [[ "${elapsed}" -lt "${timeout}" ]]; do
+            curl -sf -m 3 "${url}" >/dev/null 2>&1 && return 0
+            sleep 3; elapsed=$((elapsed+3))
+          done
+          return 1
+        }
+
+        if [[ "${OLLAMA_UP}" -eq 0 ]]; then
+          printf "  . esperando Ollama (hasta 60s) ...\n"
+          if wait_for "${OLLAMA_URL}/api/tags" 60; then
+            OLLAMA_UP=1; ok "Ollama arriba via Docker"
+          else
+            bad "Ollama no respondio tras 60s"
+          fi
+        fi
+        if [[ "${QDRANT_UP}" -eq 0 ]]; then
+          printf "  . esperando Qdrant (hasta 60s) ...\n"
+          if wait_for "${QDRANT_URL}/readyz" 60; then
+            QDRANT_UP=1; ok "Qdrant arriba via Docker"
+          else
+            bad "Qdrant no respondio tras 60s"
+          fi
+        fi
+      else
+        printf "  \033[31merror\033[0m docker compose: %s\n" "$(cat "${COMPOSE_ERR}")"
+        rm -f "${COMPOSE_ERR}"
+        bad "docker compose up fallo - revisa docker/README.md o correlo manualmente"
+      fi
     else
-      bad "docker compose up fallo - revisa docker/README.md o correlo manual: cd docker && docker compose up -d"
+      bad "no se encontro docker/docker-compose.yml - no se pueden levantar los servicios"
     fi
   else
-    bad "no se encontro docker/docker-compose.yml - no se pueden levantar los servicios"
+    bad "Ollama/Qdrant no responden y Docker no esta disponible - levantalos nativamente o instala Docker"
   fi
-else
-  bad "Ollama/Qdrant no responden y Docker no esta disponible - levantalos nativamente (ollama serve + docker run qdrant/qdrant) o instala Docker"
 fi
 
 # 5. Ollama + pull de modelos
@@ -104,7 +135,7 @@ if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
   ok "Ollama respondiendo en ${OLLAMA_URL}"
   if command -v ollama >/dev/null 2>&1; then
     for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}" \
-             qwen3-coder:30b omnicoder:9b deepseek-r1:14b ornith:9b; do
+             qwen3-coder:30b "${IMPLEMENTATION_MODEL}" deepseek-r1:14b ornith:9b; do
       printf "  . ollama pull %s ...\n" "${m}"
       if ollama pull "${m}" >/dev/null 2>&1; then
         ok "modelo ${m} listo"
@@ -114,7 +145,7 @@ if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
     done
   else
     for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}" \
-             qwen3-coder:30b omnicoder:9b deepseek-r1:14b ornith:9b; do
+             qwen3-coder:30b "${IMPLEMENTATION_MODEL}" deepseek-r1:14b ornith:9b; do
       if curl -sf -m 30 "${OLLAMA_URL}/api/show" \
            -H "Content-Type: application/json" \
            -d "{\"name\":\"${m}\"}" >/dev/null 2>&1; then
@@ -170,7 +201,7 @@ if [[ -f "${OPENCODE_JSON}" ]]; then
   [[ -f "${OPENCODE_JSON}.bak" ]] || cp "${OPENCODE_JSON}" "${OPENCODE_JSON}.bak"
 
 python3 - "${OPENCODE_JSON}" "${REPO_ROOT}" <<'PY'
-import json, sys, os
+import json, sys
 path, root = sys.argv[1], sys.argv[2]
 with open(path) as f:
     data = json.load(f)
@@ -214,7 +245,7 @@ else
   bad "no se encontro ${OPENCODE_JSON}"
 fi
 
-# 9. .env.example
+# 10. .env.example
 hdr ".env"
 cat > "${REPO_ROOT}/.env.example" <<ENVEOF
 # Tony-AI bootstrap env. Copia a .env o exporta en tu shell.
@@ -231,6 +262,7 @@ JUDGMENT_EMBED_MODEL=nomic-embed-text
 CODE_EMBED_MODEL=bge-m3
 
 # Modelos principales (descargados por setup.sh).
+TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-9b
 # Qwen3-Coder 30B: planificacion y proposicion
 # OmniCoder 9B: implementacion
 # DeepSeek-R1 14B: revision y Judgment Day juez A
@@ -242,7 +274,7 @@ TONY_INDEX_CHUNKER=regex
 ENVEOF
 ok ".env.example escrito con TONY_REPO_ROOT=${REPO_ROOT} - copia a .env"
 
-# 10. Resumen y post-install
+# 11. Resumen y post-install
 hdr "Resumen"
 echo "  Pasados: ${PASS}"
 echo "  Fallos:  ${FAIL}"
