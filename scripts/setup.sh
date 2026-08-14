@@ -40,7 +40,7 @@ hdr "Ollama CLI"
 if command -v ollama >/dev/null 2>&1; then ok "ollama $(ollama --version 2>/dev/null | head -1 || echo instalado)"; else bad "ollama CLI no esta en PATH (https://ollama.com/download)"; fi
 
 hdr "GGA"
-if command -v gga >/dev/null 2>&1; then ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"; else bad "gga no esta en PATH (Gentleman Guardian Angel)"; fi
+if command -v gga >/dev/null 2>&1; then ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"; else bad "gga no esta en PATH (Gentleman Guardian Angel). Instala GGA y asegurate de que ~/.local/bin este en PATH."; fi
 
 hdr "Servicios de soporte (Ollama + Qdrant)"
 OLLAMA_UP=0; QDRANT_UP=0
@@ -87,8 +87,8 @@ else bad "Qdrant no responde en ${QDRANT_URL}"; fi
 
 hdr "Python dev/test dependencies"
 printf "  . pip install -r requirements-dev.txt ...\n"
-if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --quiet --break-system-packages 2>/dev/null; then
-  if python3 -c 'import tree_sitter, tree_sitter_languages' >/dev/null 2>&1; then ok "pytest + tree-sitter instalados"; else bad "requirements-dev.txt termino pero tree-sitter no puede importarse"; fi
+if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --break-system-packages; then
+  if python3 -c 'import tree_sitter, tree_sitter_language_pack' >/dev/null 2>&1; then ok "pytest + tree-sitter + language pack instalados"; else bad "requirements-dev.txt termino pero tree-sitter no puede importarse"; fi
 else bad "pip install -r requirements-dev.txt fallo"; fi
 
 hdr "opencode.json (TONY_REPO_ROOT)"
