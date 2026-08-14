@@ -54,7 +54,7 @@ if command -v ollama >/dev/null 2>&1; then ok "ollama $(ollama --version 2>/dev/
 
 hdr "GGA"
 if command -v gga >/dev/null 2>&1; then
-  ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"
+  ok "$(gga --version 2>/dev/null | head -1)"
 else
   GGA_DIR="${TMPDIR:-/tmp}/gentleman-guardian-angel"
   if ! command -v git >/dev/null 2>&1; then
@@ -74,7 +74,7 @@ else
       if (cd "${GGA_DIR}" && ./install.sh >/dev/null 2>&1); then
         export PATH="${HOME}/.local/bin:${PATH}"
         if command -v gga >/dev/null 2>&1; then
-          ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"
+          ok "$(gga --version 2>/dev/null | head -1)"
         else
           bad "gga no esta en PATH despues de la instalacion; revisa ~/.local/bin"
         fi
