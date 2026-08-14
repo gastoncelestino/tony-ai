@@ -46,23 +46,22 @@ hdr "GGA"
 if command -v gga >/dev/null 2>&1; then
   ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"
 else
-  printf "  . GGA no esta instalado; clonando repositorio oficial ...\n"
   GGA_DIR="${TMPDIR:-/tmp}/gentleman-guardian-angel"
   if ! command -v git >/dev/null 2>&1; then
     bad "git no esta instalado; no se puede instalar GGA"
   else
     if [[ -d "${GGA_DIR}/.git" ]]; then
-      printf "  . repositorio GGA ya existe en %s\n" "${GGA_DIR}"
+      ok "repositorio GGA ya existe"
     elif [[ -e "${GGA_DIR}" ]]; then
       bad "${GGA_DIR} existe pero no es un repositorio GGA"
-    elif git clone https://github.com/Gentleman-Programming/gentleman-guardian-angel.git "${GGA_DIR}"; then
+    elif git clone https://github.com/Gentleman-Programming/gentleman-guardian-angel.git "${GGA_DIR}" >/dev/null 2>&1; then
       ok "repositorio GGA clonado"
     else
       bad "no se pudo clonar GGA"
     fi
     if [[ -d "${GGA_DIR}/.git" ]]; then
       printf "  . ejecutando ./install.sh ...\n"
-      if (cd "${GGA_DIR}" && ./install.sh); then
+      if (cd "${GGA_DIR}" && ./install.sh >/dev/null 2>&1); then
         export PATH="${HOME}/.local/bin:${PATH}"
         if command -v gga >/dev/null 2>&1; then
           ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"
