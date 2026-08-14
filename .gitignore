@@ -29,9 +29,8 @@ bun-debug.log*
 .npm/
 
 ### Tony-AI runtime state
-# Estado efímero del Kernel y archivos de contexto generados durante la ejecución.
+# Estado efímero del Kernel.
 .tony-kernel/
-.context-flow/
 
 # Bases SQLite locales creadas por los servidores MCP.
 local-memory/memory.db
@@ -39,9 +38,7 @@ local-memory/memory.db-*
 judgment-memory/judgment-memory.db
 judgment-memory/judgment-memory.db-*
 
-# Índice local y metadata de Code Indexer.
-code-index/manifest.db
-code-index/manifest.db-*
+# Índice local de Code Indexer.
 code-index/.codeindex/
 
 # Estado temporal de pruebas E2E.
@@ -68,6 +65,4 @@ Thumbs.db
 ### Generated / temporary files
 *.log
 opencode.json.bak
-*.tmp
-*.temp
 .zip-build/
