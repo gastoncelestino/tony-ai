@@ -48,16 +48,16 @@ if command -v gga >/dev/null 2>&1; then
 else
   GGA_DIR="${TMPDIR:-/tmp}/gentleman-guardian-angel"
   if ! command -v git >/dev/null 2>&1; then
-    bad "git no esta instalado; no se puede instalar GGA"
+    bad "gga no esta en PATH y git no esta instalado; no se puede instalar GGA"
   else
     if [[ -d "${GGA_DIR}/.git" ]]; then
-      ok "repositorio GGA ya existe"
+      ok "repositorio GGA clonado"
     elif [[ -e "${GGA_DIR}" ]]; then
       bad "${GGA_DIR} existe pero no es un repositorio GGA"
     elif git clone https://github.com/Gentleman-Programming/gentleman-guardian-angel.git "${GGA_DIR}" >/dev/null 2>&1; then
       ok "repositorio GGA clonado"
     else
-      bad "no se pudo clonar GGA"
+      bad "gga no esta en PATH y no se pudo clonar GGA"
     fi
     if [[ -d "${GGA_DIR}/.git" ]]; then
       printf "  . ejecutando ./install.sh ...\n"
@@ -66,10 +66,10 @@ else
         if command -v gga >/dev/null 2>&1; then
           ok "gga $(gga --version 2>/dev/null | head -1 || echo instalado)"
         else
-          bad "GGA se instalo pero gga no esta en PATH; revisa ~/.local/bin"
+          bad "gga no esta en PATH despues de la instalacion; revisa ~/.local/bin"
         fi
       else
-        bad "la instalacion de GGA fallo"
+        bad "gga no esta en PATH y la instalacion de GGA fallo"
       fi
     fi
   fi
