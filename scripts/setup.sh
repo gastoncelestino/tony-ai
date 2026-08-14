@@ -21,20 +21,14 @@ hdr() { printf "\n\033[1m-- %s --\033[0m\n" "$1"; }
 # User-local executables installed by pip and GGA live here.
 export PATH="${HOME}/.local/bin:${PATH}"
 
-# Pytest creates temporary cache directories next to .pytest_cache. On WSL
-# checkouts under /mnt/c, stale Windows/WSL permissions can make those writes
-# fail with PytestCacheWarning even though the tests themselves pass.
-hdr "Permisos del workspace"
-if [[ -d "${REPO_ROOT}" ]]; then
-  chmod u+rwx "${REPO_ROOT}" 2>/dev/null || true
-  if [[ -d "${REPO_ROOT}/.pytest_cache" ]]; then
-    chmod -R u+rwX "${REPO_ROOT}/.pytest_cache" 2>/dev/null || true
-  fi
-  if [[ -w "${REPO_ROOT}" ]]; then
-    ok "workspace escribible para pytest"
-  else
-    bad "workspace no es escribible; pytest puede emitir PytestCacheWarning"
-  fi
+# Pytest cache lives outside /mnt/c checkouts to avoid WSL/DrvFS permission
+# errors when pytest creates its temporary cache directories.
+PYTEST_CACHE_DIR="${HOME}/.cache/tony-ai/pytest"
+hdr "Pytest cache"
+if mkdir -p "${PYTEST_CACHE_DIR}" && [[ -w "${PYTEST_CACHE_DIR}" ]]; then
+  ok "cache de pytest en ${PYTEST_CACHE_DIR}"
+else
+  bad "no se pudo preparar el cache de pytest en ${PYTEST_CACHE_DIR}"
 fi
 
 hdr "Python"
