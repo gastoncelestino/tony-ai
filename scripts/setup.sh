@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 # scripts/setup.sh — bootstrap idempotente para tony-ai.
-# Valida Python/Bun/OpenCode/Docker, levanta Ollama+Qdrant via Docker solo para
-# los servicios que realmente faltan (respeta instalaciones nativas), baja
-# TODOS los modelos, y regenera opencode.json con rutas relativas.
+# Todos los requisitos del proyecto son obligatorios: Python 3.10+, Bun,
+# OpenCode CLI, Ollama, Docker, GGA y tree-sitter.
 #
-# Uso:  ./scripts/setup.sh        (o `make bootstrap`)
-# Re-correr es seguro: ollama pull es idempotente y opencode.json solo
-# se reescribe si encuentra una ruta absoluta residual.
+# Uso: ./scripts/setup.sh
 
 set -euo pipefail
 
@@ -55,23 +52,54 @@ else
   bad "opencode CLI no esta en PATH (https://opencode.ai)"
 fi
 
-# 4. Docker (warning, no error)
+# 4. Docker — obligatorio
 hdr "Docker"
 DOCKER_AVAILABLE=0
 if command -v docker >/dev/null 2>&1; then
-  ok "docker $(docker --version | awk '{print $3}' | sed 's/,//')"
-  DOCKER_AVAILABLE=1
+  if docker info >/dev/null 2>&1; then
+    ok "docker $(docker --version | awk '{print $3}' | sed 's/,//') y daemon disponible"
+    DOCKER_AVAILABLE=1
+  else
+    bad "docker esta instalado pero el daemon no responde"
+  fi
 else
-  printf "  \033[33mwarn\033[0m docker no encontrado - asume Ollama/Qdrant nativos\n"
+  bad "docker no esta instalado (https://docs.docker.com/engine/install/)"
 fi
 
-# 4b. Servicios de soporte: levanta SOLO los servicios que no responden.
-#     Esto permite, por ejemplo, Ollama nativo + Qdrant en Docker sin intentar
-#     bindear 11434 por segunda vez.
+# 5. Ollama CLI — obligatorio
+hdr "Ollama CLI"
+if command -v ollama >/dev/null 2>&1; then
+  ok "ollama $(ollama --version 2>/dev/null | head -1 || echo 'instalado')"
+else
+  bad "ollama CLI no esta en PATH (https://ollama.com/download)"
+fi
+
+# 6. GGA — obligatorio
+hdr "GGA"
+if command -v gga >/dev/null 2>&1; then
+  ok "gga $(gga --version 2>/dev/null | head -1 || echo 'instalado')"
+else
+  bad "gga no esta en PATH (Gentleman Guardian Angel)"
+fi
+
+# 7. tree-sitter — obligatorio
+hdr "tree-sitter"
+if python3 -c 'import tree_sitter, tree_sitter_languages' >/dev/null 2>&1; then
+  ok "tree-sitter y tree-sitter-languages disponibles"
+else
+  bad "tree-sitter no esta instalado; ejecuta python3 -m pip install -r requirements-dev.txt"
+fi
+
+# 8. Servicios de soporte: Ollama + Qdrant.
+# Docker es obligatorio aunque Ollama puede estar corriendo de forma nativa.
 hdr "Servicios de soporte (Ollama + Qdrant)"
 OLLAMA_UP=0; QDRANT_UP=0
-curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1 && OLLAMA_UP=1
-curl -sf -m 5 "${QDRANT_URL}/readyz" >/dev/null 2>&1 && QDRANT_UP=1
+if command -v curl >/dev/null 2>&1; then
+  curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1 && OLLAMA_UP=1
+  curl -sf -m 5 "${QDRANT_URL}/readyz" >/dev/null 2>&1 && QDRANT_UP=1
+else
+  bad "curl no esta instalado; se necesita para verificar Ollama/Qdrant"
+fi
 
 if [[ "${OLLAMA_UP}" -eq 1 ]]; then
   ok "Ollama ya responde en ${OLLAMA_URL} - no se levanta container Ollama"
@@ -99,205 +127,112 @@ if [[ "${#SERVICES_TO_START[@]}" -gt 0 ]]; then
           done
           return 1
         }
-
         if [[ "${OLLAMA_UP}" -eq 0 ]]; then
           printf "  . esperando Ollama (hasta 60s) ...\n"
-          if wait_for "${OLLAMA_URL}/api/tags" 60; then
-            OLLAMA_UP=1; ok "Ollama arriba via Docker"
-          else
-            bad "Ollama no respondio tras 60s"
-          fi
+          if wait_for "${OLLAMA_URL}/api/tags" 60; then OLLAMA_UP=1; ok "Ollama arriba via Docker"; else bad "Ollama no respondio tras 60s"; fi
         fi
         if [[ "${QDRANT_UP}" -eq 0 ]]; then
           printf "  . esperando Qdrant (hasta 60s) ...\n"
-          if wait_for "${QDRANT_URL}/readyz" 60; then
-            QDRANT_UP=1; ok "Qdrant arriba via Docker"
-          else
-            bad "Qdrant no respondio tras 60s"
-          fi
+          if wait_for "${QDRANT_URL}/readyz" 60; then QDRANT_UP=1; ok "Qdrant arriba via Docker"; else bad "Qdrant no respondio tras 60s"; fi
         fi
       else
         printf "  \033[31merror\033[0m docker compose: %s\n" "$(cat "${COMPOSE_ERR}")"
         rm -f "${COMPOSE_ERR}"
-        bad "docker compose up fallo - revisa docker/README.md o correlo manualmente"
+        bad "docker compose up fallo"
       fi
     else
-      bad "no se encontro docker/docker-compose.yml - no se pueden levantar los servicios"
+      bad "no se encontro docker/docker-compose.yml"
     fi
   else
-    bad "Ollama/Qdrant no responden y Docker no esta disponible - levantalos nativamente o instala Docker"
+    bad "faltan servicios y Docker no esta disponible"
   fi
 fi
 
-# 5. Ollama + pull de modelos
+# 9. Ollama + modelos
 hdr "Ollama (${OLLAMA_URL})"
 if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
   ok "Ollama respondiendo en ${OLLAMA_URL}"
-  if command -v ollama >/dev/null 2>&1; then
-    for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}" \
-             qwen3-coder:30b "${IMPLEMENTATION_MODEL}" deepseek-r1:14b ornith:9b; do
-      printf "  . ollama pull %s ...\n" "${m}"
-      if ollama pull "${m}" >/dev/null 2>&1; then
-        ok "modelo ${m} listo"
-      else
-        bad "ollama pull ${m} fallo"
-      fi
-    done
-  else
-    for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}" \
-             qwen3-coder:30b "${IMPLEMENTATION_MODEL}" deepseek-r1:14b ornith:9b; do
-      if curl -sf -m 30 "${OLLAMA_URL}/api/show" \
-           -H "Content-Type: application/json" \
-           -d "{\"name\":\"${m}\"}" >/dev/null 2>&1; then
-        ok "modelo ${m} presente (probe /api/show)"
-      else
-        printf "  \033[33mwarn\033[0m modelo %s no detectado - bajalo manualmente\n" "${m}"
-      fi
-    done
-  fi
+  for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}" qwen3-coder:30b "${IMPLEMENTATION_MODEL}" deepseek-r1:14b ornith:9b; do
+    printf "  . ollama pull %s ...\n" "${m}"
+    if ollama pull "${m}" >/dev/null 2>&1; then
+      ok "modelo ${m} listo"
+    else
+      bad "ollama pull ${m} fallo"
+    fi
+  done
 else
   bad "Ollama no responde en ${OLLAMA_URL}"
 fi
 
-# 6. Qdrant
+# 10. Qdrant
 hdr "Qdrant (${QDRANT_URL})"
 if curl -sf -m 5 "${QDRANT_URL}/readyz" >/dev/null 2>&1; then
   ok "Qdrant /readyz = 200"
-  if curl -sf -m 5 "${QDRANT_URL}/collections" >/dev/null 2>&1; then
-    ok "Qdrant REST /collections OK"
-  else
-    bad "Qdrant /readyz OK pero /collections falla"
-  fi
+  if curl -sf -m 5 "${QDRANT_URL}/collections" >/dev/null 2>&1; then ok "Qdrant REST /collections OK"; else bad "Qdrant /collections falla"; fi
 else
-  bad "Qdrant no responde en ${QDRANT_URL} (docker run -p 6333:6333 qdrant/qdrant)"
+  bad "Qdrant no responde en ${QDRANT_URL}"
 fi
 
-# 7. Python dev/test dependencies
+# 11. Python dev/test dependencies, incluyendo tree-sitter obligatorio
 hdr "Python dev/test dependencies"
 printf "  . pip install -r requirements-dev.txt ...\n"
 if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --quiet --break-system-packages 2>/dev/null; then
-  ok "pytest $(python3 -c 'import pytest; print(pytest.__version__)' 2>/dev/null || echo 'instalado')"
+  if python3 -c 'import tree_sitter, tree_sitter_languages' >/dev/null 2>&1; then
+    ok "pytest + tree-sitter instalados"
+  else
+    bad "requirements-dev.txt termino pero tree-sitter no puede importarse"
+  fi
 else
   bad "pip install -r requirements-dev.txt fallo"
 fi
 
-# 8. tree-sitter (opcional, solo si TONY_INDEX_CHUNKER=tree-sitter)
-hdr "tree-sitter (opcional)"
-if [[ "${TONY_INDEX_CHUNKER:-regex}" == "tree-sitter" ]]; then
-  printf "  . pip install -r requirements-optional.txt ...\n"
-  if python3 -m pip install -r "${REPO_ROOT}/requirements-optional.txt" --quiet --break-system-packages 2>/dev/null; then
-    ok "tree-sitter instalado"
-  else
-    bad "pip install tree-sitter fallo"
-  fi
-else
-  printf "  \033[33minfo\033[0m  tree-sitter no requerido (TONY_INDEX_CHUNKER=regex)\n"
-fi
-
-# 9. Regenerar opencode.json idempotentemente
+# 12. Regenerar opencode.json idempotentemente
 hdr "opencode.json (TONY_REPO_ROOT)"
 OPENCODE_JSON="${REPO_ROOT}/opencode.json"
 if [[ -f "${OPENCODE_JSON}" ]]; then
   [[ -f "${OPENCODE_JSON}.bak" ]] || cp "${OPENCODE_JSON}" "${OPENCODE_JSON}.bak"
-
-python3 - "${OPENCODE_JSON}" "${REPO_ROOT}" <<'PY'
+  python3 - "${OPENCODE_JSON}" <<'PY'
 import json, sys
-path, root = sys.argv[1], sys.argv[2]
-with open(path) as f:
-    data = json.load(f)
-
-subpath = {
-    "tonymem":         "local-memory/server.py",
-    "code-index":      "code-index/server.py",
-    "judgment-memory": "judgment-memory/server.py",
-}
-
-mcp = data.get("mcp", {})
-for name, sp in subpath.items():
-    if name not in mcp:
-        continue
-    entry = mcp[name]
-    if entry.get("type") != "local":
-        continue
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f: data = json.load(f)
+for name, sp in {"tonymem":"local-memory/server.py", "code-index":"code-index/server.py", "judgment-memory":"judgment-memory/server.py"}.items():
+    entry = data.get("mcp", {}).get(name)
+    if not entry or entry.get("type") != "local": continue
     entry["command"] = ["python3", "{env:TONY_REPO_ROOT}/" + sp]
     env = entry.setdefault("environment", {})
     env.setdefault("TONY_REPO_ROOT", "{env:TONY_REPO_ROOT}")
-    if name == "code-index":
-        env.setdefault("TONY_INDEX_CHUNKER", "regex")
-    mcp[name] = entry
-
-data["mcp"] = mcp
-with open(path, "w") as f:
-    json.dump(data, f, indent=2, ensure_ascii=False)
-    f.write("\n")
+    if name == "code-index": env["TONY_INDEX_CHUNKER"] = "tree-sitter"
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False); f.write("\n")
 PY
-
-  if python3 -c "import json; json.load(open('${OPENCODE_JSON}'))"; then
-    if grep -qE '/home/[a-zA-Z0-9_]+/[A-Za-z0-9_./-]+/server\.py' "${OPENCODE_JSON}"; then
-      bad "opencode.json aun tiene rutas absolutas residuales"
-    else
-      ok "opencode.json regenerado y portable"
-    fi
-  else
-    bad "opencode.json quedo invalido - restaura ${OPENCODE_JSON}.bak"
-  fi
+  if python3 -c "import json; json.load(open('${OPENCODE_JSON}'))" && ! grep -qE '/home/[a-zA-Z0-9_]+/.+/server\.py' "${OPENCODE_JSON}"; then ok "opencode.json regenerado y portable"; else bad "opencode.json invalido o con rutas absolutas"; fi
 else
   bad "no se encontro ${OPENCODE_JSON}"
 fi
 
-# 10. .env.example
+# 13. .env.example
 hdr ".env"
 cat > "${REPO_ROOT}/.env.example" <<ENVEOF
 # Tony-AI bootstrap env. Copia a .env o exporta en tu shell.
-
-# Requerida por todos los MCP servers - apunta a la raiz del repo clonado.
 TONY_REPO_ROOT=${REPO_ROOT}
-
-# Endpoints de servicios (coinciden con docker/docker-compose.yml).
 TONY_OLLAMA_URL=http://localhost:11434
 TONY_QDRANT_URL=http://localhost:6333
-
-# Modelos de embedding (deben matchear opencode.json).
 JUDGMENT_EMBED_MODEL=nomic-embed-text
 CODE_EMBED_MODEL=bge-m3
-
-# Modelos principales (descargados por setup.sh).
 TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-2-9b:q4_k_m
-# Qwen3-Coder 30B: planificacion y proposicion
-# OmniCoder 2 9B Q4_K_M: implementacion
-# DeepSeek-R1 14B: revision y Judgment Day juez A
-# Ornith 9B: archive y jd-fix-agent
-
-# Chunker de code-index: "regex" (default, stdlib-only) o "tree-sitter"
-# (opt-in, requiere pip install tree-sitter tree-sitter-languages).
-TONY_INDEX_CHUNKER=regex
+TONY_INDEX_CHUNKER=tree-sitter
 ENVEOF
-ok ".env.example escrito con TONY_REPO_ROOT=${REPO_ROOT} - copia a .env"
+ok ".env.example escrito con requisitos obligatorios"
 
-# 11. Resumen y post-install
 hdr "Resumen"
 echo "  Pasados: ${PASS}"
 echo "  Fallos:  ${FAIL}"
 if [[ "${FAIL}" -gt 0 ]]; then
-  echo ""
-  echo "Algunos chequeos fallaron. Re-ejecuta 'make bootstrap' cuando los corrijas,"
-  echo "y 'make health' para verificar todo end-to-end."
+  echo "Algunos chequeos fallaron. Corrige los requisitos y vuelve a ejecutar ./scripts/setup.sh"
   exit 1
 fi
 
 echo ""
 echo "Tony-AI bootstrap completo."
-
-SHELL_NAME="$(basename "${SHELL:-}")"
-case "${SHELL_NAME}" in
-  bash|zsh|fish)
-    echo "  Agregá esto a tu ~/.${SHELL_NAME}rc si no lo tenés:"
-    echo "    export TONY_REPO_ROOT=\"${REPO_ROOT}\""
-    ;;
-  *)
-    echo "  export TONY_REPO_ROOT=\"${REPO_ROOT}\""
-    ;;
-esac
-
-echo "  make test     # test_core.py + test_ledger.py + test_hooks.ts"
-echo "  make health   # OpenCode/MCP/Ollama/Qdrant/embeddings check unificado"
+echo "  make test"
+echo "  make health"
