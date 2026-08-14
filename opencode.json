@@ -253,7 +253,7 @@
             "output": 8192
           }
         },
-        "omnicoder:9b": {
+        "carstenuhlig/omnicoder-9b": {
           "options": {
             "numCtx": 16384
           },
