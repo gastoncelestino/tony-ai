@@ -29,7 +29,7 @@ Finalmente, **Verify** ejecuta las verificaciones definidas por el flujo SDD. Cu
 flowchart LR
     U["Pedido / Proyecto"]
     P["Planning<br/>Qwen3-Coder 30B"]
-    I["Implementation<br/>Omnicoder-2-9b"]
+    I["Implementation<br/>OmniCoder 2 9B"]
     R["Review 4R<br/>DeepSeek-R1 14B"]
     V["Verify<br/>sdd-verify"]
     A["Archive<br/>Ornith 9B"]
@@ -150,7 +150,7 @@ Esto permite que el workflow no dependa únicamente de que un agente "recuerde" 
         │ decisiones + │      │ embeddings +   │    │ ledger +       │
         │ contexto     │      │ vector search  │    │ recuperación   │
         └──────────────┘      └────────────────┘    └────────────────┘
-Para una descripción más profunda de los componentes y sus interfaces, consultá [ARCHITECTURE.md](https://github.com/gastoncelestino/tony-ai/blob/main/ARCHITECTURE.md)
+Para una descripción más profunda de los componentes y sus interfaces, consultá [ARCHITECTURE.md](ARCHITECTURE.md)
 
 # Requisitos
 - **Python 3.10+** — servidores MCP y tooling Python.
@@ -226,7 +226,7 @@ Es el chequeo de salud end-to-end de `Tony-AI`. No instala ni configura cosas: v
 
 Para la instalación detallada, consultá [INSTALL.md](INSTALL.md).
 
-# Como empezar con Tony-AI
+# Cómo empezar con Tony-AI
 ```bash
 # 1. Inicializá el proyecto (una sola vez)
 /sdd-init

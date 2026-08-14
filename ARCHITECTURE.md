@@ -148,8 +148,8 @@ make health
 ```
 
 ## Tres conceptos clave:
-1. **Judgment Day no corre en paralelo con revisión 4R.**  
-   Por defecto, después de la implementación corre la revisión 4R ordinaria (`review-risk/readability/reliability/resilience` + `review-refuter`). Judgment Day (dos jueces ciegos, `jd-judge-a`/`jd-judge-b`) solo se activa explícitamente — nunca ambos a la vez.
+1. **Judgment Day es un flujo de revisión explícito y separado de la revisión 4R.**
+   Por defecto, después de la implementación se ejecuta la revisión 4R ordinaria. Judgment Day se activa explícitamente y utiliza los jueces configurados `jd-judge-a` y `jd-judge-b`.
 
 2. **TonyMem, Code Indexer/Qdrant y DCP participan transversalmente en el workflow.**  
    Los agentes pueden consultar y actualizar estos componentes durante las diferentes fases según las necesidades de contexto, búsqueda semántica y persistencia. No existe una etapa aislada de "leer memoria" al final del pipeline.
