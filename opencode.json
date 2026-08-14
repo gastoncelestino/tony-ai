@@ -1,4 +1,3 @@
-
 {
   "agent": {
     "sdd-apply": {"prompt": "{file:./prompts/sdd/sdd-apply.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
@@ -9,7 +8,7 @@
     "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-explore": {"prompt": "{file:./prompts/sdd/sdd-explore.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
     "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow"}},
-    "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md}", "permission": {"tonymem_*": "allow"}},
+    "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md", "permission": {"tonymem_*": "allow"}},
     "sdd-onboard": {"prompt": "{file:./prompts/sdd/sdd-onboard.md}", "permission": {"tonymem_*": "allow"}},
     "review-readability": {"prompt": "{file:./prompts/agents/phase-prompts/review-readability.md}"},
     "review-reliability": {"prompt": "{file:./prompts/agents/phase-prompts/review-reliability.md}"},
@@ -33,4 +32,4 @@
   },
   "permission": {"bash": {"*": "allow", "git commit *": "ask", "git push": "ask", "git push *": "ask", "git push --force *": "ask", "git rebase *": "ask", "git reset --hard *": "ask"}, "read": {"*": "allow", "**/*.key": "deny", "**/*.pem": "deny", "**/.aws/credentials": "deny", "**/.config/gh/hosts.yml": "deny", "**/.credentials/**": "deny", "**/.env": "deny", "**/.env.*": "deny", "**/.ssh/**": "deny", "**/Library/Keychains/**": "deny", "**/credentials.json": "deny", "**/secrets/**": "deny", "*.env": "deny", "*.env.*": "deny"}, "context7_*": "deny", "code-index_*": "deny", "judgment-memory_*": "deny", "tony-kernel_*": "deny"},
   "share": "disabled",
-  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}
+  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}}
