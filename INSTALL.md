@@ -26,8 +26,8 @@ cd tony-ai
 
 `setup.sh` hace:
 1. Verifica dependencias (Python, Bun, OpenCode CLI, Docker)
-2. Verifica Ollama + Qdrant: si ya responden no toca nada (modo nativo); si no responden y hay Docker, los levanta con `docker compose up -d`; si no hay Docker, pide que los levantes a mano
-3. Descarga los modelos de Ollama (requiere Ollama respondiendo): qwen3-coder:30b, omnicoder:9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text
+2. Verifica Ollama + Qdrant: si ya responden no toca nada; si falta uno, Docker levanta **solo ese servicio**. Esto permite combinar Ollama nativo con Qdrant en Docker sin conflictos de puertos.
+3. Descarga los modelos de Ollama (requiere Ollama respondiendo): qwen3-coder:30b, carstenuhlig/omnicoder-9b, deepseek-r1:14b, ornith:9b, bge-m3, nomic-embed-text
 4. Instala `requirements-dev.txt` (pytest) y configura `.env.example`
 5. Regenera `opencode.json` con rutas portables usando `TONY_REPO_ROOT`
 6. Instala el pre-commit hook de prompt bundles (`.githooks/pre-commit`)
@@ -64,6 +64,7 @@ TONY_OLLAMA_URL=http://localhost:11434
 TONY_QDRANT_URL=http://localhost:6333
 JUDGMENT_EMBED_MODEL=nomic-embed-text
 CODE_EMBED_MODEL=bge-m3
+TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-9b
 TONY_INDEX_CHUNKER=regex
 ```
 
@@ -79,30 +80,22 @@ echo 'export TONY_REPO_ROOT="'"$(pwd)"'"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## Deberías ver algo como:
-```bash
-📄 .env
-📄 AGENTS.md
-📄 opencode.json
-📁 plugins
-   📄 tonymem.ts
-   📄 qdrant.ts
-   📄 judgment-memory.ts
-   📄 tony-kernel/index.ts
-```
-
 ## 3.3 Iniciar servicios de soporte
+Si ya tenés Ollama nativo corriendo, **no levantes el servicio `ollama` de Docker** porque ambos usan el puerto 11434. En ese caso alcanza con:
+
 ```bash
 cd docker
-docker compose up -d
-docker compose ps
+docker compose up -d qdrant
 ```
 
-Deberías ver algo como:
-| NAME | IMAGE | COMMAND | SERVICE | STATUS | PORTS |
-|------|-------|---------|---------|--------|-------|
-| tony-ai-qdrant | qdrant/qdrant:latest | /bin/qdrant... | qdrant | running | 0.0.0.0:6333->6333/tcp |
-| tony-ai-ollama | ollama/ollama:latest | /usr/bin/ollama... | ollama | running | 0.0.0.0:11434->11434/tcp |
+Si no tenés ninguno de los dos servicios:
+
+```bash
+cd docker
+docker compose up -d ollama qdrant
+```
+
+Deberías ver los servicios disponibles en `docker compose ps`.
 
 ## 3.4 Descargar modelos de Ollama
 ## 3.4.1 Modelos grandes (descargan lentamente)
@@ -110,9 +103,9 @@ Deberías ver algo como:
 ollama pull qwen3-coder:30b
 ollama pull deepseek-r1:14b
 ```
-## 3.4.2 Modelos medianos
+## 3.4.2 Modelo de implementación
 ```bash
-ollama pull omnicoder:9b
+ollama pull carstenuhlig/omnicoder-9b
 ollama pull ornith:9b
 ```
 ## 3.4.3 Modelos pequeños (rápidos)
@@ -161,7 +154,6 @@ source ~/.bashrc
 make health          # Verificación end-to-end
 make test            # Ejecutar todos los tests
 ```
-
 
 # 5. Correr la suite de tests
 ## 5.1 Ejecución recomendada
@@ -222,21 +214,20 @@ cd local-memory
 python3 server.py
 ```
 
-| Componente 	| Test         | Qué cubre    |
-|--------------|--------------|--------------|
-| TonyMem server 					| `local-memory/server.py` (manual JSON-RPC) 	| Sesión completa: save, search, context, session-summary, prompt-capture, lifecycle (active/proven/needs_review + mark_stale/mark_reviewed/mark_proven + ranking) 		|
-| TonyMem plugin 					| `plugins/tonymem.ts` (tipado `tsc`) 			| Tipado contra stubs de `bun:sqlite`/`@opencode-ai/plugin` 					|
-| Code Indexer 						| `tests/test_code_index_core.py` 				| Chunking + mock HTTP end-to-end, 4/4 escenarios 								|
-| DCP config 						| validado contra `dcp.schema.json` 			| Schema completo, `additionalProperties: false` 								|
-| Judgment Day Memory Bridge 		| `tests/test_judgment_memory_ledger.py` 		| Mock Ollama+Qdrant, 7/7 escenarios incl. camino feliz 						|
-| Judgment Day Memory Bridge 		| `tests/test_judgment_memory_hooks.ts` 		| Hooks de plugin (`chat.message`, `tool.execute.after`, `system.transform`) 	|
-| Judgment Day Memory Bridge 		| `judgment-memory/scripts/verify-qdrant.ts` 	| Smoke test del cliente TS contra servicios reales 	|
-| Tony Kernel 						| `tests/test_kernel_state_machine.py` 			| FSM phases, phase gate, artifact validation, scope guard, checksum drift 	|
-| Tony Kernel 						| `tests/test_kernel_integration.py` 			| Integration tests: can_start_phase, record_phase_completion, evidence rejection 	|
-| Tony Kernel 						| `tests/test_tony_kernel_e2e.ts` 				| End-to-end adversarial: phase skip, fake evidence, tampering, scope violation, unknown agent, failed task 	|
-| Tony Kernel 						| `tests/test_sdd_flow_e2e.py` 					| Flujo aislado explore→archive contra el kernel real, 28 checks adversariales 	|
-
-
+| Componente | Test | Qué cubre |
+|------------|------|-----------|
+| TonyMem server | `local-memory/server.py` (manual JSON-RPC) | Sesión completa: save, search, context, session-summary, prompt-capture, lifecycle |
+| TonyMem plugin | `plugins/tonymem.ts` (tipado `tsc`) | Tipado contra stubs |
+| Code Indexer | `tests/test_code_index_core.py` | Chunking + mock HTTP end-to-end |
+| DCP config | `dcp.schema.json` | Schema completo |
+| Judgment Day Memory Bridge | `tests/test_judgment_memory_ledger.py` | Mock Ollama+Qdrant |
+| Judgment Day Memory Bridge | `tests/test_judgment_memory_hooks.ts` | Hooks de plugin |
+| Judgment Day Memory Bridge | `judgment-memory/scripts/verify-qdrant.ts` | Smoke test contra servicios reales |
+| Tony Kernel | `tests/test_kernel_state_machine.py` | FSM, phase gate, artifacts y scope |
+| Tony Kernel | `tests/test_kernel_integration.py` | Integration tests |
+| Tony Kernel | `tests/test_tony_kernel_e2e.ts` | End-to-end adversarial |
+| Tony Kernel | `tests/test_sdd_flow_e2e.py` | Flujo explore→archive |
+| Bootstrap | `tests/test_setup.py` | Sintaxis, detección de servicios y referencias de modelos |
 
 # 6. Troubleshooting
 
