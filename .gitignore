@@ -1,4 +1,4 @@
-### Python ###
+### Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -22,33 +22,41 @@ coverage.xml
 coverage-bun/
 htmlcov/
 
-### Node / Bun ###
+### Node / Bun
 node_modules/
 npm-debug.log*
 bun-debug.log*
 .npm/
 
-### Tony-AI runtime state (generado en cada corrida, no se versiona) ###
+### Tony-AI runtime state
+# Estado efímero del Kernel y archivos de contexto generados durante la ejecución.
 .tony-kernel/
 .context-flow/
+
+# Bases SQLite locales creadas por los servidores MCP.
 local-memory/memory.db
-local-memory/.tonymem/
-code-index/manifest.db
-code-index/.codeindex/
+local-memory/memory.db-*
 judgment-memory/judgment-memory.db
-judgment-memory/.tonymem/
+judgment-memory/judgment-memory.db-*
+
+# Índice local y metadata de Code Indexer.
+code-index/manifest.db
+code-index/manifest.db-*
+code-index/.codeindex/
+
+# Estado temporal de pruebas E2E.
 .test-e2e-tmp/
 
-### Env / secrets ###
+### Environment / secrets
 .env
 .env.local
 .env.*.local
 docker/.env
 
-### Docker ###
+### Docker local overrides
 docker/*.override.yml
 
-### Editores / SO ###
+### Editors / OS
 .DS_Store
 Thumbs.db
 .idea/
@@ -57,11 +65,9 @@ Thumbs.db
 *.swo
 *~
 
-### Varios ###
+### Generated / temporary files
 *.log
-*.lock
-*.bak
 opencode.json.bak
-
-### Build artifacts ###
+*.tmp
+*.temp
 .zip-build/
