@@ -1,35 +1,158 @@
 # Tony-AI - ARQUITECTURA
-## Patrón de memoria: archivo "SQLite compartido"
-El diseño central de Tony-AI es que **cada servicio de memoria tiene un servidor MCP (Python) y un plugin (Bun) que comparten el mismo archivo SQLite**:
-```
-┌─────────────────────────┐    ┌─────────────────────────┐
-│  local-memory/server.py │    │   plugins/tonymem.ts    │
-│  (MCP server, 8 tools)  │    │  (OpenCode hooks)       │
-│                         │    │                         │
-│  SQLite: memory.db      │◄──►│  bun:sqlite (WAL mode)  │
-│  observations table     │    │  same file, same schema │
-└─────────────────────────┘    └─────────────────────────┘
+## Persistencia y memoria
 
-┌─────────────────────────┐    ┌─────────────────────────┐
-│  judgment-memory/       │    │  plugins/judgment-      │
-│  ledger.py + server.py  │    │  memory.ts + qdrant.ts  │
-│  (MCP server, 4 tools)  │    │  (OpenCode hooks)       │
-│                         │    │                         │
-│  SQLite: judgment-      │◄──►│  bun:sqlite (WAL mode)  │
-│  memory.db              │    │  same file, same schema │
-│  judgments table        │    │                         │
-│                         │    │  HTTP → Qdrant/Ollama   │
-│  Qdrant: jdmem_{proj}   │◄──►│  (via plugins/qdrant.ts)│
-└─────────────────────────┘    └─────────────────────────┘
+Tony-AI separa la persistencia según el tipo de conocimiento que administra.
+
+- **TonyMem** utiliza SQLite como almacenamiento persistente de observaciones y contexto.
+- **Judgment Memory** utiliza un ledger SQLite independiente para registrar juicios y, además, Qdrant para recuperación semántica.
+- **Code Indexer** utiliza Qdrant como almacenamiento vectorial del índice semántico del código.
+- **Tony Kernel** mantiene su estado operativo en el directorio `.tony-kernel/`.
+
+Cuando un servidor MCP Python y un plugin OpenCode necesitan acceder a la misma memoria persistente, ambos utilizan el mismo archivo SQLite y el mismo esquema, con SQLite en modo WAL para permitir concurrencia entre lectores y escritores.
+```
+                         ┌──────────────────────────┐
+                         │        OpenCode          │
+                         │   Agent Orchestrator     │
+                         │          + SDD           │
+                         └────────────┬─────────────┘
+                                      │
+                         ┌────────────▼─────────────┐
+                         │       Tony Kernel        │
+                         │                          │
+                         │ Phase Gate · Scope Guard │
+                         │ Artifacts · Checksums    │
+                         │ Evidence · Transitions   │
+                         └────────────┬─────────────┘
+                                      │
+                 ┌────────────────────┼────────────────────┐
+                 │                    │                    │
+                 ▼                    ▼                    ▼
+        ┌────────────────┐   ┌────────────────┐   ┌──────────────────┐
+        │ local-memory   │   │   code-index   │   │ judgment-memory  │
+        │                │   │                │   │                  │
+        │ Memoria        │   │ Búsqueda       │   │ Memoria de       │
+        │ persistente    │   │ semántica      │   │ juicios          │
+        │ SQLite         │   │ del código     │   │                  │
+        └───────┬────────┘   └───────┬────────┘   └────────┬─────────┘
+                │                    │                     │
+                ▼                    ▼                     ▼
+        ┌──────────────┐      ┌────────────────┐    ┌────────────────┐
+        │    SQLite    │      │ Ollama +       │    │ SQLite +       │
+        │              │      │ Qdrant         │    │ Qdrant         │
+        │ decisiones + │      │ embeddings +   │    │ ledger +       │
+        │ contexto     │      │ vector search  │    │ recuperación   │
+        └──────────────┘      └────────────────┘    └────────────────┘
 ```
 Este patrón permite un acceso directo al archivo SQLite en modo **WAL**, que es el modo de concurrencia que SQLite está diseñado para soportar: **un escritor a la vez, lectores nunca bloquean**.
+
+## Reglas del proyecto
+* Usa Conventional Commits.
+* No permite atribuciones Co-Authored-By ni atribuciones de IA en commits.
+* Prioriza respuestas y cambios concisos cuando no se necesita más detalle.
+* Exige verificar afirmaciones técnicas antes de darlas por ciertas.
+* Cuando hay una afirmación incorrecta, se debe explicar técnicamente por qué.
+* Promueve alternativas cuando existen trade-offs reales.
+* Filosofía de desarrollo
+
+## Ideas importantes:
+* Concepts > Code — entender arquitectura y fundamentos antes de escribir código.
+* AI is a tool — el humano dirige y la IA ejecuta.
+* Solid foundations — arquitectura, patrones y fundamentos antes que soluciones superficiales.
+* Against immediacy — no priorizar atajos por encima de diseño y comprensión.
+
+## Alcance de la personalidad
+* La personalidad del agente controla cómo responde al usuario, pero no modifica los artifacts técnicos que produce.
+* El agente puede hablar en español rioplatense, pero un README.md, código, identificadores, mensajes de error o comentarios técnicos siguen las convenciones del proyecto.
+
+## Skills
+* AGENTS.md también obliga al agente a verificar si existe una skill aplicable antes de responder o ejecutar una tarea y cargarla cuando corresponda.
+
+## TESTING.md
+Es la guía oficial de estrategia y ejecución de pruebas de Tony-AI.
+
+La arquitectura de testing tiene tres niveles:
+
+                 Tony-AI Testing
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+     Python          TypeScript    Configuración
+     tests           tests         / SDD
+        │              │              │
+     pytest           Bun        validate-config
+        │
+        └── standalone runner
+            sin dependencias
+
+## Estrategia de testing
+
+
+Tony-AI separa la validación local de código de los smoke tests que requieren infraestructura externa.   
+La suite local ejecuta Python, TypeScript y validaciones de configuración sin depender de Ollama, Qdrant ni Docker.   
+Los smoke tests de infraestructura se ejecutan por separado mediante:
+
+```bash
+make verify-qdrant
+make health
+```
+
+## Python
+Tiene dos mecanismos:
+* python3 -m pytest tests # para desarrollo/CI
+* python3 tools/run-python-tests.py tests # como runner standalone sin dependencias externas.
+
+La suite Python puede ejecutarse sin instalar Pytest mediante el runner standalone:
+
+```bash
+python3 tools/run-python-tests.py tests
+```
+
+## TypeScript
+Los tests se ejecutan con Bun:
+```bash
+bun test tests
+```
+Los archivos .test.ts son descubiertos automáticamente.
+
+## Makefile
+Hay targets específicos:
+```bash
+make test
+make test-python
+make test-ts
+make test-kernel
+```
+make test es el comando principal.
+
+## CI
+```
+Python 3.10
+Python 3.11
+Python 3.12
+Bun 1.3.14
+```
+Cada versión ejecuta:
+```bash
+make test
+```
+
+## Smoke tests / infraestructura
+Hay una separación clara entre: `tests locales`
+```bash
+make test
+```
+y tests que requieren infraestructura real:
+```bash
+make verify-qdrant
+make health
+```
 
 ## Tres conceptos clave:
 1. **Judgment Day no corre en paralelo con revisión 4R.**  
    Por defecto, después de la implementación corre la revisión 4R ordinaria (`review-risk/readability/reliability/resilience` + `review-refuter`). Judgment Day (dos jueces ciegos, `jd-judge-a`/`jd-judge-b`) solo se activa explícitamente — nunca ambos a la vez.
 
-2. **TonyMem, Code Indexer/Qdrant y DCP trabajan en cada fase.**  
-   Se consultan y escriben durante cada fase (contexto previo antes de arrancar, guardado de decisiones al terminar, poda de contexto continua). No hay una etapa "leer memoria" al final del pipeline.
+2. **TonyMem, Code Indexer/Qdrant y DCP participan transversalmente en el workflow.**  
+   Los agentes pueden consultar y actualizar estos componentes durante las diferentes fases según las necesidades de contexto, búsqueda semántica y persistencia. No existe una etapa aislada de "leer memoria" al final del pipeline.
 
 3. **Judgment Day tiene memoria propia.**  
    Antes de lanzar a los jueces, se llama `jd_recall` (¿ya vimos un problema parecido?). Cuando la lineage llega a un estado terminal, el orquestador llama `jd_record`, que persiste en un ledger SQLite propio (`judgment-memory/ledger.py`) y lo embebe/indexa en Qdrant (colección `jdmem_{project}`, separada del Code Indexer). Ver `judgment-memory/README.md`.
@@ -40,7 +163,11 @@ Este patrón permite un acceso directo al archivo SQLite en modo **WAL**, que es
 - **Orquestación determinista** — `kernel/orchestrator_integration.py` gobierna las 8 fases SDD (explore → archive) con checksums de fase, gate de artifacts, scope guard, retry budget y evidencias.
 - **Plugin OpenCode** — `plugins/tony-kernel/index.ts` intercepta `tool.execute.before/after` para forzar `can_start_phase` antes de delegar y `record_phase_completion` después de ejecutar.
 - **CLI** — `kernel/cli.py` expone `can_start_phase`, `record_delegation`, `record_phase_completion`, `check_scope`, `reset`, `status`.
-- **Persistencia** — `kernel/persistence.py` guarda estado en `.tony-kernel/kernel-state.json` (WAL mode en SQLite). `task_ledger.py` trackea tareas por fase. `evidence_ledger.py` guarda evidencias.
+- **Persistencia** — `kernel/persistence.py` mantiene el estado operativo del Kernel en `.tony-kernel/kernel-state.json`. Los componentes auxiliares registran tareas y evidencias mediante sus respectivos ledgers.
+## Enforcement fail-closed
+Tony Kernel aplica una política fail-closed para las fases que controla.   
+Cuando una delegación no corresponde a una fase válida, cuando una transición no está permitida o cuando faltan condiciones obligatorias, el Kernel bloquea la ejecución en lugar de permitir que el agente continúe bajo una suposición implícita.   
+El agente puede proponer una acción, pero la autorización para avanzar de fase pertenece al Kernel.
 
 ### Servicios de contexto
 - **TonyMem** — Memoria persistente para decisiones, hallazgos y compartición de contexto entre sesiones. Servidor MCP Python (`local-memory/server.py`) + plugin OpenCode (`plugins/tonymem.ts`) comparten el mismo `memory.db` en modo WAL. Lifecycle de memorias con 3 estados: `active` (default), `proven` (solución verificada, rankea primero en `mem_search`), `needs_review` (stale, no confiar sin verificar).
@@ -53,6 +180,60 @@ Este patrón permite un acceso directo al archivo SQLite en modo **WAL**, que es
 - **TonyMem Convention** (`skills/_shared/tonymem-convention.md`) — Topic keys, contratos de `mem_save`/`mem_get_observation`/`mem_search`/`mem_review`, aislamiento por proyecto, manejo de concurrencia, lifecycle de memorias (active/proven/needs_review).
 - **OpenSpec Convention** (`skills/_shared/openspec-convention.md`) — Directorios, paths y delta spec sections para artifacts en filesystem.
 - **Skill Resolver** (`skills/_shared/skill-resolver.md`) — Protocolo de resolución de skills desde el registry.
+
+## Flujo arquitectónico
+Una tarea atraviesa varias capas antes de producir un cambio verificable:
+```text
+Usuario
+   │
+   ▼
+OpenCode
+   │
+   ▼
+Tony Orchestrator
+   │
+   ├──────────────► TonyMem
+   │
+   ├──────────────► Code Index
+   │
+   ├──────────────► Judgment Memory
+   │
+   └──────────────► DCP
+   │
+   ▼
+SDD Phase
+   │
+   ▼
+Tony Kernel
+   │
+   ├── Phase Gate
+   ├── Artifact Gate
+   ├── Scope Guard
+   ├── Evidence
+   ├── Checksums
+   └── Retry Budget
+   │
+   ▼
+Sub-agent
+   │
+   ▼
+Phase Result
+   │
+   ▼
+Tony Kernel
+   │
+   ├── valida artifacts
+   ├── valida evidencia
+   ├── valida scope
+   └── registra completion
+   │
+   ▼
+Siguiente fase
+```
+El orquestador decide qué agente debe ejecutar una fase, pero el Kernel determina si esa transición está permitida.
+Esta separación permite mantener dos responsabilidades independientes:
+- **Orquestación:** decidir qué debe ejecutarse.
+- **Enforcement:** determinar si puede ejecutarse.
 
 ### Prompts de fases SDD
 Cada fase tiene su propio prompt en `prompts/sdd/`:
@@ -75,7 +256,6 @@ tony-ai/
 ├── TESTING.md                         # Estrategia y guía de ejecución de pruebas
 ├── Makefile                           # Wrappers de tests, bootstrap, health, docker
 ├── requirements-dev.txt               # pytest (para desarrollo y CI)
-├── requirements-optional.txt          # tree-sitter (opt-in)
 │
 ├── tests/                             # suite centralizada de tests
 │   ├── test_kernel_state_machine.py   # Tests unitarios FSM + enforcement
@@ -100,7 +280,7 @@ tony-ai/
 │   ├── phase_gate.py                  # Validación de transiciones de fase
 │   ├── artifact_gate.py               # Validación de artifacts (exists + hash + validated + integral)
 │   ├── artifact_store.py              # disk_artifact_store (sha256 + WAL)
-│   ├── persistence.py                 # Persistencia WAL en .tony-kernel/kernel-state.json
+│   ├── persistence.py                 # Persistencia JSON + lock del estado del Kernel
 │   ├── phase_checksum.py              # Detección de tampering post-completion
 │   ├── retry_budget.py                # Presupuesto de reintentos por fase
 │   ├── evidence_ledger.py             # Registro de evidencias por tarea
@@ -149,33 +329,6 @@ tony-ai/
 
 > **Estrategia de Tests**: Los tests Python pueden ejecutarse mediante `pytest tests/` (desarrollo/CI) o con el runner standalone sin dependencias `python3 tools/run-python-tests.py tests`. Los tests TypeScript usan `bun test tests`. Ver [`TESTING.md`](TESTING.md) y el `Makefile`.
 
-
-## Comandos
-| Comando | Descripción | Fuente | Offline |
-|---------|-------------|--------|---------|
-| `/sdd-init` | Inicializar contexto SDD | SQLite + config | ✅ |
-| `/sdd-new <change>` | Nuevo cambio con SDD completo | Sub-agentes planning | ❌ |
-| `/sdd-explore <task>` | Investigar una idea | Sub-agente explore | ❌ |
-| `/sdd-propose` | Crear propuesta PRD | Sub-agente propose | ❌ |
-| `/sdd-spec` | Especificación técnica | Sub-agente spec | ❌ |
-| `/sdd-design` | Diseño técnico | Sub-agente design | ❌ |
-| `/sdd-tasks` | Generar plan de tareas | Sub-agente tasks | ❌ |
-| `/sdd-apply [change]` | Implementar tareas | Sub-agente writer | ❌ |
-| `/sdd-verify [change]` | Validar implementación | Sub-agente verify | ❌ |
-| `/sdd-archive [change]` | Cerrar cambio y archivar | SQLite/JSON | ✅ |
-| `/sdd-onboard` | Walkthrough guiado de SDD | Sub-agente onboard | ❌ |
-| `/sdd-status [change]` | Ver estado del cambio | Artifact store | ✅ |
-| `/sdd-continue [change]` | Ejecutar siguiente fase | Sub-agentes | ❌ |
-| `/sdd-ff <name>` | Fast-forward: propuesta → tareas | Sub-agentes planning | ❌ |
-| `/memory-search "query"` | Búsqueda semántica en TonyMem + Judgment Memory | SQLite + Qdrant | ✅ / ❌ |
-| `/memory-stats` | Estadísticas de memoria | SQLite | ✅ |
-| `/judgment-history [project]` | Ver historial de juicios | SQLite ledger | ✅ |
-| `juzgar esto` | Activar Judgment Day | 2 jueces + memoria | ❌ |
-| `/kernel-status` | Estado del Kernel (fase actual, artifacts, checksums) | kernel-state.json | ✅ |
-| `/kernel-reset` | Resetear estado del Kernel (solo desarrollo) | kernel-state.json | ✅ |
-
-💡 Todo funciona offline excepto los comandos que requieren sub-agentes (`/sdd-new`, `/sdd-explore`, `/sdd-propose`, `/sdd-spec`, `/sdd-design`, `/sdd-tasks`, `/sdd-apply`, `/sdd-verify`, `/sdd-onboard`, `/sdd-continue`, `/sdd-ff`, `juzgar esto`) y búsqueda semántica (`/memory-search` con Qdrant/Ollama).
-
 ## Persistencia de Prompts
 Hook chat.message → auto-guarda con type='prompt-capture'
 Incluido en mem_context por defecto
@@ -200,17 +353,22 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
 | Rol | Modelo | Agentes |
 |-----|--------|---------|
 | Planificación | `ollama/qwen3-coder:30b` | `tony-orchestrator`, `sdd-explore`, `sdd-propose`, `sdd-design`, `sdd-spec`, `sdd-tasks`, `sdd-init`, `sdd-onboard` |
-| Implementación | `ollama/omnicoder:9b` | `sdd-apply` |
+| Implementación | `ollama/omnicoder-2-9b` | `sdd-apply` |
 | Revisión | `ollama/deepseek-r1:14b` | `sdd-verify`, `review-*` (5), `jd-judge-a` |
 | Revisión (juez B) | `ollama/qwen3-coder:30b` | `jd-judge-b` — deliberadamente distinto de `jd-judge-a` |
 | Ejecución | `ollama/ornith:9b` | `sdd-archive`, `jd-fix-agent` |
 
 
-## Beneficios concretos:
-1. Primera tarea: Configuras todo desde cero
-2. Segunda tarea: Sistema te sugiere patrones similares
-3. Tercera tarea: Ya tiene memoria de errores evitados
-4. Tu sistema es progresivamente más útil con el uso. No es ML tradicional, es memoria semántica operacional.
+## Propiedades emergentes del diseño
+La separación entre memoria persistente, búsqueda semántica y enforcement del workflow permite que el sistema acumule conocimiento operativo sin modificar los modelos.
+
+El valor acumulado proviene de tres fuentes:
+
+1. **Memoria de proyecto** — decisiones y descubrimientos persistentes.
+2. **Conocimiento del código** — representación semántica e incremental del codebase.
+3. **Memoria de juicios** — resultados y lecciones obtenidas durante revisiones.
+
+El sistema reutiliza estas tres fuentes en tareas posteriores para reducir la dependencia del contexto de una única sesión.
 
 
 ## Principios de diseño
@@ -222,23 +380,23 @@ Por defecto, `code-index/` usa `bge-m3` para embeddings de código, mientras que
   - `judgment-memory/` almacena resultados normalizados de flujos de revisión completados.
 - **Contratos explícitos**: cada fase SDD devuelve un envelope estructurado (Section D en `skills/_shared/sdd-phase-common.md`), con `status`, `executive_summary`, `artifacts`, `next_recommended`, `risks`, `skill_resolution`.
 - **Indexado incremental**: el indexador de código saltea archivos sin cambios y limpia los borrados del índice.
-- **Prompt separation**: los prompts de orquestación y fases viven en `prompts/sdd/` como archivos `.md` referenciados desde `opencode.json`, no inline en JSON.
+- **Prompt separation**: los prompts son artifacts versionados independientes de `opencode.json`. La configuración referencia los archivos fuente mediante `{file:...}`, evitando duplicar instrucciones dentro del JSON.
 - **Skill registry**: las skills se resuelven una vez por sesión desde el registry y se inyectan como rutas exactas en cada sub-agente, no se buscan ad-hoc.
 
-## Integración de agentes SDD con OpenCode
+# Integración de agentes SDD con OpenCode
 
-### 1. Prompts fuente
+## 1. Prompts fuente
 
 Los agentes SDD usan directamente sus prompts fuente. No existe una etapa de generación o materialización de bundles.
 
 - `prompts/agents/tony-orchestrator.md`: coordinación mínima del workflow.
 - `prompts/agents/phase-capabilities.md`: mapa de capacidades y routing.
-- `prompts/agents/phase-launcher.md`: contrato mínimo de lanzamiento.
+- `prompts/agents/includes/phase-launcher.md`: contrato mínimo de lanzamiento.
 - `prompts/sdd/<phase>.md`: instrucciones específicas de cada fase SDD.
 - `prompts/agents/phase-prompts/*.md`: reviewers y agentes de Judgment Day.
 - `skills/_shared/sdd-phase-common.md`: contrato común de los ejecutores SDD.
 
-### 2. Configuración de OpenCode
+## 2. Configuración de OpenCode
 
 `opencode.json` conecta cada agente directamente con su prompt fuente mediante `{file:...}`.
 
@@ -259,7 +417,7 @@ Conceptualmente:
 
 OpenCode resuelve el prompt del agente seleccionado. El orquestador no debe copiar el prompt completo del ejecutor dentro de la delegación.
 
-### 3. Contexto mínimo y delegación
+## 3. Contexto mínimo y delegación
 
 `tony-orchestrator` mantiene únicamente el contexto necesario para enrutar el workflow:
 
@@ -271,7 +429,7 @@ OpenCode resuelve el prompt del agente seleccionado. El orquestador no debe copi
 
 El orquestador no carga prompts de ejecutores para decidir el routing, no ejecuta trabajo de fase inline y no copia artifacts completos en la delegación. Los ejecutores recuperan sus artifacts upstream desde el backend configurado cuando su fase los necesita.
 
-### 4. Separación entre SDD y Review/Judgment Day
+## 4. Separación entre SDD y Review/Judgment Day
 
 Los agentes SDD y los agentes de review/Judgment Day tienen responsabilidades independientes.
 
@@ -282,7 +440,7 @@ Los agentes SDD y los agentes de review/Judgment Day tienen responsabilidades in
 
 Estos agentes no forman parte del contexto común de ejecución de las fases SDD.
 
-### 5. Disciplina de contexto
+## 5. Disciplina de contexto
 
 La arquitectura evita generar prompts agregados para cada fase.
 
@@ -298,30 +456,31 @@ phase prompt + required upstream artifacts
 phase result
 ```
 
-El objetivo es que cada modelo reciba el mínimo contexto efectivo necesario para completar su responsabilidad.
-
+El objetivo es que cada modelo reciba el mínimo contexto efectivo necesario para completar su responsabilidad.   
+Esta separación evita que `tony-orchestrator` se convierta en un ejecutor monolítico y permite que cada fase mantenga su propio contrato, prompt y conjunto mínimo de contexto.
 ## 6. Flujo con el Kernel
+El Kernel diferencia entre:
 
-Para las ocho fases SDD core, el plugin de Tony Kernel intercepta la delegación:
-
-```ts
-const args = input.arguments as Record<string, unknown>
-const requestedPhase = derivePhase(args)
-
-if (requestedPhase === null) return // agente de protocolo fuera del FSM
-
-const result = await client.canStartPhase(requestedPhase)
-if (!result.allowed) {
-  throw new KernelBlockedError("Phase transition blocked")
-}
-
-await client.recordDelegation(requestedPhase, "sub-agent")
+**Fases SDD controladas por el FSM**
+```text
+explore
+propose
+spec
+design
+tasks
+apply
+verify
+archive
 ```
-
-Después de la ejecución, el hook de completion valida artifacts, evidencia, scope y estado de la fase antes de registrar `recordPhaseCompletion`.
-
-Los agentes `review-*`, `jd-*`, `sdd-init` y `sdd-onboard` deben estar explícitamente clasificados como agentes conocidos fuera del FSM. Un `subagent_type` desconocido sigue siendo bloqueado por `KernelBlockedError` (fail-closed).
-
+y agentes auxiliares que no representan una transición del workflow:
+```text
+sdd-init
+sdd-onboard
+review-*
+jd-*
+gga-reviewer
+```
+Estos agentes pueden participar del workflow sin convertirse en fases adicionales del FSM.
 ## 7. Checklist de configuración
 
 ```bash
