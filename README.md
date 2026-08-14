@@ -1,5 +1,5 @@
 # Tony-AI
-`Tony-AI` es un sistema de orquestación de agentes de IA para desarrollo de software basado en Spec-Driven Development (SDD), que utiliza múltiples LLMs locales y memoria persistente para planificar, implementar, revisar y aprender de los cambios realizados en un proyecto.   
+`Tony-AI` es un sistema de orquestación de agentes de IA para desarrollo de software basado en Spec-Driven Development (SDD), que utiliza múltiples LLMs locales y memoria persistente para planificar, implementar, revisar y reutilizar conocimiento operativo de los cambios realizados.  
 Combina tres subsistemas principales:   
 
 * `local-memory/` — memoria persistente y duradera basada en SQLite.
@@ -44,48 +44,48 @@ flowchart LR
 ```
 
 ## Contexto y memoria
-```mermaid
-flowchart TB
-    AG["Agentes / Tony Kernel"]
+Tony-AI separa la orquestación del workflow de los sistemas que aportan contexto y memoria.
 
-    AG --> TM["TonyMem<br/>memoria persistente"]
-    AG --> CI["Code Index<br/>búsqueda semántica"]
-    AG --> JM["Judgment Memory<br/>memoria de juicios"]
-    AG --> DCP["DCP<br/>gestión de contexto"]
-
-    TM --> SQL["SQLite"]
-    CI --> EMB["Ollama<br/>embeddings"]
-    EMB --> QD["Qdrant<br/>vector store"]
-    JM --> SQL2["SQLite<br/>ledger"]
-    JM --> QD
-    DCP --> OC["OpenCode"]
+```text
+                         OpenCode
+                            │
+                   Tony Orchestrator
+                    │       │       │
+                    │       │       └── Judgment Memory
+                    │       └────────── Code Index
+                    └────────────────── TonyMem
+                            │
+                           DCP
+                            │
+                         SDD phase
+                            │
+                       Tony Kernel
 ```
 
-Tony-AI separa el contexto persistente en distintos tipos de memoria, según el tipo de conocimiento que se necesita recuperar durante una tarea.
+- **TonyMem** aporta decisiones, descubrimientos y contexto persistente.
+- **Code Index** aporta conocimiento semántico sobre el código.
+- **Judgment Memory** aporta juicios y lecciones de revisiones anteriores.
+- **DCP** administra el contexto utilizado por OpenCode.
+- **Tony Kernel** no decide qué trabajo hacer: controla si una transición de fase está permitida.
 
-- **TonyMem** conserva decisiones, descubrimientos y contexto operativo del proyecto. Utiliza SQLite para mantener esta información entre sesiones y permitir su recuperación cuando una tarea futura necesita antecedentes relacionados.
-- **Code Index** mantiene una representación semántica del codebase. El código se divide en unidades estructurales mediante `tree-sitter`, se generan embeddings con Ollama y se almacenan en Qdrant para realizar búsquedas semánticas sobre el repositorio.
-- **Judgment Memory** conserva los resultados y lecciones obtenidos durante revisiones y procesos de Judgment Day. Combina SQLite para el ledger de juicios con Qdrant para recuperar evaluaciones anteriores semánticamente relacionadas.
-- **DCP** participa en la gestión del contexto utilizado por OpenCode, ayudando a controlar qué información se incorpora al contexto de los agentes.
-
-TonyMem aporta **contexto y decisiones**, Code Index aporta **conocimiento sobre el código**, y Judgment Memory aporta **experiencia acumulada de revisiones anteriores**.
-
-El objetivo no es realizar fine-tuning, sino **conservar, indexar y recuperar conocimiento operativo** para que los agentes puedan reutilizarlo durante nuevas tareas.
-
+El objetivo no es entrenar los modelos, sino conservar, indexar y recuperar conocimiento operativo para reutilizarlo en tareas posteriores.
 
 ```text
 Nueva tarea
     │
     ├── TonyMem ──────────────► decisiones y contexto previo
-    │
     ├── Code Index ───────────► código relacionado
-    │
     ├── Judgment Memory ──────► revisiones y lecciones previas
-    │
-    └── DCP ──────────────────► contexto relevante para OpenCode
+    └── DCP ──────────────────► contexto relevante
                                       │
                                       ▼
-                               Agente / Tony Kernel
+                               Agente / Orchestrator
+                                      │
+                                      ▼
+                                 SDD Phase
+                                      │
+                                      ▼
+                                 Tony Kernel
 ```
 							   
 ## Kernel
@@ -199,7 +199,7 @@ Se instala automáticamente desde `scripts/setup.sh`
 | Función | Modelo |
 |---|---|
 | Planning / propuesta | `qwen3-coder:30b` |
-| Implementación | `omnicoder-2-9b:q4_k_m` |
+| Implementación | `carstenuhlig/omnicoder-2-9b:q4_k_m` |
 | Review / Judgment | `deepseek-r1:14b` |
 | Archive / jd-fix-agent | `ornith:9b` |
 | Code embeddings | `bge-m3` |
@@ -289,9 +289,8 @@ Para retomar un cambio anterior:
 
 ```bash
 # 7. Activar Judgment Day
-juzgar esto
 
-Recupera juicios anteriores relevantes, analiza el estado actual del cambio, ejecuta los jueces configurados, consolida el resultado, registra la lección obtenida para futuras revisiones.
+`juzgar esto` recupera juicios anteriores relevantes, ejecuta los dos jueces configurados y registra el resultado en Judgment Memory para futuras revisiones.
 
 Esto permite que las revisiones posteriores puedan aprovechar conocimiento acumulado de evaluaciones anteriores.
 El sistema recupera juicios previos relevantes y ejecuta los jueces configurados, registrando el resultado en Judgment Memory. 

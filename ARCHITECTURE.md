@@ -279,7 +279,7 @@ tony-ai/
 │   ├── state_machine.py               # FSM de fases SDD
 │   ├── phase_gate.py                  # Validación de transiciones de fase
 │   ├── artifact_gate.py               # Validación de artifacts (exists + hash + validated + integral)
-│   ├── artifact_store.py              # disk_artifact_store (sha256 + WAL)
+│   ├── artifact_store.py              # Persistencia de artifacts + SHA-256
 │   ├── persistence.py                 # Persistencia JSON + lock del estado del Kernel
 │   ├── phase_checksum.py              # Detección de tampering post-completion
 │   ├── retry_budget.py                # Presupuesto de reintentos por fase
