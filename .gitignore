@@ -32,7 +32,8 @@ bun-debug.log*
 # Estado efímero del Kernel.
 .tony-kernel/
 
-# Bases SQLite locales creadas por los servidores MCP.
+# Bases SQLite configuradas para los servidores MCP.
+.tonymem/
 local-memory/memory.db
 local-memory/memory.db-*
 judgment-memory/judgment-memory.db
