@@ -263,18 +263,11 @@ El orquestador hace el trabajo pesado: explora el código, arma una propuesta, g
 
 El Kernel bloquea la transición y señala la condición que impide avanzar.
 
-Ejemplos:
+Por ejemplo:
 
-Artifacts faltantes o con hash inválido
-→ completar o regenerar el artifact de la fase actual
-
-Diff fuera de allowed_files
-→ revisar el scope definido para el cambio
-
-Salto de fase
-→ completar la fase anterior antes de avanzar
-
-La idea es que el agente no pueda simplemente continuar ignorando una condición obligatoria del workflow.
+- Artifacts faltantes → completar o regenerar el artifact.
+- Diff fuera de `allowed_files` → revisar el scope.
+- Salto de fase → completar la fase anterior.
 ```
 
 ```bash
@@ -292,9 +285,9 @@ Para retomar un cambio anterior:
 
 `juzgar esto` recupera juicios anteriores relevantes, ejecuta los dos jueces configurados y registra el resultado en Judgment Memory para futuras revisiones.
 
-Esto permite que las revisiones posteriores puedan aprovechar conocimiento acumulado de evaluaciones anteriores.
-El sistema recupera juicios previos relevantes y ejecuta los jueces configurados, registrando el resultado en Judgment Memory. 
-Actualmente la configuración incluye dos jueces: `jd-judge-a` y `jd-judge-b`.
+Actualmente la configuración incluye:
+- `jd-judge-a`
+- `jd-judge-b`
 ```
 
 ```bash
@@ -328,7 +321,7 @@ mem_save(
 # Luego se recupera en nuevas conversaciones
 mem_search("retry HTTP") → encuentra la decisión guardada
 
-Aprende de: Decisiones arquitectónicas, bugs resueltos, patrones de código
+Reutiliza: Decisiones arquitectónicas, bugs resueltos, patrones de código
 ```
 
 ```bash
@@ -338,7 +331,7 @@ Aprende de: Decisiones arquitectónicas, bugs resueltos, patrones de código
 jd_record(task="validar JWT", final="approve", lesson="siempre verificar signature expiration")
 # Futuras tareas similares recuerdan esta lección
 
-Aprende de: Errores de review, mejores prácticas validadas
+Reutiliza: Errores de review, mejores prácticas validadas
 ```
 
 ```bash
@@ -347,7 +340,7 @@ Aprende de: Errores de review, mejores prácticas validadas
 - Embeddings semánticos con bge-m3
 - Búsquedas como "cómo se maneja la autenticación" te encuentran código relevante
 
-Aprende de: Crecimiento del codebase, patrones emergentes
+Representa: Crecimiento del codebase, patrones emergentes
 ```
 
 ```bash
