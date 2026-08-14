@@ -13,7 +13,7 @@ Tony-AI tiene dos niveles de ejecución:
 | Bun | Plugins y tests TypeScript | Desarrollo y runtime OpenCode |
 | OpenCode CLI | Orquestación de agentes/SDD | Runtime |
 | Ollama | Modelos locales y embeddings | Runtime |
-| Docker + Compose | Qdrant y, opcionalmente, Ollama | Bootstrap/runtime |
+| Docker + Compose | Qdrant y Ollama | Bootstrap/runtime |
 | GGA | Revisión de código antes de commit | Bootstrap/runtime |
 | tree-sitter + `tree-sitter-language-pack` | Chunking estructural del Code Indexer | Desarrollo/runtime |
 
