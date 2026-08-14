@@ -23,7 +23,7 @@ export PATH="${HOME}/.local/bin:${PATH}"
 
 # Pytest cache lives outside /mnt/c checkouts to avoid WSL/DrvFS permission
 # errors when pytest creates its temporary cache directories.
-PYTEST_CACHE_DIR="${HOME}/.cache/tony-ai/pytest"
+PYTEST_CACHE_DIR="/tmp/tony-ai-pytest"
 hdr "Pytest cache"
 if mkdir -p "${PYTEST_CACHE_DIR}" && [[ -w "${PYTEST_CACHE_DIR}" ]]; then
   ok "cache de pytest en ${PYTEST_CACHE_DIR}"
