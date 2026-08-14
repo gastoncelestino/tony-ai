@@ -2,9 +2,16 @@
 `Tony-AI` es un sistema de orquestación de agentes de IA para desarrollo de software basado en Spec-Driven Development (SDD), que utiliza múltiples LLMs locales y memoria persistente para planificar, implementar, revisar y reutilizar conocimiento operativo de los cambios realizados.  
 Combina tres subsistemas principales:   
 
-* `local-memory/` — memoria persistente y duradera basada en SQLite.
+* `local-memory/` — servidor MCP de memoria persistente y duradera basada en SQLite.
 * `code-index/` — indexación y búsqueda semántica del código mediante Ollama + Qdrant.
 * `judgment-memory/` — almacenamiento y recuperación de decisiones, revisiones y juicios previos para reutilizar conocimiento durante futuras tareas.
+
+La configuración de OpenCode almacena las bases SQLite persistentes de TonyMem y Judgment Memory bajo `.tonymem/`:
+
+```text
+.tonymem/memory.db
+.tonymem/judgment-memory.db
+```
 
 Los servicios definidos en `docker/` proporcionan la infraestructura local para Ollama y Qdrant cuando estos servicios no están disponibles en el host.   
 
@@ -68,6 +75,8 @@ Tony-AI separa la orquestación del workflow de los sistemas que aportan context
 - **DCP** administra el contexto utilizado por OpenCode.
 - **Tony Kernel** no decide qué trabajo hacer: controla si una transición de fase está permitida.
 
+La persistencia SQLite configurada para OpenCode se encuentra en `.tonymem/`; los directorios `local-memory/` y `judgment-memory/` contienen los servidores MCP que acceden a esas bases.
+
 El objetivo no es entrenar los modelos, sino conservar, indexar y recuperar conocimiento operativo para reutilizarlo en tareas posteriores.
 
 ```text
@@ -86,8 +95,7 @@ Nueva tarea
                                       │
                                       ▼
                                  Tony Kernel
-```
-							   
+```							   
 ## Kernel
 Si algo falla, el Kernel te dice exactamente por qué:
 
