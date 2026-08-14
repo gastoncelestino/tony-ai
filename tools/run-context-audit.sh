@@ -25,7 +25,6 @@ for ref in main dev; do
   fi
 done
 
-# Prefer exact cl100k_base token counts when Python+tiktoken are available.
 TOKENIZER='estimate'
 if command -v python3 >/dev/null 2>&1 && python3 - <<'PY' >/dev/null 2>&1
 import tiktoken
@@ -45,7 +44,6 @@ count_tokens() {
   if [ "$TOKENIZER" = 'cl100k_base' ]; then
     printf '%s' "$text" | python3 -c 'import sys,tiktoken; e=tiktoken.get_encoding("cl100k_base"); print(len(e.encode(sys.stdin.read())))'
   else
-    # Conservative fallback; this is explicitly reported as an estimate.
     printf '%s' "$text" | wc -c | awk '{printf "%.0f", $1/4}'
   fi
 }
@@ -72,7 +70,7 @@ mcp_for_phase() {
   local phase="$1"
   local config
   config="$(get_file dev "$CONFIG")"
-  printf '%s\n' "$config" | python3 - "$phase" <<'PY'
+  printf '%s\n' "$config" | python3 -c '
 import json,sys
 phase=sys.argv[1]
 data=json.load(sys.stdin)
@@ -80,7 +78,7 @@ agent=data.get("agent",{}).get(phase,{})
 perm=agent.get("permission",{})
 allowed=[k for k,v in perm.items() if v=="allow"]
 print(",".join(allowed) if allowed else "none")
-PY
+' "$phase"
 }
 
 printf '\n%bTony AI — Context Audit: main vs dev%b\n' "$GREEN" "$RESET"
