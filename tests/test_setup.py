@@ -28,7 +28,9 @@ def test_setup_requires_all_tooling() -> None:
     assert "DOCKER_AVAILABLE=0" in text
     assert 'bad "docker no esta instalado' in text
     assert 'bad "gga no esta en PATH' in text
-    assert "import tree_sitter, tree_sitter_languages" in text
+    assert "import tree_sitter, tree_sitter_language_pack" in text
+    assert "requirements-dev.txt fallo" in text
+    assert "2>/dev/null" not in text.split('python3 -m pip install', 1)[1].split('hdr "opencode.json"', 1)[0]
 
 
 def test_setup_starts_only_missing_services() -> None:
@@ -53,7 +55,8 @@ def test_tree_sitter_is_mandatory_and_default_chunker() -> None:
     config = json.loads(OPENCODE.read_text(encoding="utf-8"))
 
     assert "tree-sitter" in requirements
-    assert "tree-sitter-languages" in requirements
+    assert "tree-sitter-language-pack" in requirements
+    assert "tree-sitter-languages" not in requirements
     assert 'TONY_INDEX_CHUNKER=tree-sitter' in env
     assert 'TONY_INDEX_CHUNKER=tree-sitter' in setup
     assert config["mcp"]["code-index"]["environment"]["TONY_INDEX_CHUNKER"] == "tree-sitter"
@@ -79,3 +82,5 @@ def test_install_docs_mark_prerequisites_mandatory() -> None:
     for requirement in ("Python 3.10+", "Bun", "OpenCode CLI", "Ollama", "Docker", "GGA", "tree-sitter"):
         assert requirement in text
     assert "opcional" not in text.lower()
+    assert "tree-sitter-languages" not in text
+    assert "tree-sitter-language-pack" in text
