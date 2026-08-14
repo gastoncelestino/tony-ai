@@ -222,7 +222,7 @@ function checkLegacyArchitecture(): void {
   try {
     const output = execFileSync(
       "git",
-      ["grep", "-n", "-I", "-E", "--", ":(exclude)tools/validate-sdd-flow.ts", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated"],
+      ["grep", "-n", "-I", "-E", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated", "--", ".", ":(exclude)tools/validate-sdd-flow.ts"],
       { cwd: ROOT, encoding: "utf8" },
     )
     fail(`legacy references found:\n${output}`)
