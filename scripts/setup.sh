@@ -17,7 +17,7 @@ PYTHON_MIN_MINOR=10
 
 JUDGMENT_EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
 CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
-IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-carstenuhlig/omnicoder-9b}"
+IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-carstenuhlig/omnicoder-2-9b:q4_k_m}"
 OLLAMA_URL="${TONY_OLLAMA_URL:-http://localhost:11434}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
 
@@ -262,9 +262,9 @@ JUDGMENT_EMBED_MODEL=nomic-embed-text
 CODE_EMBED_MODEL=bge-m3
 
 # Modelos principales (descargados por setup.sh).
-TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-9b
+TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-2-9b:q4_k_m
 # Qwen3-Coder 30B: planificacion y proposicion
-# OmniCoder 9B: implementacion
+# OmniCoder 2 9B Q4_K_M: implementacion
 # DeepSeek-R1 14B: revision y Judgment Day juez A
 # Ornith 9B: archive y jd-fix-agent
 
