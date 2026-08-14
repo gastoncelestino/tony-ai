@@ -177,9 +177,7 @@ make test-kernel                     # Solo tests Kernel
 ```bash
 make verify-qdrant   # Smoke test del pipeline de Qdrant/Ollama
 make health          # Verificar estado de los servicios
-make validate-config # Validar opencode.json + prompts + skills
-make build-prompts    # Regenerar bundles de prompts
-make check-prompts    # Validar que los bundles estén actualizados
+make validate-config # Validar opencode.json + prompts + MCP
 ```
 
 ## 5.2 Comandos OpenCode (slash commands)

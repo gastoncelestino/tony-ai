@@ -97,23 +97,35 @@ Spec-Driven Development es un enfoque estructurado para construir cambios en sof
 ```
 
 ## Idea central
-La resolución programática ocurre durante el **build**, no dentro del modelo ni durante la ejecución de OpenCode. `phase-manifest.json` es la fuente de composición; `prompt-bundler.ts` resuelve sus includes y materializa archivos finales; `opencode.json` conecta cada nombre de agente con su bundle; finalmente, `tony-orchestrator` solo selecciona el `subagent_type` correcto.
 
->El orquestador decide **qué agente ejecutar**. OpenCode carga el prompt materializado definido para ese agente. El bundler decide **qué contenido recibe** ese agente.
+Tony mantiene el contexto de cada fase SDD deliberadamente pequeño.
+
+Los agentes están conectados directamente con sus prompts fuente desde `opencode.json`. El orquestador selecciona la fase y transmite únicamente los datos necesarios para iniciar su ejecución; el agente de fase recupera los artifacts upstream que necesita.
 
 ```mermaid
 flowchart LR
-    A["phase-manifest.json"] --> B["build-prompts.ts"]
-    B --> C["prompt-bundler.ts"]
-    C --> D["prompts/generated/tony-orchestrator.md"]
-    C --> E["prompts/generated/phases/{phase}.md"]
-    C --> F["prompt-manifest.json + prompt-snapshot.json"]
-    G["opencode.json"] --> D
-    G --> E
-    H["Usuario"] --> I["tony-orchestrator"]
-    I -->|"Task subagent_type: sdd-apply"| G
-    E --> J["Subagente de fase"]
+    A["Usuario"] --> B["tony-orchestrator"]
+    B --> C["phase-capabilities"]
+    C --> D["phase agent"]
+    D --> E["prompt de fase"]
+    D --> F["artifacts upstream"]
+    D --> G["resultado de fase"]
+    G --> B
 ```
+
+> El orquestador decide **qué agente ejecutar**. El agente de fase recibe únicamente el contexto necesario para ejecutar esa responsabilidad.
+
+### Contexto por fase
+
+Los prompts viven como archivos fuente y se referencian directamente desde `opencode.json` mediante `{file:...}`. No se generan bundles ni manifests de prompts durante el build.
+
+- `prompts/agents/tony-orchestrator.md` — coordinación y routing mínimo.
+- `prompts/agents/phase-capabilities.md` — mapa de capacidades.
+- `prompts/sdd/*.md` — ejecución de las fases SDD.
+- `prompts/agents/phase-prompts/*.md` — review y Judgment Day.
+- `skills/_shared/sdd-phase-common.md` — contrato común de los ejecutores.
+
+El objetivo es reducir el contexto de cada modelo a lo estrictamente necesario para su responsabilidad.
 
 # Requisitos
 - **Python 3.10+** para los servidores MCP en Python.
