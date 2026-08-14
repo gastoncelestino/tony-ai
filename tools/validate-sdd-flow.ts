@@ -171,7 +171,7 @@ function checkPermissions(): void {
     "sdd-tasks": ["tonymem_*"],
     "sdd-archive": ["tonymem_*"],
     "sdd-init": ["tonymem_*"],
-    "sdd-onboard": ["tonymem_*"],
+    "sdd-onboard": ["tonymem_*"]
   }
 
   for (const [agent, allows] of Object.entries(expectedAllows)) {
@@ -222,7 +222,7 @@ function checkLegacyArchitecture(): void {
   try {
     const output = execFileSync(
       "git",
-      ["grep", "-n", "-I", "-E", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated"],
+      ["grep", "-n", "-I", "-E", "--", ":(exclude)tools/validate-sdd-flow.ts", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated"],
       { cwd: ROOT, encoding: "utf8" },
     )
     fail(`legacy references found:\n${output}`)
