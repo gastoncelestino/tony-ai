@@ -30,6 +30,7 @@ bun-debug.log*
 
 ### Tony-AI runtime state (generado en cada corrida, no se versiona) ###
 .tony-kernel/
+.context-flow/
 local-memory/memory.db
 local-memory/.tonymem/
 code-index/manifest.db
