@@ -4,23 +4,27 @@ import { resolve } from "node:path"
 
 const ROOT = resolve(process.cwd())
 const PYTHON = process.env.TONY_PYTHON ?? "python3"
+const GREEN = "\x1b[32m"
+const RED = "\x1b[31m"
+const YELLOW = "\x1b[33m"
+const RESET = "\x1b[0m"
 let passed = 0
 let failed = 0
 let skipped = 0
 
 function ok(message: string): void {
   passed++
-  console.log(`OK   ${message}`)
+  console.log(`${GREEN}OK${RESET}   ${message}`)
 }
 
 function fail(message: string): void {
   failed++
-  console.error(`FAIL ${message}`)
+  console.error(`${RED}FAIL${RESET} ${message}`)
 }
 
 function skip(message: string): void {
   skipped++
-  console.warn(`SKIP ${message}`)
+  console.warn(`${YELLOW}SKIP${RESET} ${message}`)
 }
 
 function file(path: string): string {
@@ -222,7 +226,7 @@ function checkLegacyArchitecture(): void {
   try {
     const output = execFileSync(
       "git",
-      ["grep", "-n", "-I", "-E", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated", "--", ".", ":(exclude)tools/validate-sdd-flow.ts"],
+      ["grep", "-n", "-I", "-E", "--", ":(exclude)tools/validate-sdd-flow.ts", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated"],
       { cwd: ROOT, encoding: "utf8" },
     )
     fail(`legacy references found:\n${output}`)
@@ -236,7 +240,7 @@ function checkLegacyArchitecture(): void {
 
 function checkGitDiff(): void {
   try {
-    execFileSync("git", ["diff", "--check"], { cwd: ROOT, stdio: "inherit" })
+    execFileSync("git", ["-c", "core.autocrlf=false", "diff", "--check"], { cwd: ROOT, stdio: "inherit" })
     ok("git diff --check")
   } catch {
     fail("git diff --check")
@@ -283,11 +287,11 @@ function main(): void {
   console.log(`SKIP: ${skipped}`)
 
   if (failed > 0) {
-    console.error("\nSDD architecture audit FAILED.")
+    console.error(`${RED}\nSDD architecture audit FAILED.${RESET}`)
     process.exit(1)
   }
 
-  console.log("\nSDD architecture audit PASSED.")
+  console.log(`${GREEN}\nSDD architecture audit PASSED.${RESET}`)
   process.exit(0)
 }
 
