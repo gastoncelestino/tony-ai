@@ -8,9 +8,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "scripts" / "setup.sh"
 OPENCODE = ROOT / "opencode.json"
+ENV_EXAMPLE = ROOT / ".env.example"
 
 
-CANONICAL_OMNICODER = "carstenuhlig/omnicoder-9b"
+CANONICAL_OMNICODER = "carstenuhlig/omnicoder-2-9b:q4_k_m"
+LEGACY_OMNICODER = "omnicoder:9b"
+PREVIOUS_OMNICODER = "carstenuhlig/omnicoder-9b"
 
 
 def test_setup_shell_syntax() -> None:
@@ -36,7 +39,8 @@ def test_setup_uses_canonical_omnicoder_model() -> None:
     text = SETUP.read_text(encoding="utf-8")
 
     assert CANONICAL_OMNICODER in text
-    assert "omnicoder:9b" not in text
+    assert LEGACY_OMNICODER not in text
+    assert PREVIOUS_OMNICODER not in text
 
 
 def test_opencode_uses_canonical_omnicoder_model() -> None:
@@ -44,4 +48,13 @@ def test_opencode_uses_canonical_omnicoder_model() -> None:
     models = data["provider"]["ollama"]["models"]
 
     assert CANONICAL_OMNICODER in models
-    assert "omnicoder:9b" not in models
+    assert LEGACY_OMNICODER not in models
+    assert PREVIOUS_OMNICODER not in models
+
+
+def test_env_example_uses_canonical_omnicoder_model() -> None:
+    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+
+    assert f"TONY_IMPLEMENTATION_MODEL={CANONICAL_OMNICODER}" in text
+    assert LEGACY_OMNICODER not in text
+    assert PREVIOUS_OMNICODER not in text
