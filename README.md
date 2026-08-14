@@ -1,75 +1,54 @@
 # Tony-AI
-Tony-AI es un sistema de orquestación de agentes de IA para desarrollo de software que utiliza un flujo de trabajo de 
-Desarrollo Guiado por Especificaciones (SDD) con múltiples LLMs locales. 
-Herramientas locales de IA centradas en **memoria persistente**, **búsqueda semántica de código**, **historial de juicios** para un orquestador de estilo OpenCode/SDD. 
-El repositorio combina tres subsistemas principales: `local-memory/` para memoria libre y duradera en SQLite,  `code-index/` para búsqueda semántica sobre código fuente usando Ollama + Qdrant, y `judgment-memory/` para almacenar y recuperar resultados previos de revisiones/juicios. 
-Los assets de Docker en `docker/` proporcionan los servicios de soporte locales de Ollama y Qdrant utilizados por los componentes semánticos.
 
+Tony-AI es un sistema de orquestación de agentes de IA para desarrollo de software basado en SDD (Spec-Driven Development), con memoria persistente, búsqueda semántica de código y Judgment Memory usando modelos locales.
 
-## ¿Cómo funciona?
-El orquestador trabaja por fases. Primero explora/propuesta/spec/diseño/tareas, después implementa, luego verifica y finalmente archiva.   
-El Tony Kernel intercepta cada transición de fase: valida artifacts, verifica checksums, aplica scope guard y evidencia antes de permitir el avance. Si algo falla, bloquea la fase y reporta el error exacto.
+## Requisitos obligatorios
 
-TonyMem guarda decisiones y contexto entre sesiones, code-index te deja buscar "por significado" dentro del repo, y judgment-memory recuerda revisiones anteriores parecidas para no arrancar siempre desde cero.  
+La instalación soportada requiere **todos** estos componentes:
 
-A nivel técnico, el stack pide Python 3.10+, Bun, Ollama, Qdrant y opcionalmente Docker para levantar los servicios auxiliares.  
-Los modelos por defecto son: qwen3-coder:30b, carstenuhlig/omnicoder-2-9b:q4_k_m, deepseek-r1:14b, ornith:9b, y embeddings con bge-m3 y nomic-embed-text. 
+- **Python 3.10+** — servidores MCP y tooling Python.
+- **Bun** — scripts TypeScript y plugins.
+- **OpenCode CLI** — orquestador SDD.
+- **Ollama** — ejecución de LLM locales.
+- **Docker + Docker Compose** — infraestructura de servicios, incluido Qdrant.
+- **GGA (Gentleman Guardian Angel)** — code review obligatorio.
+- **tree-sitter + tree-sitter-languages** — chunking estructural obligatorio del Code Indexer.
 
-```mermaid
-flowchart TD
-    U["Proyecto / pedido del usuario"] --> P["Planning Engine<br/>Qwen3-Coder 30B"]
-    P --> I["Implementation<br/>OmniCoder 2 9B Q4_K_M"]
+No hay dependencias opcionales en el bootstrap oficial: `scripts/setup.sh` falla si falta cualquiera de estos requisitos.
 
-    I --> R4["Revisión 4R<br/>DeepSeek-R1 14B"]
-    I -.->|"explícito: juzgar esto"| JD["Judgment Day<br/>DeepSeek-R1 + Qwen3-Coder"]
+## Modelos por defecto
 
-    JDM["TonyMem Recall<br/>jd_recall"] -.->|"antes de juzgar"| JD
-    JD -.->|"después: terminal state"| JDR["jd_record<br/>ledger + Qdrant"]
+| Función | Modelo |
+|---|---|
+| Planning / propuesta | `qwen3-coder:30b` |
+| Implementación | `carstenuhlig/omnicoder-2-9b:q4_k_m` |
+| Review / Judgment | `deepseek-r1:14b` |
+| Archive / jd-fix-agent | `ornith:9b` |
+| Code embeddings | `bge-m3` |
+| Judgment embeddings | `nomic-embed-text` |
 
-    R4 --> V["Verify<br/>sdd-verify"]
-    JD --> V
-    V --> A["Archive<br/>Ornith 9B"]
+## Instalación
 
-    P -.->|"consulta / guarda"| CTX
-    I -.->|"consulta / guarda"| CTX
-    V -.->|"consulta / guarda"| CTX
-
-    subgraph CTX["Servicios de contexto"]
-        direction TB
-        TM["TonyMem<br/>memoria de decisiones"]
-        CI["Code Indexer<br/>búsqueda semántica de código"]
-        QD["Qdrant<br/>vector store"]
-        DCP["DCP<br/>poda continua de contexto"]
-    end
-
-    TM -.->|"shared SQLite file"| TM2["local-memory/server.py"]
-    CI -.->|"HTTP API"| QD
-    DCP -.->|"plugin global"| OC["OpenCode"]
+```bash
+git clone https://github.com/gastoncelestino/tony-ai.git
+cd tony-ai
+git checkout dev
+./scripts/setup.sh
 ```
 
-## ¿Qué es SDD?
-Spec-Driven Development es un enfoque estructurado para construir cambios en software a través de ocho fases:
+El bootstrap valida las dependencias, instala `requirements-dev.txt` incluyendo tree-sitter, levanta únicamente los servicios Docker que falten, descarga todos los modelos y genera `.env.example` y una configuración portable de OpenCode.
 
-1. **Explorar** — Investigar ideas, leer código, comparar enfoques
-2. **Proponer** — Crear una propuesta de cambio con contexto de negocio
-3. **Especificación** — Escribir especificación técnica detallada
-4. **Diseño** — Definir arquitectura técnica y estructuras de datos
-5. **Tareas** — Desglosar specs en tareas implementables
-6. **Aplicar** — Implementar el cambio
-7. **Verificar** — Validar implementación contra specs
-8. **Archivar** — Cerrar el cambio con estado final
+Después:
 
+```bash
+./scripts/health.sh
+make test
+```
 
-## Qué incluye este repositorio
-- **Tony Kernel (`kernel/` + `plugins/tony-kernel/`)**: orquestación determinista de las 8 fases SDD. Intercepta transiciones de fase, valida artifacts con hash sha256, detecta tampering post-completion, aplica scope guard sobre diffs, registra evidencias y retry budgets. Incluye suite adversarial e2e (9 tests).
-- **TonyMem (`local-memory/`)**: un servidor MCP en Python con solo stdlib que proporciona memoria local persistente en SQLite, incluyendo herramientas para guardar, buscar, actualizar, resumen de sesión y recuperación contextual.
-- **Code Indexer (`code-index/`)**: búsqueda semántica sobre un codebase, usando llamadas HTTP a Ollama para embeddings y Qdrant para almacenamiento vectorial.
-- **Judgment Memory (`judgment-memory/`)**: un puente que almacena la salida final de flujos de revisión/juicio para que tareas futuras similares puedan recuperar resultados previos en lugar de empezar desde cero.
-- **Servicios de Docker (`docker/`)**: archivos Compose y documentación para correr Ollama y Qdrant localmente.
-- **Assets de agentes (`commands/`, `prompts/`, `skills/`, `plugins/`)**: definiciones de comandos, prompts SDD, skills e integraciones de plugins usadas por la capa de orquestación.
+Para la instalación detallada, consultá [INSTALL.md](INSTALL.md).
 
+## Arquitectura
 
-## Arquitectura [ARCHITECTURE.md](https://github.com/gastoncelestino/tony-ai/blob/main/ARCHITECTURE.md)
 ```text
                          ┌──────────────────────┐
                          │     OpenCode / SDD   │
@@ -78,206 +57,82 @@ Spec-Driven Development es un enfoque estructurado para construir cambios en sof
                                     │
                          ┌──────────▼───────────┐
                          │    Tony Kernel       │
-                         │  Phase Gate + Scope  │
-                         │  Guard + Artifacts   │
+                         │ Phase Gate / Scope   │
                          └──────────┬───────────┘
                                     │
-                  ┌─────────────────┼─────────────────┐
-                  │                 │                 │
-                  ▼                 ▼                 ▼
-         ┌───────────────┐   ┌───────────────┐  ┌─────────────────┐
-         │ local-memory  │   │  code-index   │  │ judgment-memory │
-         │ memoria SQLite│   │ RAG semántico │  │ recuperación de │
-         │               │   │               │  │ juicios         │
-         └──────┬────────┘   └──────┬────────┘  └────────┬────────┘
-                │                   │                    │
-                ▼                   ▼                    ▼
-          Base de datos      Ollama + Qdrant       SQLite + Qdrant
-          SQLite              para embeddings       para juicios
+              ┌─────────────────────┼─────────────────────┐
+              ▼                     ▼                     ▼
+       ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+       │  TonyMem     │      │ Code Index   │      │ Judgment Mem │
+       │ SQLite       │      │ tree-sitter  │      │ SQLite/Qdrant│
+       └──────────────┘      │ Ollama/Qdrant│      └──────────────┘
+                             └──────────────┘
 ```
 
-## Idea central
+El Code Indexer usa **tree-sitter obligatoriamente** para dividir el código respetando estructuras sintácticas como funciones, clases y métodos antes de generar embeddings. El bootstrap oficial ya no usa `regex` como chunker.
 
-Tony mantiene el contexto de cada fase SDD deliberadamente pequeño.
+## Flujo SDD
 
-Los agentes están conectados directamente con sus prompts fuente desde `opencode.json`. El orquestador selecciona la fase y transmite únicamente los datos necesarios para iniciar su ejecución; el agente de fase recupera los artifacts upstream que necesita.
+1. Explorar
+2. Proponer
+3. Especificar
+4. Diseñar
+5. Crear tareas
+6. Aplicar
+7. Verificar
+8. Archivar
 
-```mermaid
-flowchart LR
-    A["Usuario"] --> B["tony-orchestrator"]
-    B --> C["phase-capabilities"]
-    C --> D["phase agent"]
-    D --> E["prompt de fase"]
-    D --> F["artifacts upstream"]
-    D --> G["resultado de fase"]
-    G --> B
+El Kernel valida artifacts, checksums, scope y evidencias antes de permitir avanzar de fase.
+
+## Servicios
+
+Ollama puede ejecutarse de forma nativa o mediante Docker, pero debe responder en `http://localhost:11434`. Qdrant debe responder en `http://localhost:6333`.
+
+El bootstrap detecta cada servicio independientemente para evitar el conflicto de puerto cuando Ollama ya está instalado en el host y Qdrant corre en Docker.
+
+## Configuración
+
+`.env.example` contiene la configuración canónica:
+
+```env
+TONY_REPO_ROOT=/path/to/tony-ai
+TONY_OLLAMA_URL=http://localhost:11434
+TONY_QDRANT_URL=http://localhost:6333
+JUDGMENT_EMBED_MODEL=nomic-embed-text
+CODE_EMBED_MODEL=bge-m3
+TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-2-9b:q4_k_m
+TONY_INDEX_CHUNKER=tree-sitter
 ```
 
-> El orquestador decide **qué agente ejecutar**. El agente de fase recibe únicamente el contexto necesario para ejecutar esa responsabilidad.
-
-### Contexto por fase
-
-Los prompts viven como archivos fuente y se referencian directamente desde `opencode.json` mediante `{file:...}`. No se generan bundles ni manifests de prompts durante el build.
-
-- `prompts/agents/tony-orchestrator.md` — coordinación y routing mínimo.
-- `prompts/agents/phase-capabilities.md` — mapa de capacidades.
-- `prompts/sdd/*.md` — ejecución de las fases SDD.
-- `prompts/agents/phase-prompts/*.md` — review y Judgment Day.
-- `skills/_shared/sdd-phase-common.md` — contrato común de los ejecutores.
-
-El objetivo es reducir el contexto de cada modelo a lo estrictamente necesario para su responsabilidad.
-
-# Requisitos
-- **Python 3.10+** para los servidores MCP en Python.
-- **Bun** para los scripts de verificación basados en TypeScript y plugins.
-- **OpenCode CLI** (instalador oficial: https://opencode.ai)
-- **Ollama** (https://ollama.com/download)
-- **Docker** (opcional, para correr Qdrant + Ollama como servicios)
-- **GGA** (opcional, para code review antes de commit — https://github.com/Gentleman-Programming/gentleman-guardian-angel)
-
-
-# Clonar repositorio
-```bash
-git clone https://github.com/gastoncelestino/tony-ai.git
-cd tony-ai
-```
-
-# Instalación automática (recomendada) [INSTALL.md](https://github.com/gastoncelestino/tony-ai/blob/main/INSTALL.md)
-```bash
-./scripts/setup.sh    # Verifica dependencias, levanta solo los servicios que faltan, descarga modelos, configura .env.example
-./scripts/health.sh   # Verifica estado del sistema
-```
-
-
-# Como empezar con Tony-AI
+## Tests
 
 ```bash
-# 1. Inicializá el proyecto (una sola vez)
+make test
+pytest tests
+python3 tools/run-python-tests.py tests
+```
+
+`tests/test_setup.py` comprueba sintaxis del bootstrap, requisitos obligatorios, tree-sitter, modelo OmniCoder 2, configuración de OpenCode y `.env.example`.
+
+## Comandos principales
+
+```text
 /sdd-init
-
-# 2. Creá un cambio nuevo
-/sdd-new "agregar rate limiting al endpoint de login"
-```
-
-El orquestador hace el trabajo pesado: explora el código, arma una propuesta, genera la spec, el diseño y las tareas. Podés intervenir en cualquier momento:
-
-```bash
-/sdd-explore "chequear si hay middleware de auth existente"
-/sdd-propose   # ajustar la propuesta si hace falta
-/sdd-design    # modificar el diseño antes de implementar
-```
-
-```bash
-# 3. Implementá y validá
-/sdd-apply                    # implementá las tareas
-/sdd-verify                   # validá contra las specs
-/sdd-archive                  # cerrá el cambio
-```
-
-Si algo falla, el Kernel te dice exactamente por qué:
-
-- **Artifacts faltantes o con hash inválido** → volvé a generar el artifact de la fase actual
-- **Diff fuera de allowed_files** → revisá el scope en `openspec/change-request.md`
-- **Salto de fase** → completá la fase anterior antes de avanzar
-
-```bash
-# 4. Consultá memoria en cualquier momento
-/memory-search "rate limiting"
+/sdd-new "descripción del cambio"
+/sdd-explore
+/sdd-propose
+/sdd-spec
+/sdd-design
+/sdd-tasks
+/sdd-apply
+/sdd-verify
+/sdd-archive
+/memory-search "query"
 /memory-stats
 /judgment-history
-/kernel-status                # estado actual del Kernel (fase, artifacts, checksums)
-```
-
-### Iterar sobre un cambio existente
-
-```bash
-/sdd-load <change-id>          # retomá un cambio anterior
-/sdd-apply                     # seguí con las tareas pendientes
-/sdd-verify                    # re-validá si tocaste specs
-/sdd-archive                   # cerrá la nueva iteración
-```
-
-### Activar Judgment Day
-
-Para revisiones adversariales explícitas:
-
-```bash
 juzgar esto
 ```
 
-El sistema busca juicios previos similares en memoria, ejecuta 2 jueces en paralelo y registra el resultado para futuras referencias.
+## Code Review
 
-
-### mem_save_prompt
-
-- Llamado por el hook `chat.message` en `tonymem.ts`
-- Captura prompts crudos con `type='prompt-capture'`
-- Excluido de búsquedas por defecto (bookkeeping)
-- Se puede filtrar explícitamente si necesitás revisar prompts
-
-Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero **se excluyen por defecto de `mem_search`** — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`.
-
-
-## TonyMem - Memoria Persistente
-```bash
-# Cada decisión/descubrimiento se guarda en SQLite
-mem_save(task="manejo retry HTTP", observation="usar exponential backoff")
-
-# Luego se recupera en nuevas conversaciones
-mem_search("retry HTTP") → encuentra la decisión guardada
-```
-Aprende de: Decisiones arquitectónicas, bugs resueltos, patrones de código
-
-## Judgment Memory - Lecciones de Revisiones
-```bash
-# Después de cada Judgment Day:
-jd_record(task="validar JWT", final="approve", lesson="siempre verificar signature expiration")
-# Futuras tareas similares recuerdan esta lección
-```
-Aprende de: Errores de review, mejores prácticas validadas
-
-## Code Indexer - Conocimiento del Codebase
-- Indexa incrementalmente (solo cambios)
-- Embeddings semánticos con bge-m3
-- Búsquedas como "cómo se maneja la autenticación" te encuentran código relevante
-
-Aprende de: Crecimiento del codebase, patrones emergentes
-
-## Hooks de OpenCode (tonymem.ts)
-```bash
-// Hook que captura automáticamente lo que haces
-"chat.message" → mem_save_prompt() // guarda prompts
-"task.execute.after" → guarda discoveries importantes
-```
-
-## Cómo funciona el aprendizaje en práctica:
-```bash
-Usuario: "Implementa login con refresh token"
-```
-
-1. `/sdd-new` → delega `sdd-explore` + `sdd-propose` a sub-agentes
-2. `mem_search()` → encuentra decisión previa sobre JWT
-3. `code_search()` → encuentra cómo funciona auth actual
-4. `jd_recall()` → recuerda lección sobre token expiration
-5. `/sdd-tasks` → genera plan de implementación
-6. `/sdd-apply` → implementa las tareas
-7. `/sdd-verify` → valida contra specs
-8. `/sdd-archive` → cierra el cambio, guarda `archive-report`
-9. `juzgar esto` → dos jueces review + lesson guardada en `jd_record`
-
-## Code Review automático
-`GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
-El repo ya incluye `.gga` (config) y el agente `gga-reviewer` en `opencode.json`. Solo falta instalar el hook:
-
-```bash
-gga install          # crea .git/hooks/pre-commit (local, no se commitea)
-gga config           # verificar configuración
-gga run              # revisar archivos staged
-gga run --pr-mode    # revisar todos los cambios del PR vs main
-gga run --no-cache   # ignorar cache y revisar todo
-```
-
-## Agradecimientos
-Algunos conceptos de SDD, orquestador, prompts, skills y comandos se basan en el repositorio `gentle-ai` de Alan Buscaglia (`The Gentleman`), a quien agradecemos por su contenido y aportes a la comunidad.
-
-Se incorporaron subsistemas propios como `Code Indexer` (RAG semántico), `TonyMem` (memoria en SQLite WAL), `Judgment Memory` (ledger y recall de juicios con Ollama y Qdrant) y `Tony Kernel` (orquestación determinista de fases SDD con gates de artefactos, scope guard y detección de tampering).
+GGA valida los cambios staged contra `AGENTS.md`. Es un requisito del entorno de desarrollo de Tony-AI, no una herramienta opcional del bootstrap.
