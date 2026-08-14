@@ -32,6 +32,11 @@ else
   exit 2
 fi
 
+# Normalize the working tree before the audit. This fixes CRLF -> LF
+# according to .gitattributes instead of hiding Git's warnings.
+echo "▶ Normalizing repository line endings..."
+git add --renormalize .
+
 bun run tools/validate-sdd-flow.ts
 EXIT_CODE=$?
 
