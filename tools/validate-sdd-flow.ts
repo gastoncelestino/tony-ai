@@ -31,9 +31,10 @@ function colorizeTestSummary(output: string): string {
   return output
     .split("\n")
     .map((line) => {
-      if (/^\d+ pass$/.test(line.trim())) return line.replace(/^(\d+ pass)/, `${GREEN}$1${RESET}`)
-      if (/^\d+ fail$/.test(line.trim())) return line.replace(/^(\d+ fail)/, `${RED}$1${RESET}`)
-      if (/^\d+ expect\(\) calls$/.test(line.trim())) return line.replace(/^(\d+ expect\(\) calls)/, `${YELLOW}$1${RESET}`)
+      const trimmed = line.trim()
+      if (/^\d+ pass$/.test(trimmed)) return line.replace(/^(\s*\d+ pass)/, `$1`).replace(/(\d+ pass)/, `${GREEN}$1${RESET}`)
+      if (/^\d+ fail$/.test(trimmed)) return line.replace(/^(\s*\d+ fail)/, `$1`).replace(/(\d+ fail)/, `${RED}$1${RESET}`)
+      if (/^\d+ expect\(\) calls$/.test(trimmed)) return line.replace(/(\d+ expect\(\) calls)/, `${YELLOW}$1${RESET}`)
       return line
     })
     .join("\n")
@@ -53,13 +54,15 @@ function exists(path: string): boolean {
 
 function run(command: string, args: string[], label: string): boolean {
   try {
-    const output = execFileSync(command, args, { cwd: ROOT, encoding: "utf8" })
+    const output = execFileSync(command, args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
     if (output) console.log(colorizeTestSummary(output))
     ok(label)
     return true
   } catch (error) {
-    const output = typeof error === "object" && error !== null && "stdout" in error ? (error as { stdout?: Buffer | string }).stdout : undefined
-    if (output) console.log(colorizeTestSummary(String(output)))
+    const stdout = typeof error === "object" && error !== null && "stdout" in error ? (error as { stdout?: Buffer | string }).stdout : undefined
+    const stderr = typeof error === "object" && error !== null && "stderr" in error ? (error as { stderr?: Buffer | string }).stderr : undefined
+    if (stdout) console.log(colorizeTestSummary(String(stdout)))
+    if (stderr) console.error(String(stderr))
     fail(`${label} (exit code indicates failure)`)
     return false
   }
@@ -241,7 +244,7 @@ function checkLegacyArchitecture(): void {
   try {
     const output = execFileSync(
       "git",
-      ["grep", "-n", "-I", "-E", "--", ":(exclude)tools/validate-sdd-flow.ts", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated"],
+      ["grep", "-n", "-I", "-E", "prompt-bundler|prompt_bundler|prompt-manifest|phase-manifest|prompts/generated", "--", ":(exclude)tools/validate-sdd-flow.ts"],
       { cwd: ROOT, encoding: "utf8" },
     )
     fail(`legacy references found:\n${output}`)
