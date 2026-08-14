@@ -21,6 +21,7 @@ Requires:
   - Ollama running locally with an embedding model pulled (default: bge-m3)
   - Qdrant running locally (default: http://localhost:6333) — e.g.
       docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
+  - tree-sitter and tree-sitter-language-pack for structural chunking
 """
 
 import argparse
@@ -34,38 +35,10 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-import importlib.util
 from typing import Optional
 from dataclasses import dataclass, field
 
-_HAS_TREESITTER = False
-_treesitter_parser = None
-
-def _try_load_treesitter():
-    """Lazy-load tree-sitter if available. Returns parser or None."""
-    global _HAS_TREESITTER, _treesitter_parser
-    if _HAS_TREESITTER:
-        return _treesitter_parser
-    try:
-        spec = importlib.util.find_spec("tree_sitter")
-        if spec is None:
-            return None
-        from tree_sitter import Parser
-        try:
-            from tree_sitter_languages import get_language
-            lang = get_language("python")
-        except ImportError:
-            try:
-                from tree_sitter import Language
-                lang = Language("python")
-            except Exception:
-                return None
-        _treesitter_parser = Parser()
-        _treesitter_parser.set_language(lang)
-        _HAS_TREESITTER = True
-        return _treesitter_parser
-    except Exception:
-        return None
+from tree_sitter_language_pack import get_parser
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -75,40 +48,28 @@ OLLAMA_URL = os.environ.get("TONY_OLLAMA_URL", "http://localhost:11434")
 EMBED_MODEL = os.environ.get("TONY_EMBED_MODEL", "bge-m3")
 QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
 
-# Fail-fast health probe: when Ollama is down, fail in ~3s with a clear
-# message instead of letting the real embedding call block an agent turn
-# for up to its 120s timeout. Re-probed at most once per TTL per URL.
 OLLAMA_HEALTH_TIMEOUT = float(os.environ.get("TONY_OLLAMA_HEALTH_TIMEOUT", "3"))
 OLLAMA_HEALTH_TTL = float(os.environ.get("TONY_OLLAMA_HEALTH_TTL", "5"))
 
-# Chunker selector: 'regex' (default, sin dependencias extras) o
-# 'tree-sitter' (opt-in, requiere `pip install tree-sitter tree-sitter-languages`).
-# Si tree-sitter no esta disponible, chunk_lines() cae transparentemente a regex.
-CHUNKER = os.environ.get("TONY_INDEX_CHUNKER", "regex").lower()
-if CHUNKER not in ("regex", "tree-sitter"):
-    sys.stderr.write(
-        f"[code-index] TONY_INDEX_CHUNKER={CHUNKER!r} desconocida; uso 'regex'.\n"
+# Tree-sitter is mandatory. The environment variable is retained as an
+# explicit contract, but regex is no longer a supported chunker.
+CHUNKER = os.environ.get("TONY_INDEX_CHUNKER", "tree-sitter").lower()
+if CHUNKER != "tree-sitter":
+    raise RuntimeError(
+        "TONY_INDEX_CHUNKER must be 'tree-sitter'; regex chunking is not supported"
     )
-    CHUNKER = "regex"
-
-_TS_FALLBACK_WARNED = False
 
 MAX_CHUNK_LINES = int(os.environ.get("TONY_INDEX_MAX_CHUNK_LINES", "260"))
 MIN_CHUNK_LINES = int(os.environ.get("TONY_INDEX_MIN_CHUNK_LINES", "8"))
 CHUNK_OVERLAP_LINES = int(os.environ.get("TONY_INDEX_CHUNK_OVERLAP", "30"))
 MAX_FILE_BYTES = int(os.environ.get("TONY_INDEX_MAX_FILE_BYTES", str(1_500_000)))
 
-# Directories never worth indexing regardless of language
 SKIP_DIRS = {
     ".git", ".hg", ".svn", "node_modules", "__pycache__", ".venv", "venv",
     "dist", "build", ".next", ".turbo", "target", ".idea", ".vscode",
     ".codeindex", ".tonymem", "vendor",
 }
 
-# Boundary regexes used to snap chunk splits to function/class/procedure
-# starts instead of blind line windows. Deliberately simple (no tree-sitter
-# dependency) — good enough to avoid cutting a function in half most of the
-# time; falls back to fixed windows for anything unrecognized.
 BOUNDARY_PATTERNS = {
     ".py": re.compile(r"^(def |class |async def )", re.M),
     ".ts": re.compile(r"^(export\s+)?(async\s+)?(function|class|interface|type)\s|^export const \w+\s*=", re.M),
@@ -151,23 +112,20 @@ class IndexStats:
     chunks_deleted: int = 0
     errors: list = field(default_factory=list)
 
-def _ts_warn_once() -> None:
-    """Stderr warning una sola vez por proceso cuando tree-sitter fue
-    pedido pero la libreria no esta instalada."""
-    global _TS_FALLBACK_WARNED
-    if _TS_FALLBACK_WARNED:
-        return
-    _TS_FALLBACK_WARNED = True
-    sys.stderr.write(
-        "[code-index] tree-sitter pedido pero no instalado; fallback a regex. "
-        "Instalalo con: pip install tree-sitter tree-sitter-languages\n"
-    )
 # ---------------------------------------------------------------------------
 # Chunking
 # ---------------------------------------------------------------------------
 
+TS_LANGUAGE_BY_EXT = {
+    ".py": "python", ".ts": "typescript", ".tsx": "tsx",
+    ".js": "javascript", ".jsx": "javascript", ".go": "go",
+    ".rs": "rust", ".java": "java", ".c": "c", ".cpp": "cpp",
+    ".h": "c", ".hpp": "cpp",
+}
+
+
 def _split_fixed(lines: list, ext: str) -> list:
-    """Fallback: fixed-size overlapping windows."""
+    """Fixed-size windows used only for file types without a tree-sitter grammar."""
     chunks = []
     i = 0
     n = len(lines)
@@ -183,96 +141,31 @@ def _split_fixed(lines: list, ext: str) -> list:
     return chunks
 
 
-def chunk_lines(lines: list, ext: str, chunker: Optional[str] = None) -> list:
-    """Lista de rangos (start_line, end_line) 0-indexados inclusivos.
-
-    chunker: 'tree-sitter' o 'regex'. None -> $TONY_INDEX_CHUNKER (default 'regex').
-    Tree-sitter es OPT-IN: si no esta instalado o chupa una excepcion,
-    cae transparentemente al chunker regex actual. Asi nunca degrada a
-    un comportamiento peor al de hoy.
-    """
-    n = len(lines)
-    if n == 0:
-        return []
-    mode = (chunker or CHUNKER).lower()
-    if mode == "tree-sitter":
-        parser = _try_load_treesitter()
-        if parser is not None:
-            try:
-                return _chunk_treesitter(lines, ext, parser)
-            except Exception as exc:  # noqa: BLE001
-                sys.stderr.write(
-                    f"[code-index] tree-sitter fallo ({exc}); fallback regex.\n"
-                )
-        else:
-            _ts_warn_once()
-    # ---- path regex original, sin tocar ----
-    pattern = BOUNDARY_PATTERNS.get(ext)
-    if not pattern:
-        return _split_fixed(lines, ext)
-
-    boundaries = [i for i, line in enumerate(lines) if pattern.match(line)]
-    if len(boundaries) < 1 or len(boundaries) > max(3, n // 3):
-        return _split_fixed(lines, ext)
-
-    ranges = []
-    for idx, start in enumerate(boundaries):
-        end = (boundaries[idx + 1] - 1) if idx + 1 < len(boundaries) else n - 1
-        ranges.append((start, end))
-    if boundaries[0] > 0:
-        ranges.insert(0, (0, boundaries[0] - 1))
-
-    merged = []
-    pending_start = None
-    for start, end in ranges:
-        if pending_start is not None:
-            start = pending_start
-            pending_start = None
-        length = end - start + 1
-        if length < MIN_CHUNK_LINES and (start, end) != ranges[-1]:
-            pending_start = start
-            continue
-        if length > MAX_CHUNK_LINES:
-            for sub_start, sub_end in _split_fixed(lines[start:end + 1], ext):
-                merged.append((start + sub_start, start + sub_end))
-        else:
-            merged.append((start, end))
-    if pending_start is not None:            
-        merged.append((pending_start, n - 1))
-    return merged
-
-
-
-def _chunk_treesitter(lines: list, ext: str, parser) -> list:
-    """Chunk using tree-sitter AST for precise function/class boundaries."""
-    lang_map = {
-        ".py": "python", ".ts": "typescript", ".tsx": "typescript",
-        ".js": "javascript", ".jsx": "javascript", ".go": "go",
-        ".rs": "rust", ".java": "java", ".c": "c", ".cpp": "cpp",
-        ".h": "c", ".hpp": "cpp",
-    }
-    lang_name = lang_map.get(ext)
+def _chunk_treesitter(lines: list, ext: str) -> list:
+    """Chunk using the modern tree-sitter-language-pack parser API."""
+    lang_name = TS_LANGUAGE_BY_EXT.get(ext)
     if not lang_name:
         return _split_fixed(lines, ext)
-    try:
-        from tree_sitter_languages import get_language
-        lang = get_language(lang_name)
-        parser.set_language(lang)
-    except ImportError:
-        return _split_fixed(lines, ext)
+
+    parser = get_parser(lang_name)
     content = "\n".join(lines)
-    tree = parser.parse(bytes(content, "utf-8"))
+    tree = parser.parse(content.encode("utf-8"))
     boundaries = []
+
     def walk(node):
-        if node.type in ("function_definition", "method_definition", "class_definition",
-                         "function_declarator", "method_declarator", "class_declaration",
-                         "function_declaration", "function"):
+        if node.type in (
+            "function_definition", "method_definition", "class_definition",
+            "function_declarator", "method_declarator", "class_declaration",
+            "function_declaration", "function",
+        ):
             boundaries.append((node.start_point[0], node.end_point[0]))
         for child in node.children:
             walk(child)
+
     walk(tree.root_node)
     if not boundaries:
         return _split_fixed(lines, ext)
+
     boundaries.sort()
     ranges = []
     for start, end in boundaries:
@@ -282,6 +175,7 @@ def _chunk_treesitter(lines: list, ext: str, parser) -> list:
             ranges.append((start, end))
     if ranges and ranges[0][0] > 0:
         ranges.insert(0, (0, ranges[0][0] - 1))
+
     merged = []
     pending_start = None
     for start, end in ranges:
@@ -300,6 +194,17 @@ def _chunk_treesitter(lines: list, ext: str, parser) -> list:
     if pending_start is not None:
         merged.append((pending_start, len(lines) - 1))
     return merged if merged else _split_fixed(lines, ext)
+
+
+def chunk_lines(lines: list, ext: str, chunker: Optional[str] = None) -> list:
+    """Return inclusive 0-indexed ranges using mandatory tree-sitter chunking."""
+    n = len(lines)
+    if n == 0:
+        return []
+    mode = (chunker or CHUNKER).lower()
+    if mode != "tree-sitter":
+        raise ValueError("Only tree-sitter chunking is supported")
+    return _chunk_treesitter(lines, ext)
 
 
 def chunk_file(path: str, content: str, chunker: Optional[str] = None) -> list:
@@ -375,17 +280,10 @@ def manifest_connect(root: str) -> sqlite3.Connection:
 # Ollama embeddings client (stdlib only)
 # ---------------------------------------------------------------------------
 
-_ollama_health_at: dict = {}  # base_url -> monotonic time of last good probe
+_ollama_health_at: dict = {}
 
 
 def _ensure_ollama_alive(base_url: str = OLLAMA_URL) -> None:
-    """Fail fast when Ollama is down: probe /api/version with a short
-    timeout before the real (long) embedding call. Any HTTP response — even
-    a 404 — proves a server is listening, so the port won't hang and the
-    embedding call itself reports the real problem. Only re-probed every
-    OLLAMA_HEALTH_TTL seconds per URL, so steady-state indexing pays one
-    cheap GET per interval, not one per batch.
-    """
     now = time.monotonic()
     if now - _ollama_health_at.get(base_url, 0.0) < OLLAMA_HEALTH_TTL:
         return
@@ -395,10 +293,8 @@ def _ensure_ollama_alive(base_url: str = OLLAMA_URL) -> None:
             resp.read()
         _ollama_health_at[base_url] = now
     except urllib.error.HTTPError:
-        # Any HTTP response means something is listening; let the embedding
-        # call surface the concrete failure instead.
         _ollama_health_at[base_url] = now
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise RuntimeError(
             f"Could not reach Ollama at {base_url} (health check): {exc}. "
             f"Is `ollama serve` running and has `ollama pull {EMBED_MODEL}` been run?"
@@ -406,11 +302,6 @@ def _ensure_ollama_alive(base_url: str = OLLAMA_URL) -> None:
 
 
 def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_URL) -> list:
-    """Embed a batch of texts via Ollama's /api/embed. Returns a list of
-    float vectors, same order as input. Raises RuntimeError with a clear
-    message if Ollama isn't reachable or the model isn't pulled — this is
-    intentionally loud rather than silently returning zero vectors.
-    """
     if not texts:
         return []
     _ensure_ollama_alive(base_url)
@@ -469,7 +360,7 @@ def _qdrant_request(method: str, path: str, body: dict = None, base_url: str = Q
 def qdrant_ensure_collection(collection: str, dim: int, base_url: str = QDRANT_URL) -> None:
     try:
         _qdrant_request("GET", f"/collections/{collection}", base_url=base_url)
-        return  # already exists
+        return
     except RuntimeError:
         pass
     _qdrant_request(
@@ -505,9 +396,7 @@ def qdrant_delete(collection: str, ids: list, base_url: str = QDRANT_URL) -> Non
 def qdrant_search(collection: str, vector: list, limit: int = 8, path_prefix: str = None, base_url: str = QDRANT_URL) -> list:
     body = {"vector": vector, "limit": limit, "with_payload": True}
     if path_prefix:
-        body["filter"] = {
-            "must": [{"key": "path", "match": {"text": path_prefix}}]
-        }
+        body["filter"] = {"must": [{"key": "path", "match": {"text": path_prefix}}]}
     result = _qdrant_request("POST", f"/collections/{collection}/points/search", body, base_url=base_url)
     return result.get("result", [])
 
@@ -526,16 +415,11 @@ def index_repo(root: str, project: str, embed_batch_size: int = 32,
                base_url_ollama: str = OLLAMA_URL,
                embed_model: str = EMBED_MODEL,
                chunker: Optional[str] = None) -> IndexStats:
-    """Full incremental index: unchanged files (by content hash) are skipped,
-    changed files have their old points deleted and new ones upserted, new
-    files are added. Safe to run repeatedly (e.g. as a cron/pre-commit hook).
-    """
     stats = IndexStats()
     manifest = manifest_connect(root)
     dim = embedding_dim(model=embed_model, base_url=base_url_ollama)
     coll = collection_name(project)
     qdrant_ensure_collection(coll, dim, base_url=base_url_qdrant)
-
     seen_paths = set()
 
     for full_path in iter_source_files(root):
@@ -592,7 +476,6 @@ def index_repo(root: str, project: str, embed_batch_size: int = 32,
         qdrant_upsert(coll, points, base_url=base_url_qdrant)
         stats.chunks_upserted += len(points)
         stats.files_indexed += 1
-
         manifest.execute(
             "INSERT INTO files (path, content_hash, point_ids, indexed_at) VALUES (?,?,?,datetime('now')) "
             "ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash, point_ids=excluded.point_ids, indexed_at=excluded.indexed_at",
@@ -600,7 +483,6 @@ def index_repo(root: str, project: str, embed_batch_size: int = 32,
         )
         manifest.commit()
 
-    # Files that were deleted from disk since last index: drop their points too
     all_known = manifest.execute("SELECT path, point_ids FROM files").fetchall()
     for r in all_known:
         if r["path"] not in seen_paths:
@@ -619,17 +501,14 @@ def search_code(query: str, project: str, limit: int = 8, path_prefix: str = Non
     coll = collection_name(project)
     vec = embed_texts([query], model=embed_model, base_url=base_url_ollama)[0]
     hits = qdrant_search(coll, vec, limit=limit, path_prefix=path_prefix, base_url=base_url_qdrant)
-    return [
-        {
-            "score": h["score"],
-            "path": h["payload"]["path"],
-            "start_line": h["payload"]["start_line"],
-            "end_line": h["payload"]["end_line"],
-            "lang": h["payload"]["lang"],
-            "text": h["payload"]["text"],
-        }
-        for h in hits
-    ]
+    return [{
+        "score": h["score"],
+        "path": h["payload"]["path"],
+        "start_line": h["payload"]["start_line"],
+        "end_line": h["payload"]["end_line"],
+        "lang": h["payload"]["lang"],
+        "text": h["payload"]["text"],
+    } for h in hits]
 
 
 def index_status(root: str, project: str, base_url_qdrant: str = QDRANT_URL) -> dict:
@@ -667,7 +546,7 @@ def _cli() -> None:
     p_index.add_argument("--project", required=True)
     p_index.add_argument(
         "--chunker", default=None, choices=["regex", "tree-sitter"],
-        help="Chunker a usar; default $TONY_INDEX_CHUNKER (o 'regex').",
+        help="Chunker a usar; default $TONY_INDEX_CHUNKER (tree-sitter).",
     )
 
     p_search = sub.add_parser("search", help="Semantic search over an indexed repo")
@@ -683,9 +562,7 @@ def _cli() -> None:
     args = parser.parse_args()
 
     if args.cmd == "index":
-        stats = index_repo(
-            os.path.abspath(args.path), args.project, chunker=args.chunker,
-        )
+        stats = index_repo(os.path.abspath(args.path), args.project, chunker=args.chunker)
         print(json.dumps(stats.__dict__, indent=2, ensure_ascii=False))
     elif args.cmd == "search":
         results = search_code(args.query, args.project, limit=args.limit, path_prefix=args.path_prefix)
