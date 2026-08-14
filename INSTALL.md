@@ -1,22 +1,25 @@
-# Tony-AI - Instalación
+# Tony-AI — Instalación
 
-## 0. Requisitos obligatorios
+## 1. Requisitos
 
-Tony-AI requiere todos estos componentes para una instalación completa:
+Tony-AI tiene dos niveles de ejecución:
 
-- **Python 3.10+** — servidores MCP y tooling Python.
-- **Bun** — scripts TypeScript y plugins.
-- **OpenCode CLI** — orquestador SDD.
-- **Ollama** — ejecución de los modelos locales.
-- **Docker + Docker Compose** — servicios de soporte, especialmente Qdrant.
-- **GGA (Gentleman Guardian Angel)** — code review obligatorio antes de commit.
-- **tree-sitter + tree-sitter-language-pack** — chunking estructural obligatorio del Code Indexer.
+- **Suite local de desarrollo/tests:** Python 3.10+, Bun y las dependencias de `requirements-dev.txt`.
+- **Runtime completo:** además requiere OpenCode CLI, Ollama, Docker + Compose, Qdrant y GGA.
 
-El bootstrap oficial no admite dependencias alternativas. `setup.sh` falla si cualquiera de estos requisitos no está disponible.
+| Requisito | Uso | Obligatorio para |
+|---|---|---|
+| Python 3.10+ | MCP servers, Kernel y tooling | Desarrollo y runtime |
+| Bun | Plugins y tests TypeScript | Desarrollo y runtime OpenCode |
+| OpenCode CLI | Orquestación de agentes/SDD | Runtime |
+| Ollama | Modelos locales y embeddings | Runtime |
+| Docker + Compose | Qdrant y, opcionalmente, Ollama | Bootstrap/runtime |
+| GGA | Revisión de código antes de commit | Bootstrap/runtime |
+| tree-sitter + `tree-sitter-language-pack` | Chunking estructural del Code Indexer | Desarrollo/runtime |
 
-Qdrant es obligatorio porque Code Indexer y Judgment Memory lo utilizan.
+El bootstrap oficial valida estos requisitos y falla si no puede completar alguno de los checks críticos. Aunque Ollama puede ejecutarse fuera de Docker, `setup.sh` requiere que el daemon de Docker esté disponible porque también administra los servicios de soporte.
 
-## 1. Clonar
+## 2. Clonar el repositorio
 
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
@@ -24,107 +27,28 @@ cd tony-ai
 git checkout dev
 ```
 
-## 2. Bootstrap automático
+## 3. Bootstrap recomendado
+
+Ejecutar desde la raíz del repositorio:
 
 ```bash
 ./scripts/setup.sh
 ```
 
-El bootstrap:
+El bootstrap es idempotente y realiza, en este orden general:
 
-1. valida Python 3.10+, Bun, OpenCode CLI, Docker, Ollama y GGA;
-2. valida e instala las dependencias Python de desarrollo, incluyendo tree-sitter y tree-sitter-language-pack;
-3. comprueba Ollama y Qdrant;
-4. usa Docker para levantar únicamente los servicios que falten;
-5. descarga `qwen3-coder:30b`, `carstenuhlig/omnicoder-2-9b:q4_k_m`, `deepseek-r1:14b`, `ornith:9b`, `bge-m3` y `nomic-embed-text`;
-6. configura `.env.example` con `TONY_INDEX_CHUNKER=tree-sitter`;
-7. regenera `opencode.json` con rutas portables y el chunker obligatorio.
+1. verifica Python 3.10+, Bun, OpenCode CLI, Docker y Ollama;
+2. verifica GGA y, si no está instalado, intenta clonarlo e instalarlo en un directorio temporal;
+3. comprueba por separado la disponibilidad de Ollama y Qdrant;
+4. inicia mediante Docker solamente el servicio de soporte que falte;
+5. descarga los modelos locales requeridos;
+6. instala `requirements-dev.txt` y verifica `tree_sitter` y `tree_sitter_language_pack`;
+7. regenera `opencode.json` con `TONY_REPO_ROOT` y fuerza `TONY_INDEX_CHUNKER=tree-sitter`;
+8. escribe `.env.example` con la configuración detectada.
 
-Podés ejecutar el bootstrap varias veces; `ollama pull` y la configuración son idempotentes.
+El script también crea `opencode.json.bak` antes de modificar la configuración. Ese archivo es generado y no debe versionarse.
 
-## 3. Configuración manual
-
-```bash
-cp .env.example .env
-```
-
-Ajustá `TONY_REPO_ROOT` a la ruta absoluta del clone:
-
-```env
-TONY_REPO_ROOT=/home/tu-usuario/proyectos/tony-ai
-TONY_OLLAMA_URL=http://localhost:11434
-TONY_QDRANT_URL=http://localhost:6333
-JUDGMENT_EMBED_MODEL=nomic-embed-text
-CODE_EMBED_MODEL=bge-m3
-TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-2-9b:q4_k_m
-TONY_INDEX_CHUNKER=tree-sitter
-```
-
-## 4. Servicios
-
-Ollama puede estar instalado de forma nativa o ejecutarse mediante Docker, pero debe responder en `TONY_OLLAMA_URL`. Qdrant se ejecuta normalmente mediante Docker.
-
-Si Ollama ya corre de forma nativa, no levantes otro Ollama sobre el puerto 11434:
-
-```bash
-cd docker
-docker compose up -d qdrant
-```
-
-Si ninguno está corriendo:
-
-```bash
-cd docker
-docker compose up -d ollama qdrant
-```
-
-Verificación:
-
-```bash
-curl http://localhost:11434/api/tags
-curl http://localhost:6333/readyz
-docker compose ps
-```
-
-## 5. GGA
-
-GGA es obligatorio. Debe existir como `gga` en `PATH` antes de considerar terminado el bootstrap.
-
-Una instalación típica desde el repositorio de GGA deja el ejecutable en `~/.local/bin/gga` y sus librerías en `~/.local/share/gga/lib`. Asegurate de que `~/.local/bin` esté en `PATH` y verificá:
-
-```bash
-gga --version
-```
-
-## 6. tree-sitter
-
-Tree-sitter es obligatorio porque Code Indexer usa chunking estructural. Las dependencias están en `requirements-dev.txt`:
-
-```bash
-python3 -m pip install -r requirements-dev.txt
-python3 -c 'import tree_sitter, tree_sitter_language_pack; print("tree-sitter OK")'
-```
-
-No configures `TONY_INDEX_CHUNKER=regex` en una instalación soportada de Tony-AI.
-
-## 7. Verificación
-
-```bash
-make health
-make test
-make validate-config
-```
-
-También podés ejecutar la suite Python directamente:
-
-```bash
-pytest tests
-python3 tools/run-python-tests.py tests
-```
-
-## 8. Modelos de Ollama
-
-El bootstrap instala estos modelos:
+### Modelos descargados
 
 ```text
 qwen3-coder:30b
@@ -135,31 +59,194 @@ bge-m3
 nomic-embed-text
 ```
 
-El modelo de implementación canónico es `carstenuhlig/omnicoder-2-9b:q4_k_m`.
+El modelo canónico de implementación es `carstenuhlig/omnicoder-2-9b:q4_k_m`.
 
-## 9. OpenCode
+## 4. Configuración del entorno
 
-Los MCP servers se ejecutan desde `opencode.json` usando `TONY_REPO_ROOT`:
+El bootstrap genera `.env.example`. Si se necesita una configuración persistente para el shell local:
+
+```bash
+cp .env.example .env
+```
+
+Los endpoints principales son:
+
+```env
+TONY_REPO_ROOT=/ruta/absoluta/al/clone
+TONY_OLLAMA_URL=http://localhost:11434
+TONY_QDRANT_URL=http://localhost:6333
+TONY_INDEX_CHUNKER=tree-sitter
+```
+
+### Persistencia local
+
+Los valores por defecto de los servidores MCP son archivos locales dentro del repositorio:
+
+```text
+local-memory/memory.db
+judgment-memory/judgment-memory.db
+code-index/.codeindex/
+.tony-kernel/kernel-state.json
+```
+
+Pueden cambiarse mediante las variables que consumen los componentes correspondientes, en particular `LOCAL_MEMORY_DB` y `JUDGMENT_MEMORY_DB` para las bases SQLite.
+
+## 5. Ollama y Qdrant
+
+El bootstrap detecta cada servicio de forma independiente.
+
+### Ollama nativo
+
+Si Ollama ya está ejecutándose en `http://localhost:11434`, Tony-AI reutiliza esa instancia y no levanta otro contenedor de Ollama.
+
+Verificación:
+
+```bash
+curl http://localhost:11434/api/tags
+```
+
+Si es necesario iniciarlo manualmente:
+
+```bash
+ollama serve
+```
+
+### Qdrant mediante Docker
+
+```bash
+cd docker
+docker compose up -d qdrant
+```
+
+Verificación:
+
+```bash
+curl http://localhost:6333/readyz
+docker compose ps
+```
+
+### Ambos servicios mediante Docker
+
+Si ninguno está disponible:
+
+```bash
+cd docker
+docker compose up -d ollama qdrant
+```
+
+No ejecute una segunda instancia de Ollama sobre el puerto `11434` si ya existe una instancia nativa activa.
+
+## 6. GGA
+
+GGA es parte del entorno requerido por el proyecto. Verifique:
+
+```bash
+gga --version
+```
+
+`setup.sh` intenta instalarlo automáticamente si `gga` no está en `PATH`. Para instalaciones manuales, asegúrese de que el ejecutable quede disponible en `PATH`, normalmente mediante `~/.local/bin`.
+
+## 7. tree-sitter
+
+El Code Indexer usa **tree-sitter obligatoriamente** para chunking estructural. No existe un modo soportado basado en regex.
+
+La dependencia se instala desde:
+
+```bash
+python3 -m pip install -r requirements-dev.txt
+```
+
+Verificación:
+
+```bash
+python3 -c 'import tree_sitter, tree_sitter_language_pack; print("tree-sitter OK")'
+```
+
+Si aparece un error de importación, corrija la instalación de Python antes de continuar. No cambie `TONY_INDEX_CHUNKER` a `regex` para ocultar el problema.
+
+## 8. OpenCode y MCP
+
+`opencode.json` registra los servidores MCP y los agentes del proyecto. El bootstrap reemplaza las rutas locales frágiles por referencias basadas en `TONY_REPO_ROOT`.
+
+Verifique la configuración:
+
+```bash
+bun run tools/validate-config.ts
+```
+
+Y, si OpenCode está instalado:
 
 ```bash
 opencode mcp list
 ```
 
-El Code Indexer debe mostrar `TONY_INDEX_CHUNKER=tree-sitter`.
+El health check también verifica que los cuatro servidores MCP puedan responder a `initialize`:
 
-## 10. Tests principales
+- `local-memory/server.py`
+- `code-index/server.py`
+- `judgment-memory/server.py`
+- `kernel/mcp_server.py`
 
-| Componente | Test |
-|---|---|
-| Bootstrap y requisitos | `tests/test_setup.py` |
-| Code Indexer | `tests/test_code_index_core.py` |
-| Judgment Memory | `tests/test_judgment_memory_ledger.py` |
-| Tony Kernel | `tests/test_kernel_state_machine.py` |
-| Kernel integration | `tests/test_kernel_integration.py` |
-| SDD E2E | `tests/test_sdd_flow_e2e.py` |
-| TypeScript | `make test-ts` |
+## 9. Verificación después de instalar
 
-`tests/test_setup.py` verifica además que el modelo OmniCoder 2 y tree-sitter sean los valores canónicos y que no reaparezcan referencias legacy.
+### Suite local
+
+No requiere Ollama, Qdrant ni Docker:
+
+```bash
+make test
+```
+
+También puede ejecutarse la suite Python directamente:
+
+```bash
+python3 -m pytest tests
+python3 tools/run-python-tests.py tests
+```
+
+El segundo comando es el runner Python standalone y no requiere Pytest.
+
+### Health check completo
+
+Requiere la infraestructura externa disponible:
+
+```bash
+make health
+```
+
+`health.sh` verifica configuración de OpenCode, los cuatro MCP servers, Ollama, Qdrant, almacenamiento local y un roundtrip real de embeddings/Qdrant.
+
+### Smoke test de Qdrant
+
+```bash
+make verify-qdrant
+```
+
+### Validación de configuración
+
+```bash
+make validate-config
+```
+
+## 10. Comandos de desarrollo habituales
+
+```bash
+make test
+make test-python
+make test-ts
+make test-kernel
+make coverage
+make health
+```
+
+Para levantar o detener los servicios Docker:
+
+```bash
+make docker-up
+make docker-down
+```
+
+`make docker-up` levanta el stack definido en `docker/docker-compose.yml` y muestra los logs del proceso de pull de Ollama.
 
 ## 11. Troubleshooting
 
@@ -179,7 +266,7 @@ command -v opencode
 command -v gga
 ```
 
-Los tres deben devolver una ruta.
+Cada comando debe devolver una ruta válida.
 
 ### Docker no responde
 
@@ -196,7 +283,7 @@ El daemon debe estar activo.
 curl http://localhost:11434/api/tags
 ```
 
-Si usás Ollama nativo:
+Si utiliza Ollama nativo:
 
 ```bash
 ollama serve
@@ -209,11 +296,38 @@ curl http://localhost:6333/readyz
 cd docker && docker compose up -d qdrant
 ```
 
-### tree-sitter no se puede importar
+### `tree_sitter` no se puede importar
 
 ```bash
 python3 -m pip install -r requirements-dev.txt
 python3 -c 'import tree_sitter, tree_sitter_language_pack'
 ```
 
-No cambies el chunker a regex para ocultar el problema: tree-sitter es un requisito obligatorio.
+### OpenCode informa rutas inválidas
+
+Ejecute nuevamente:
+
+```bash
+./scripts/setup.sh
+bun run tools/validate-config.ts
+```
+
+El bootstrap regenera las rutas MCP utilizando `TONY_REPO_ROOT`.
+
+### El health check falla aunque `make test` pasa
+
+Esto es posible y no implica necesariamente un fallo del código. `make test` valida la suite local sin servicios externos; `make health` valida además Ollama, Qdrant, MCP y embeddings reales. Revise primero:
+
+```bash
+curl http://localhost:11434/api/tags
+curl http://localhost:6333/readyz
+docker compose -f docker/docker-compose.yml ps
+```
+
+## 12. Referencias
+
+- `README.md` — introducción, quickstart y uso.
+- `ARCHITECTURE.md` — arquitectura, memoria, SDD y Tony Kernel.
+- `TESTING.md` — estrategia completa de pruebas y CI.
+- `scripts/setup.sh` — bootstrap reproducible del entorno.
+- `scripts/health.sh` — verificación end-to-end.
