@@ -60,6 +60,7 @@ jobs:
           path: |
             coverage.xml
             coverage-bun/lcov.info
+            .coverage
           if-no-files-found: error
 
   docker-build:
