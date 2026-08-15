@@ -32,12 +32,13 @@ test-ts: check-test-deps check-test-discovery
 
 check-coverage-deps: check-test-deps
 	@python3 -c 'import coverage; print("coverage", coverage.__version__)'
+	@python3 -c 'import pytest_cov; print("pytest-cov", pytest_cov.__version__)'
 
 coverage: check-coverage-deps coverage-python coverage-ts
 
-# Coverage Python cubre los módulos principales del runtime.
+# Coverage Python mide branches y conserva contexto por test para auditorías de redundancia.
 coverage-python: check-coverage-deps
-	@coverage run --source=kernel,code-index,judgment-memory,local-memory -m pytest tests -q || coverage run --source=kernel,code-index,judgment-memory,local-memory tools/run-python-tests.py tests
+	@python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing --cov-report=xml:coverage.xml || (rm -f .coverage && coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tools/run-python-tests.py tests)
 	@coverage report -m --fail-under=40
 	@coverage xml -o coverage.xml
 
