@@ -9,6 +9,8 @@ test: check-test-deps check-test-discovery test-python test-ts validate-config
 # test-all agrega las pruebas específicas del kernel y del flujo SDD end-to-end.
 test-all: test test-kernel
 
+auto_placeholder:
+
 check-test-deps:
 	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
 	@command -v bun >/dev/null 2>&1 || (echo "ERROR: falta Bun."; exit 1)
@@ -41,6 +43,7 @@ coverage-python: check-coverage-deps
 	@python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing --cov-report=xml:coverage.xml || (rm -f .coverage && coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tools/run-python-tests.py tests)
 	@coverage report -m --fail-under=40
 	@coverage xml -o coverage.xml
+	@coverage json --show-contexts -o coverage-contexts.json
 
 # Coverage TypeScript usa el reporte LCOV de Bun.
 coverage-ts: check-test-deps check-test-discovery
@@ -74,7 +77,7 @@ docker-down:
 
 # Limpieza de bases locales y artefactos de coverage.
 clean:
-	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db coverage.xml
+	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db coverage.xml coverage-contexts.json
 	@rm -rf coverage-bun
 
 # Valida la configuración de OpenCode/proyecto.
