@@ -9,8 +9,6 @@ test: check-test-deps check-test-discovery test-python test-ts validate-config
 # test-all agrega las pruebas específicas del kernel y del flujo SDD end-to-end.
 test-all: test test-kernel
 
-auto_placeholder:
-
 check-test-deps:
 	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
 	@command -v bun >/dev/null 2>&1 || (echo "ERROR: falta Bun."; exit 1)
