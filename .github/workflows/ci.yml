@@ -60,8 +60,8 @@ jobs:
           include-hidden-files: true
           path: |
             coverage.xml
+            coverage-contexts.json
             coverage-bun/lcov.info
-            .coverage
           if-no-files-found: error
 
   docker-build:
