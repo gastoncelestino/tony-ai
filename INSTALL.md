@@ -326,8 +326,8 @@ docker compose -f docker/docker-compose.yml ps
 
 ## 12. Referencias
 
-- `README.md` — introducción, quickstart y uso.
-- `ARCHITECTURE.md` — arquitectura, memoria, SDD y Tony Kernel.
-- `TESTING.md` — estrategia completa de pruebas y CI.
+- [README.md](README.md) — introducción, quickstart y uso.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — arquitectura, memoria, SDD y Tony Kernel.
+- [TESTING.md](TESTING.md) — estrategia completa de pruebas y CI.
 - `scripts/setup.sh` — bootstrap reproducible del entorno.
 - `scripts/health.sh` — verificación end-to-end.

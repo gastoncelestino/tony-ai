@@ -1,5 +1,0 @@
-# Deprecated: tree-sitter is now mandatory for Tony-AI.
-# Kept temporarily as a compatibility pointer for existing installation scripts.
-# Use requirements-dev.txt instead.
-
--r requirements-dev.txt

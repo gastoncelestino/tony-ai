@@ -65,7 +65,7 @@ Este patrón permite un acceso directo al archivo SQLite en modo **WAL**, que es
 * El agente puede hablar en español rioplatense, pero un README.md, código, identificadores, mensajes de error o comentarios técnicos siguen las convenciones del proyecto.
 
 ## Skills
-* AGENTS.md también obliga al agente a verificar si existe una skill aplicable antes de responder o ejecutar una tarea y cargarla cuando corresponda.
+* `AGENTS.md` también obliga al agente a verificar si existe una skill aplicable antes de responder o ejecutar una tarea y cargarla cuando corresponda.
 
 ## TESTING.md
 Es la guía oficial de estrategia y ejecución de pruebas de Tony-AI.
