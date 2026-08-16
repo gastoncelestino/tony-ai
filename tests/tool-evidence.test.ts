@@ -14,13 +14,14 @@ const observation = (
   ...overrides,
 })
 
-test("maps a successful task-linked observation to evidence", () => {
+test("maps a successful task-linked observation to Kernel evidence", () => {
   const evidence = observationToEvidence(observation())
 
   expect(evidence?.task_id).toBe("task-1")
-  expect(evidence?.tool).toBe("bash")
-  expect(evidence?.success).toBe(true)
-  expect(evidence?.claim).toContain("completed successfully")
+  expect(evidence?.evidence.type).toBe("command")
+  expect(evidence?.evidence.exit_code).toBe(0)
+  expect(evidence?.evidence.claim).toContain("completed successfully")
+  expect(evidence?.evidence.metadata.tool).toBe("bash")
 })
 
 test("does not create evidence without an explicit task link", () => {
@@ -39,6 +40,6 @@ test("preserves failure evidence when task identity is explicit", () => {
   }))
 
   expect(evidence?.task_id).toBe("task-1")
-  expect(evidence?.success).toBe(false)
-  expect(evidence?.metadata.error).toBe("command failed")
+  expect(evidence?.evidence.exit_code).toBe(1)
+  expect(evidence?.evidence.metadata.error).toBe("command failed")
 })
