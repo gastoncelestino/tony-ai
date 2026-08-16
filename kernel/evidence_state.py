@@ -50,12 +50,13 @@ def assess_evidence(
     evidence_refs: Sequence[str] = (),
     minimum_valid: int = 1,
     minimum_confidence: float = 0.75,
+    confidence: Optional[float] = None,
 ) -> EvidenceAssessment:
     """Assess evidence without performing retrieval.
 
-    This function deliberately treats ``NO_EVIDENCE`` differently from weak
-    or conflicting evidence. Retrieval policy can therefore be layered on top
-    without changing the underlying evidence contract.
+    ``confidence`` can be supplied by an upstream retriever/judge. When it is
+    absent, this layer derives a conservative execution-outcome confidence.
+    ``NO_EVIDENCE`` remains distinct from ``LOW_CONFIDENCE``.
     """
     refs = tuple(evidence_refs)
     if not evidence:
@@ -83,18 +84,19 @@ def assess_evidence(
             reason="Valid evidence contains contradictory execution outcomes",
         )
 
-    confidence = min(1.0, successful / max(1, len(valid)))
-    if confidence < minimum_confidence:
+    derived_confidence = successful / max(1, len(valid))
+    effective_confidence = derived_confidence if confidence is None else max(0.0, min(1.0, confidence))
+    if effective_confidence < minimum_confidence:
         return EvidenceAssessment(
             state=EvidenceState.LOW_CONFIDENCE,
             evidence_refs=refs,
-            confidence=confidence,
+            confidence=effective_confidence,
             reason="Evidence is valid but below the confidence threshold",
         )
 
     return EvidenceAssessment(
         state=EvidenceState.SUFFICIENT,
         evidence_refs=refs,
-        confidence=confidence,
+        confidence=effective_confidence,
         reason="Evidence meets the configured validity and confidence thresholds",
     )
