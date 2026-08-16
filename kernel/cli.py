@@ -34,6 +34,7 @@ if getattr(sys, "pycache_prefix", None) is None:
 from .persistence import load_orchestrator, update_orchestrator, reset_state
 from .artifact_store import disk_artifact_store, disk_artifact_hasher
 from .schemas import ArtifactRef, Evidence, EvidenceType
+from .task_graph_persistence import mutate_with_task_graph
 
 
 def _build_store():
@@ -51,7 +52,6 @@ def _load():
 
 
 def _result_to_dict(r) -> dict:
-    """Normalize an OrchestrationResult into the JSON shape the plugin reads."""
     decision = r.decision.value
     return {
         "decision": decision,
@@ -96,6 +96,7 @@ def _parse_evidence(raw: list) -> list:
                 stderr=ev.get("stderr"),
                 file_path=ev.get("file_path"),
                 file_hash=ev.get("file_hash"),
+                metadata=ev.get("metadata", {}),
             ))
         elif isinstance(ev, Evidence):
             evidence.append(ev)
@@ -219,7 +220,10 @@ def _main(argv: list) -> None:
             print(json.dumps({"error": "evidence must be a JSON array"}), file=sys.stderr)
             sys.exit(1)
         result = update_orchestrator(
-            lambda orch: orch.complete_task(task_id, _parse_evidence(raw)),
+            lambda orch: mutate_with_task_graph(
+                orch,
+                lambda graph_orch: graph_orch.complete_task(task_id, _parse_evidence(raw)),
+            ),
             artifact_store=_build_store(),
             artifact_hasher=_build_hasher(),
         )
