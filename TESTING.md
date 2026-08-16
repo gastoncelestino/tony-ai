@@ -27,26 +27,6 @@
         └──────────────────────────────┘
 ```
 
-## 0. Quick Start
-
-**Solo necesitas verificar que tu cambio no rompió nada:**
-
-```bash
-make test
-```
-Ejecuta la suite local estándar (Python + TypeScript + validación de config) sin Ollama, Qdrant ni Docker.
-
-**Cambios críticos (Kernel, MCP, config, infraestructura):**
-
-```bash
-make test-all
-make health
-```
-
-Eso es el 95% de lo que necesitas.
-
----
-
 ## 1. Qué necesito
 
 ### Requisitos mínimos
