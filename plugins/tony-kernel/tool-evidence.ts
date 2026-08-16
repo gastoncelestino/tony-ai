@@ -9,13 +9,19 @@ import type { ToolExecutionObservation } from "./tool-observation"
 
 export interface ToolExecutionEvidence {
   task_id: string
-  tool: string
-  claim: string
-  success: boolean
-  metadata: {
-    arguments: Record<string, unknown>
-    result: unknown
-    error: string | null
+  evidence: {
+    type: "command"
+    claim: string
+    command: string
+    exit_code: 0 | 1
+    stdout: string | null
+    stderr: string | null
+    metadata: {
+      tool: string
+      arguments: Record<string, unknown>
+      result: unknown
+      error: string | null
+    }
   }
 }
 
@@ -27,15 +33,21 @@ export function observationToEvidence(
 
   return {
     task_id: observation.task_id,
-    tool: observation.tool,
-    claim: observation.success
-      ? `Tool ${observation.tool} completed successfully`
-      : `Tool ${observation.tool} failed`,
-    success: observation.success,
-    metadata: {
-      arguments: { ...observation.arguments },
-      result: observation.result,
-      error: observation.error,
+    evidence: {
+      type: "command",
+      claim: observation.success
+        ? `Tool ${observation.tool} completed successfully`
+        : `Tool ${observation.tool} failed`,
+      command: observation.tool,
+      exit_code: observation.success ? 0 : 1,
+      stdout: null,
+      stderr: observation.error,
+      metadata: {
+        tool: observation.tool,
+        arguments: { ...observation.arguments },
+        result: observation.result,
+        error: observation.error,
+      },
     },
   }
 }
