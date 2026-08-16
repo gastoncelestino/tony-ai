@@ -1,11 +1,18 @@
 """Integration tests for the incremental Task State Graph orchestration layer."""
 
+from datetime import datetime
+
+import pytest
+
 from kernel import (
     Evidence,
     EvidenceType,
     OrchestrationDecision,
     Phase,
+    TaskGraphError,
     TaskGraphKernelOrchestrator,
+    TaskNode,
+    TaskStateGraph,
     TaskStatus,
 )
 
@@ -73,3 +80,56 @@ def test_graph_rejects_unknown_dependency_during_task_addition():
         pass
     else:
         raise AssertionError("unknown task dependency must be rejected")
+
+
+def _graph() -> TaskStateGraph:
+    return TaskStateGraph().add(
+        TaskNode(task_id="task", description="task", phase=Phase.APPLY)
+    )
+
+
+def test_failed_task_can_retry_without_losing_attempt_history():
+    now = datetime(2026, 1, 1)
+    graph = _graph().start("task", now=now)
+    graph = graph.fail("task", "command failed", now=datetime(2026, 1, 1, 0, 1))
+
+    assert graph.nodes["task"].status == TaskStatus.FAILED
+    assert graph.nodes["task"].attempt_count == 1
+    assert graph.nodes["task"].attempts[0].status == "failed"
+    assert graph.nodes["task"].attempts[0].error == "command failed"
+
+    graph = graph.retry("task")
+    assert graph.nodes["task"].status == TaskStatus.PENDING
+    graph = graph.start("task", now=datetime(2026, 1, 1, 0, 2))
+
+    assert graph.nodes["task"].status == TaskStatus.IN_PROGRESS
+    assert graph.nodes["task"].attempt_count == 2
+    assert graph.nodes["task"].attempts[0].status == "failed"
+    assert graph.nodes["task"].attempts[1].status == "running"
+
+
+def test_rollback_is_terminal_for_failed_task():
+    graph = _graph().start("task")
+    graph = graph.fail("task", "irrecoverable", rollback={"action": "restore"})
+    graph = graph.rollback_task("task")
+
+    node = graph.nodes["task"]
+    assert node.status == TaskStatus.BLOCKED
+    assert node.rollback == {"action": "restore"}
+    assert node.attempt_count == 1
+
+    with pytest.raises(TaskGraphError):
+        graph.retry("task")
+
+
+def test_invalid_transitions_are_rejected_deterministically():
+    graph = _graph()
+
+    with pytest.raises(TaskGraphError):
+        graph.complete("task", ("evidence:1",))
+    with pytest.raises(TaskGraphError):
+        graph.fail("task", "not started")
+    with pytest.raises(TaskGraphError):
+        graph.retry("task")
+    with pytest.raises(TaskGraphError):
+        graph.rollback_task("task")
