@@ -18,8 +18,10 @@ Los servicios definidos en `docker/` proporcionan la infraestructura local para 
 ## ¿Cómo funciona?
 `Tony-AI` orquesta el desarrollo de software mediante un flujo de trabajo basado en **Spec-Driven Development (SDD)**. El proceso separa la planificación de la implementación, la revisión, la verificación y el archivado, y utiliza agentes especializados para cada etapa.
 
-El flujo general es:
-**exploración → propuesta → spec → diseño → tareas → implementación → revisión → verificación → archivado**
+El **FSM principal contiene exactamente ocho fases**:
+**exploración → propuesta → spec → diseño → tareas → apply → verify → archive**
+
+**Review 4R y Judgment Day son workflows auxiliares, no fases adicionales del FSM.** Pueden participar entre la implementación y la verificación sin modificar la máquina de estados.
 
 **Tony Kernel** actúa como capa de control del flujo. Intercepta las transiciones entre fases y valida que cada etapa haya producido los artifacts y la evidencia necesarios antes de permitir avanzar.  
 
@@ -486,41 +488,6 @@ Usuario
 | `/kernel-reset` | Resetear estado del Kernel (solo desarrollo) | kernel-state.json | ✅ |
 
 💡 Todo funciona offline excepto los comandos que requieren sub-agentes (`/sdd-new`, `/sdd-explore`, `/sdd-propose`, `/sdd-spec`, `/sdd-design`, `/sdd-tasks`, `/sdd-apply`, `/sdd-verify`, `/sdd-onboard`, `/sdd-continue`, `/sdd-ff`, `juzgar esto`) y búsqueda semántica (`/memory-search` con Qdrant/Ollama).
-
-## Testing
-Tony-AI separa las pruebas de código de las verificaciones que requieren infraestructura externa.
-La suite local **no necesita Ollama, Qdrant ni Docker**. Esto permite ejecutar la mayoría de las pruebas incluso en un entorno sin los servicios de IA configurados.
-- **Python + pytest** para desarrollo y CI.
-- **Runner Python standalone** (`tools/run-python-tests.py`) sin dependencias externas.
-- **Bun** para los tests TypeScript.
-- **Validación directa de configuración y prompts SDD**.
-- **Tests focalizados del Tony Kernel**.
-- **Tests de integración del plugin Judgment Memory**.
-
-La ejecución recomendada es:
-```bash
-python3 -m pip install -r requirements-dev.txt
-make test
-```
-También pueden ejecutarse las suites individualmente:
-```bash
-make test-python
-make test-ts
-make test-kernel
-```
-
-Para ejecutar Python sin pytest:
-```bash
-python3 tools/run-python-tests.py tests
-```
-
-## Categorías de tests
-Los tests Python pueden filtrarse por categoría:
-```bash
-python3 -m pytest -m concurrency
-python3 -m pytest -m mcp
-python3 -m pytest -m "not concurrency"
-```
 
 ## Code Review automático
 `GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
