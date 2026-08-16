@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -19,8 +19,11 @@ def test_kernel_runtime_dir_is_external(monkeypatch, tmp_path):
 
 def test_code_index_manifest_is_external(monkeypatch, tmp_path):
     monkeypatch.setenv("TONY_RUNTIME_DIR", str(tmp_path / "runtime"))
-    sys.path.insert(0, str(ROOT / "code-index"))
-    server = importlib.import_module("server")
+    code_index_server = ROOT / "code-index" / "server.py"
+    spec = importlib.util.spec_from_file_location("tony_code_index_server_runtime_test", code_index_server)
+    assert spec is not None and spec.loader is not None
+    server = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(server)
 
     manifest = Path(server._runtime_manifest_path(str(ROOT)))
     assert manifest == tmp_path / "runtime" / "code-index" / ".codeindex" / "manifest.db"
