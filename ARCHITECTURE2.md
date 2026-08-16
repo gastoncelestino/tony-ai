@@ -1,21 +1,21 @@
 # Tony-AI — Architecture
 
-## 1. Purpose and architectural principles
+## Propósito y principios arquitectónicos
 
-Tony-AI is an agent orchestration system for software development based on Spec-Driven Development (SDD).
+Tony-AI es un sistema de orquestación de agentes de IA para desarrollo de software basado en Spec-Driven Development (SDD).
 
-The architecture separates two responsibilities that must not depend solely on LLM behavior:
+La arquitectura separa dos responsabilidades que no deben depender únicamente del comportamiento de un LLM:
 
-- **Orchestration:** decide what work should be executed and which agent has the required capability.
-- **Enforcement:** deterministically decide whether a phase may start, complete, or advance.
+- **Orquestación:** decidir qué trabajo debe ejecutarse y qué agente tiene la capacidad correspondiente.
+- **Enforcement:** determinar de forma determinista si una fase puede comenzar, completarse o avanzar.
 
-Tony-AI combines specialized agents, persistent memory, semantic search, dynamic context management, and a deterministic Kernel.
+El sistema combina agentes especializados, memoria persistente, búsqueda semántica y un Kernel determinista que aplica las condiciones críticas del workflow.
 
-Tony-AI does not train models. Its purpose is to preserve, index, retrieve, and apply operational knowledge during later tasks.
+Tony-AI no es un sistema de entrenamiento de modelos. Su objetivo es conservar, indexar, recuperar y aplicar conocimiento operativo durante tareas posteriores.
 
 ---
 
-## 2. High-level architecture
+## Arquitectura
 
 ```text
                          OpenCode
@@ -37,156 +37,181 @@ Tony-AI does not train models. Its purpose is to preserve, index, retrieve, and 
                        Tony Kernel
                             │
                             ▼
-                       Phase / Agent
+                      Phase / Agent
 ```
 
-| Component | Responsibility |
+- OpenCode proporciona el runtime del agente.
+- Tony Orchestrator coordina el workflow y enruta el trabajo.
+- Los servicios de contexto aportan información durante las distintas fases.
+- Tony Kernel aplica las reglas deterministas que autorizan o bloquean las transiciones.
+
+## Estructura del repositorio
+
+```text
+tony-ai/
+├── README.md
+├── ARCHITECTURE.md
+├── TESTING.md
+├── INSTALL.md
+├── AGENTS.md
+├── opencode.json
+├── kernel/
+├── local-memory/
+├── code-index/
+├── judgment-memory/
+├── plugins/
+├── prompts/
+├── skills/
+├── tests/
+├── tools/
+└── docker/
+```
+
+## Componentes principales
+
+| Componente | Responsabilidad |
 |---|---|
-| **OpenCode** | Agent runtime, plugins, and tools |
-| **Tony Orchestrator** | Routing, coordination, and minimum routing context |
-| **Tony Kernel** | FSM, gates, scope, evidence, checksums, and enforcement |
-| **TonyMem** | Persistent decisions, discoveries, and shared context |
-| **Code Index** | Semantic search over the codebase |
-| **Judgment Memory** | Persistence and retrieval of previous judgments |
-| **DCP** | Dynamic context management |
-
-The key boundary is:
-
-```text
-Orchestrator → decides what should run
-Kernel       → decides whether it may run
-Sub-agent    → performs the phase work
-Context      → supplies information when needed
-```
+| **OpenCode** | Runtime y ejecución del agente, plugins y herramientas |
+| **Tony Orchestrator** | Routing, coordinación y contexto mínimo |
+| **Tony Kernel** | FSM, gates, scope, evidencias, checksums y enforcement |
+| **TonyMem** | Memoria persistente de decisiones, hallazgos y contexto |
+| **Code Index** | Búsqueda semántica sobre el código |
+| **Judgment Memory** | Persistencia y recuperación de juicios anteriores |
+| **DCP** | Gestión dinámica de la ventana de contexto |
 
 ---
 
-## 3. Component responsibilities
+## Responsabilidades de los componentes
 
-### OpenCode
+## OpenCode
+OpenCode aloja la ejecución del agente, los plugins y las herramientas utilizadas por el workflow. La configuración de agentes y MCP servers se encuentra en `opencode.json`.
+OpenCode puede ejecutar acciones, pero la autorización de una transición de fase controlada pertenece al Tony Kernel.
 
-OpenCode hosts agent execution, plugins, and tools. Agent and MCP configuration is defined through `opencode.json` and related project configuration.
+## Tony Orchestrator
+Mantiene el contexto necesario para enrutar el workflow:
+- Entiende el estado SDD actual;
+- Consulta `phase-capabilities.md` para determinar la capacidad correspondiente;
+- Selecciona el agente de fase;
+- Delega únicamente la información necesaria para iniciar esa fase;
+- Recibe el resultado estructurado y decide el siguiente paso.
 
-OpenCode can execute actions, but authorization for a Kernel-controlled phase transition belongs to Tony Kernel.
+El orquestador no carga prompts completos de los ejecutores para decidir el routing, no ejecuta el trabajo de fase inline y no copia artifacts completos en la delegación.
 
-### Tony Orchestrator
-
-The orchestrator keeps only the context required to route the workflow:
-
-1. understands the current SDD state;
-2. resolves the required capability through `phase-capabilities.md`;
-3. selects the appropriate phase agent;
-4. delegates only the information required to start the phase;
-5. receives a structured result and routes the next operation.
-
-The orchestrator does not need to load every executor prompt to make a routing decision, does not perform phase work inline, and does not copy complete upstream artifacts into every delegation.
-
-### Tony Kernel
-
-Tony Kernel is the deterministic enforcement layer. It controls:
-
-- valid phase transitions;
-- required artifacts;
-- artifact integrity and checksums;
+## Tony Kernel
+Controla:
+- transiciones de fase;
+- artifacts requeridos;
+- integridad mediante checksums;
 - allowed scope;
-- evidence;
+- evidencia;
 - retry budget;
-- phase completion state.
+- estado de finalización de las fases.
 
-The Kernel is **fail-closed**. If a mandatory condition is missing, the transition is blocked instead of being inferred from an agent response.
+El agente puede proponer una acción, pero la autorización para avanzar pertenece al Kernel.
+El Kernel utiliza una política **fail-closed**: cuando falta una condición obligatoria, la transición se bloquea en lugar de continuar bajo una suposición implícita.
 
-### TonyMem
+## TonyMem
+Proporciona memoria persistente para decisiones, descubrimientos y contexto compartido entre sesiones.
+- servidor MCP: `local-memory/server.py`;
+- plugin OpenCode: `plugins/tonymem.ts`;
+- persistencia SQLite;
+- modo WAL para concurrencia;
+- lifecycle de memorias: `active`, `proven`, `needs_review`.
 
-TonyMem provides persistent memory for decisions, discoveries, and context shared across sessions.
+## Persistencia y almacenamiento
 
-- MCP server: `local-memory/server.py`;
-- OpenCode integration: `plugins/tonymem.ts`;
-- SQLite persistence;
-- WAL mode for concurrent access;
-- memory lifecycle: `active`, `proven`, `needs_review`.
+| Sistema | Almacenamiento | Propósito |
+|---|---|---|
+| TonyMem | SQLite | Observaciones, decisiones y contexto |
+| Judgment Memory | SQLite + Qdrant | Ledger y recuperación semántica de juicios |
+| Code Index | Qdrant | Índice semántico del código |
+| Tony Kernel | JSON + archivos locales | Estado operativo y artifacts |
 
-### Code Index
+## Aislamiento de datos
+Las bases persistentes configuradas para OpenCode se encuentran bajo `.tonymem/`, mientras que los servidores que acceden a ellas viven en `local-memory/` y `judgment-memory/`.
 
-Code Index provides semantic search over the codebase using local embeddings and Qdrant.
+```text
+.tonymem/
+├── memory.db
+└── judgment-memory.db
+```
 
-- MCP server: `code-index/server.py`;
+## Code Index
+Proporciona búsqueda semántica sobre el código mediante embeddings locales y Qdrant.
+- servidor MCP: `code-index/server.py`;
 - embeddings: `bge-m3`;
-- vector storage: Qdrant;
-- incremental indexing;
-- structural chunking through tree-sitter.
+- almacenamiento vectorial: Qdrant;
+- indexación incremental;
+- chunking estructural mediante tree-sitter.
 
-### Judgment Memory
+## Judgment Memory
+Conserva juicios y resultados de Judgment Day para permitir recuperación semántica en tareas posteriores.
+- ledger SQLite propio: `judgment-memory/ledger.py`;
+- almacenamiento vectorial en Qdrant;
+- colección separada `jdmem_{project}`;
+- recuperación mediante `jd_recall`;
+- persistencia mediante `jd_record`.
 
-Judgment Memory persists judgments and lessons from Judgment Day so they can be recalled by later evaluations.
+## DCP
+Dynamic Context Pruning gestiona la cantidad de contexto utilizada por OpenCode y permite conservar las partes relevantes durante workflows extensos.
 
-- SQLite ledger: `judgment-memory/ledger.py`;
-- Qdrant vector storage;
-- separate collection `jdmem_{project}`;
-- retrieval through `jd_recall`;
-- persistence through `jd_record`.
-
-### DCP
-
-Dynamic Context Pruning manages the amount of context used by OpenCode during long workflows and preserves relevant context when the available window is constrained.
-
----
-
-## 4. Workflow architecture
-
-A task passes through several layers before producing a verified change:
+## Arquitectura del workflow
 
 ```text
-User
-  │
-  ▼
+Usuario
+   │
+   ▼
 OpenCode
-  │
-  ▼
+   │
+   ▼
 Tony Orchestrator
-  │
-  ├──────────────► TonyMem
-  ├──────────────► Code Index
-  ├──────────────► Judgment Memory
-  └──────────────► DCP
-  │
-  ▼
+   │
+   ├──────────────► TonyMem
+   ├──────────────► Code Index
+   ├──────────────► Judgment Memory
+   └──────────────► DCP
+   │
+   ▼
 SDD Phase
-  │
-  ▼
+   │
+   ▼
 Tony Kernel
-  │
-  ├── Phase Gate
-  ├── Artifact Gate
-  ├── Scope Guard
-  ├── Evidence
-  ├── Checksums
-  └── Retry Budget
-  │
-  ▼
+   │
+   ├── Phase Gate
+   ├── Artifact Gate
+   ├── Scope Guard
+   ├── Evidence
+   ├── Checksums
+   └── Retry Budget
+   │
+   ▼
 Sub-agent
-  │
-  ▼
+   │
+   ▼
 Phase Result
-  │
-  ▼
+   │
+   ▼
 Tony Kernel
-  │
-  ├── validates artifacts
-  ├── validates evidence
-  ├── validates scope
-  └── records completion
-  │
-  ▼
-Next phase
+   │
+   ├── valida artifacts
+   ├── valida evidencia
+   ├── valida scope
+   └── registra completion
+   │
+   ▼
+Siguiente fase
 ```
 
-Context services are transversal. There is no single final "read memory" stage.
+La arquitectura mantiene una frontera clara:
+
+- **Orquestador:** decide qué debe ejecutarse.
+- **Kernel:** decide si puede ejecutarse.
+- **Sub-agent:** ejecuta el trabajo de la fase.
+- **Servicios de contexto:** aportan información cuando es necesaria.
 
 ---
 
-## 5. SDD state machine
-
-The main FSM contains exactly eight phases:
+## State machine y fases SDD
 
 ```text
 explore
@@ -206,14 +231,14 @@ verify
 archive
 ```
 
-`kernel/state_machine.py` is the source of truth for valid FSM phases and transitions.
+Cada fase tiene un prompt específico en `prompts/sdd/`.
+`kernel/state_machine.py` define las fases válidas y las transiciones permitidas.
 
-### FSM phases vs auxiliary agents
+## Fases del FSM vs agentes auxiliares
 
-Not every agent participating in the workflow is an FSM phase.
+No todo agente que participa del workflow representa una transición del FSM.
 
-**Kernel-controlled phases:**
-
+**Fases controladas por el Kernel:**
 ```text
 explore
 propose
@@ -225,8 +250,7 @@ verify
 archive
 ```
 
-**Auxiliary workflows/agents:**
-
+**Agentes auxiliares:**
 ```text
 sdd-init
 sdd-onboard
@@ -235,69 +259,22 @@ jd-*
 gga-reviewer
 ```
 
-Auxiliary agents may participate in the workflow without becoming additional FSM transitions.
+Los agentes auxiliares pueden participar del proceso sin convertirse en fases adicionales del state machine.
 
-Review 4R and Judgment Day therefore do **not** increase the number of SDD phases.
+## Arquitectura de contexto y memoria
 
----
-
-## 6. Tony Kernel enforcement
-
-### Phase Gate
-
-Prevents a phase from starting when the current state, transition, or preconditions are invalid.
-
-### Artifact Gate
-
-Validates that required artifacts exist and satisfy the integrity requirements of the current phase.
-
-### Scope Guard
-
-Ensures changes remain inside the scope allowed by the change request.
-
-### Evidence
-
-Records evidence associated with tasks and phase completion so advancement does not depend solely on a textual claim by an agent.
-
-### Checksums
-
-Detects changes to artifacts that were already validated.
-
-### Retry Budget
-
-Limits retries per phase to prevent uncontrolled loops.
-
-### OpenCode integration
-
-The OpenCode Kernel plugin intercepts tool execution events to enforce phase start checks before delegation and completion recording after execution.
-
-The Kernel CLI exposes operations such as:
+Los servicios de contexto participan transversalmente en el workflow. No existe una única etapa aislada de "leer memoria" al final del pipeline.
 
 ```text
-can_start_phase
-record_delegation
-record_phase_completion
-check_scope
-reset
-status
-```
-
-Operational Kernel state is stored under `.tony-kernel/` according to the current persistence implementation.
-
----
-
-## 7. Context and memory architecture
-
-```text
-New task
-   │
-   ├── TonyMem ──────────────► previous decisions and context
-   ├── Code Index ───────────► related code
-   ├── Judgment Memory ──────► previous judgments and lessons
-   └── DCP ──────────────────► relevant working context
+Nueva tarea
+    │
+    ├── TonyMem ──────────────► decisiones y contexto previo
+    ├── Code Index ───────────► código relacionado
+    ├── Judgment Memory ──────► revisiones y juicios previos
+    └── DCP ──────────────────► contexto relevante
                                       │
                                       ▼
-                               Agent / Orchestrator
+                               Agente / Orchestrator
                                       │
                                       ▼
                                   SDD Phase
@@ -306,41 +283,26 @@ New task
                                  Tony Kernel
 ```
 
-### TonyMem
+Los agentes pueden consultar y actualizar estos componentes durante diferentes fases según las necesidades de contexto, búsqueda semántica y persistencia.
 
-Memories have three lifecycle states:
+## Arquitectura de Review y Judgment Day
 
-- `active` — usable by default;
-- `proven` — verified knowledge that can be prioritized;
-- `needs_review` — potentially stale knowledge that must be verified before being trusted.
+## Review 4R
+Después de la implementación, el workflow puede ejecutar la revisión 4R ordinaria. Los agentes `review-*` inspeccionan dimensiones específicas de la implementación y son read-only.
 
-### Code Index
+`review-refuter` valida únicamente las inferencias suministradas y no agrega findings nuevos.
 
-The Code Index locates semantically related code without requiring the agent to know exact paths or identifiers in advance.
+## Judgment Day
+Judgment Day es un flujo explícito y separado de la revisión 4R.
 
-### Judgment Memory
+No se ejecuta como una fase adicional del FSM.
 
-Before a Judgment Day evaluation, `jd_recall` retrieves similar previous judgments. When a judgment reaches a terminal state, `jd_record` persists the result and indexes it for later retrieval.
+Cuando se activa explícitamente, utiliza dos jueces independientes:
 
-### Prompt persistence
+- `jd-judge-a` — DeepSeek-R1 14B;
+- `jd-judge-b` — Qwen3-Coder 30B.
 
-Prompt captures are bookkeeping/context data and should not be mixed with normal semantic memory searches unless explicitly requested.
-
----
-
-## 8. Review 4R and Judgment Day
-
-### Review 4R
-
-Review 4R is the ordinary post-implementation review workflow. Review agents inspect defined dimensions of the implementation and are read-only.
-
-`review-refuter` validates supplied inferences and does not invent new findings.
-
-### Judgment Day
-
-Judgment Day is an explicit workflow separate from Review 4R and is **not an additional FSM phase**.
-
-Conceptually:
+El flujo conceptual es:
 
 ```text
 Implementation
@@ -366,114 +328,24 @@ Implementation
                             Verify
 ```
 
-Judgment Memory exists specifically so previous judgments can inform later judgments without turning those judgments into ordinary project memory.
+## Correcciones posteriores
 
-`jd-fix-agent` applies only corrections confirmed by the judgment process.
+`jd-fix-agent` aplica únicamente correcciones confirmadas por el proceso de juicio.
 
----
+Los agentes de review y Judgment Day no forman parte del contexto común de ejecución de las fases SDD.
 
-## 9. Persistence and storage
+## Fuentes de verdad
 
-Tony-AI separates storage by responsibility:
+- `README.md` — visión general, quickstart y uso.
+- `INSTALL.md` — instalación y configuración del entorno.
+- `ARCHITECTURE.md` — arquitectura, responsabilidades, workflow y persistencia.
+- `TESTING.md` — estrategia, comandos y cobertura de pruebas.
+- `AGENTS.md` — reglas operativas para agentes y desarrollo.
+- Código y tests — comportamiento implementado definitivo cuando existe una contradicción con la documentación.
 
-| System | Storage | Purpose |
-|---|---|---|
-| TonyMem | SQLite | Decisions, observations, and context |
-| Judgment Memory | SQLite + Qdrant | Judgment ledger and semantic recall |
-| Code Index | Qdrant | Semantic code index |
-| Tony Kernel | JSON/files | Operational state and artifacts |
-
-The exact filesystem paths and environment variables used by the current implementation are documented in `INSTALL.md` and the corresponding component READMEs. This avoids duplicating implementation-specific paths in multiple architecture documents.
-
----
-
-## 10. Shared contracts
-
-Shared contracts define behavior that multiple agents or subsystems depend on.
-
-- `skills/_shared/sdd-phase-common.md` — common SDD executor contract.
-- `skills/_shared/tonymem-convention.md` — TonyMem topics, operations, isolation, concurrency, and lifecycle.
-- `skills/_shared/openspec-convention.md` — filesystem paths and delta-spec conventions.
-- `skills/_shared/skill-resolver.md` — skill resolution protocol.
-
-The shared contract files are the source of truth for their respective protocols; this document only explains their architectural role.
-
----
-
-## 11. Prompt and agent architecture
-
-SDD agents use source prompts directly. Prompt generation or bundle materialization is not an architectural requirement.
-
-Important prompt responsibilities include:
-
-- `prompts/agents/tony-orchestrator.md` — orchestration.
-- `prompts/agents/phase-capabilities.md` — capability/routing map.
-- `prompts/agents/includes/phase-launcher.md` — phase launch contract.
-- `prompts/sdd/<phase>.md` — phase-specific instructions.
-- `prompts/agents/phase-prompts/*.md` — review and Judgment Day agents.
-
-The orchestrator keeps minimum routing context. Phase executors retrieve upstream artifacts when their phase requires them.
-
----
-
-## 12. Repository structure
-
-```text
-tony-ai/
-├── README.md
-├── ARCHITECTURE.md
-├── TESTING.md
-├── INSTALL.md
-├── AGENTS.md
-├── opencode.json
-│
-├── kernel/                 # deterministic workflow enforcement
-├── local-memory/           # TonyMem MCP server
-├── code-index/             # Code Index MCP server
-├── judgment-memory/        # Judgment Memory
-├── plugins/                # OpenCode integrations
-├── prompts/                # orchestrator, phases, and reviewers
-├── skills/                 # shared contracts and capabilities
-├── tests/                  # test suite
-├── tools/                  # tooling and runners
-└── docker/                 # local infrastructure
-```
-
----
-
-## 13. Documentation boundaries and sources of truth
-
-Documentation has explicit ownership to prevent multiple conflicting definitions.
-
-| Document | Source of truth for |
-|---|---|
-| `README.md` | Project overview, quickstart, and user-facing concepts |
-| `INSTALL.md` | Installation and environment configuration |
-| `ARCHITECTURE.md` | Architectural model and component responsibilities |
-| `TESTING.md` | Test strategy, commands, coverage, CI, and troubleshooting |
-| `AGENTS.md` | Agent/development operating rules |
-| Component READMEs | Subsystem implementation details |
-| `skills/_shared/*` | Shared agent protocols and conventions |
-| `kernel/state_machine.py` | FSM phases and valid transitions |
-| `opencode.json` + source configuration | Active agent/MCP wiring |
-| Code + tests | Definitive implemented behavior |
-
-When documentation conflicts with the implementation, verify the code and tests first. Then update the document that is not authoritative for that subject.
-
-Architecture should describe stable responsibilities and contracts, not duplicate every implementation detail.
-
----
-
-## 14. Future documentation validation
-
-The documentation model should eventually be machine-checked by a repository validation command such as `make validate-docs`.
-
-The validator should detect at least:
-
-- documented SDD phases that do not exist in the Kernel;
-- documented agents or prompts that do not exist;
-- documented MCP servers that do not exist;
-- documented repository paths that do not exist;
-- documented commands that are not configured or implemented.
-
-This keeps documentation aligned with the same deterministic principles used by Tony Kernel and configuration validation.
+## Documentación
+[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.
+[INSTALL.md](INSTALL.md) — instalación y configuración del entorno.
+[ARCHITECTURE.md](ARCHITECTURE.md) — componentes, responsabilidades, flujos, contratos y persistencia.
+[AGENTS.md](AGENTS.md) — reglas operativas para agentes y desarrollo.
+[TESTING.md](TESTING.md) — estrategia, comandos y cobertura de pruebas.
