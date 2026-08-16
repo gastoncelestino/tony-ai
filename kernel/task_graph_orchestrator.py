@@ -6,13 +6,16 @@ TaskLedger is maintained as a compatibility projection for existing callers.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Callable, Sequence
 
+from .evidence_state import EvidenceAssessment
 from .orchestrator_integration import (
     KernelOrchestrator,
     OrchestrationDecision,
     OrchestrationResult,
 )
-from .schemas import TaskStatus
+from .retrieval_policy import RetrievalDecision, retrieve_until_sufficient
+from .schemas import Evidence, TaskStatus
 from .task_graph import TaskGraphError, TaskStateGraph
 from .task_graph_adapter import _evidence_ref, graph_to_ledger, ledger_to_graph
 
@@ -41,6 +44,75 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             return True
         except TaskGraphError:
             return False
+
+    def assess_task_evidence(
+        self,
+        task_id: str,
+        evidence: Sequence[Evidence],
+        *,
+        minimum_valid: int = 1,
+        minimum_confidence: float = 0.75,
+        confidence: float | None = None,
+    ) -> EvidenceAssessment:
+        """Assess evidence against the authoritative graph without changing state."""
+        node = self.task_graph.get(task_id)
+        if node is None:
+            raise TaskGraphError(f"Unknown task: {task_id}")
+        refs = tuple(_evidence_ref(item) for item in evidence)
+        _, assessment = self.task_graph.assess_completion_evidence(
+            task_id,
+            evidence,
+            refs,
+            minimum_valid=minimum_valid,
+            minimum_confidence=minimum_confidence,
+            confidence=confidence,
+        )
+        return assessment
+
+    def retrieve_task_evidence(
+        self,
+        task_id: str,
+        retriever: Callable[[int], Sequence[Evidence]],
+        *,
+        max_attempts: int = 2,
+        minimum_valid: int = 1,
+        minimum_confidence: float = 0.75,
+    ) -> RetrievalDecision:
+        """Perform bounded retrieval for an in-progress task.
+
+        The retrieval policy controls repetition. This method only commits
+        evidence to the task graph when the final assessment is sufficient;
+        low-confidence and contradictory results remain available to judgment.
+        """
+        node = self.task_graph.get(task_id)
+        if node is None:
+            raise TaskGraphError(f"Unknown task: {task_id}")
+        if node.status != TaskStatus.IN_PROGRESS:
+            raise TaskGraphError(f"Task {task_id} is not in progress")
+
+        collected: list[Evidence] = []
+
+        def collect(attempt: int) -> Sequence[Evidence]:
+            evidence = tuple(retriever(attempt))
+            collected.extend(evidence)
+            return evidence
+
+        decision = retrieve_until_sufficient(
+            collect,
+            max_attempts=max_attempts,
+            minimum_valid=minimum_valid,
+            minimum_confidence=minimum_confidence,
+        )
+        if decision.assessment.can_progress:
+            refs = tuple(_evidence_ref(item) for item in collected)
+            self.task_graph = self.task_graph.complete(task_id, refs)
+            existing = self.task_ledger.tasks[task_id]
+            self.task_ledger = self.task_ledger.__class__(
+                tasks={**self.task_ledger.tasks,
+                       task_id: replace(existing, evidence=tuple(collected))}
+            )
+            self._project_ledger()
+        return decision
 
     def complete_task(self, task_id: str, evidence: list = None) -> OrchestrationResult:
         """Validate evidence, then complete the authoritative graph node."""
@@ -75,9 +147,17 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             )
 
         refs = tuple(_evidence_ref(e) for e in validated_evidence)
-        self.task_graph = self.task_graph.complete(task_id, refs)
+        self.task_graph, assessment = self.task_graph.assess_completion_evidence(
+            task_id, validated_evidence, refs
+        )
+        if not assessment.can_progress:
+            return OrchestrationResult(
+                decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
+                reason=f"Evidence assessment for task {task_id}: {assessment.state.value} — {assessment.reason}",
+                current_phase=self.change_state.current_phase.value,
+                metadata={"evidence_state": assessment.state.value},
+            )
 
-        # Preserve concrete Evidence objects in the compatibility projection.
         existing = self.task_ledger.tasks[task_id]
         self.task_ledger = self.task_ledger.__class__(
             tasks={**self.task_ledger.tasks,
@@ -89,7 +169,7 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             decision=OrchestrationDecision.PROCEED,
             reason=f"Task {task_id} completed with {len(validated_evidence)} evidence items",
             current_phase=self.change_state.current_phase.value,
-            metadata={"task_id": task_id, "evidence_count": len(validated_evidence)},
+            metadata={"task_id": task_id, "evidence_count": len(validated_evidence), "evidence_state": assessment.state.value},
         )
 
     def fail_task(self, task_id: str, error: str, rollback: dict = None) -> bool:
