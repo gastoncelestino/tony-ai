@@ -47,8 +47,7 @@ La configuración inicial es reutilizable y ejecuta, secuencialmente:
 8. verifica que `.env.example` existe en el repositorio (no lo modifica);
 9. crea `.env` copiando desde `.env.example` (si no existe ya);
 10. valida que `.env` tiene todas las variables obligatorias y que los URLs/rutas son accesibles.
-
-El script también crea `opencode.json.bak` antes de modificar la configuración. Ambos son archivos generados y no deben versionarse.
+11. crea `opencode.json.bak` antes de modificar la configuración.
 
 ### Modelos descargados
 
@@ -65,20 +64,8 @@ El modelo canónico de implementación es `carstenuhlig/omnicoder-2-9b:q4_k_m`.
 
 ## 4. Configuración del entorno
 
-`.env.example` es estático y se entrega con el repositorio (contiene placeholders como `/path/to/tony-ai`). El bootstrap verifica su existencia y automáticamente crea `.env` copiando la configuración y reemplazando los placeholders con las rutas reales del sistema (la primera vez).
-
-Si necesitás recrear `.env` desde `.env.example`:
-
-```bash
-# En Linux/macOS:
-sed 's|/path/to/tony-ai|'"$(pwd)"'|g' .env.example > .env
-
-# O simplemente:
-cp .env.example .env
-# y luego editar TONY_REPO_ROOT con la ruta absoluta
-```
-
-El archivo `.env.example` tiene placeholders que se reemplazan automáticamente:
+`.env.example` es estático y se entrega con el repositorio.  
+El instalador `setup.sh` verifica su existencia y automáticamente crea `.env` copiando la configuración y reemplazando las rutas reales del sistema.
 
 ```env
 TONY_REPO_ROOT=/path/to/tony-ai          # → reemplazado con ruta real
@@ -102,7 +89,7 @@ Pueden cambiarse mediante las variables que consumen los componentes correspondi
 
 ## 5. Ollama y Qdrant
 
-El bootstrap detecta cada servicio de forma independiente.
+El instalador detecta cada servicio de forma independiente.
 
 ### Ollama nativo
 
