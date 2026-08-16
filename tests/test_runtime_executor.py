@@ -9,13 +9,15 @@ from kernel.runtime_executor import RuntimeExecutor
 from kernel.runtime_policy import RuntimePolicy
 
 
-def _policy(timeout=1.0, cpu_seconds=None):
+def _policy(timeout=1.0, cpu_seconds=None, memory_mb=None):
     data = {
         "allowed_commands": ["*"],
         "timeout_seconds": timeout,
     }
     if cpu_seconds is not None:
         data["cpu_seconds"] = cpu_seconds
+    if memory_mb is not None:
+        data["memory_mb"] = memory_mb
     return RuntimePolicy.from_mapping(data)
 
 
@@ -26,6 +28,7 @@ def test_runtime_executor_runs_authorized_command():
     assert result.stdout.strip() == "ok"
     assert not result.timed_out
     assert not result.cpu_limited
+    assert not result.memory_limited
 
 
 def test_runtime_executor_blocks_unauthorized_command():
@@ -53,6 +56,19 @@ def test_runtime_executor_enforces_cpu_limit():
 
     assert result.cpu_limited
     assert result.exit_code is not None
+    assert not result.timed_out
+
+
+def test_runtime_executor_enforces_memory_limit():
+    result = RuntimeExecutor(_policy(timeout=5.0, memory_mb=128)).run(
+        (
+            sys.executable,
+            "-c",
+            "data = bytearray(512 * 1024 * 1024); print(len(data))",
+        )
+    )
+
+    assert result.exit_code != 0
     assert not result.timed_out
 
 
