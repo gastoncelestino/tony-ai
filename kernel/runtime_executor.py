@@ -1,12 +1,19 @@
-"""Policy-controlled subprocess execution with bounded wall-clock time."""
+"""Policy-controlled subprocess execution with bounded resource limits."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
+import signal
 import subprocess
 from typing import Sequence
 
 from .runtime_guard import RuntimePolicyGuard
 from .runtime_policy import RuntimePolicy
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - exercised only on non-POSIX hosts
+    resource = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +25,7 @@ class RuntimeExecutionResult:
     stdout: str = ""
     stderr: str = ""
     timed_out: bool = False
+    cpu_limited: bool = False
 
 
 class RuntimeExecutor:
@@ -28,17 +36,25 @@ class RuntimeExecutor:
         self.guard = RuntimePolicyGuard(policy)
 
     def run(self, command: Sequence[str], *, cwd: str | None = None) -> RuntimeExecutionResult:
-        """Run a command with the policy timeout and optional authorized cwd."""
+        """Run a command with policy authorization and resource limits."""
         argv = tuple(command)
         if not argv or not all(isinstance(part, str) and part for part in argv):
             raise ValueError("command must contain at least one non-empty string")
         self.guard.require_command(" ".join(argv))
         if cwd is not None:
             self.guard.require_path(cwd)
+        if self.policy.cpu_seconds is not None and resource is None:
+            raise RuntimePolicyViolation("CPU limit is unsupported on this platform")
+
         try:
             completed = subprocess.run(
-                argv, cwd=cwd, capture_output=True, text=True,
-                timeout=self.policy.timeout_seconds, check=False,
+                argv,
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=self.policy.timeout_seconds,
+                check=False,
+                preexec_fn=self._resource_limits() if resource is not None else None,
             )
         except subprocess.TimeoutExpired as exc:
             stdout = exc.stdout or ""
@@ -47,8 +63,32 @@ class RuntimeExecutor:
                 stdout = stdout.decode(errors="replace")
             if isinstance(stderr, bytes):
                 stderr = stderr.decode(errors="replace")
-            return RuntimeExecutionResult(argv, None, stdout, stderr, True)
-        return RuntimeExecutionResult(argv, completed.returncode, completed.stdout, completed.stderr)
+            return RuntimeExecutionResult(argv, None, stdout, stderr, timed_out=True)
+
+        cpu_limited = (
+            self.policy.cpu_seconds is not None
+            and completed.returncode in {
+                -getattr(signal, "SIGXCPU", 24),
+                -getattr(signal, "SIGKILL", 9),
+            }
+        )
+        return RuntimeExecutionResult(
+            argv,
+            completed.returncode,
+            completed.stdout,
+            completed.stderr,
+            cpu_limited=cpu_limited,
+        )
+
+    def _resource_limits(self):
+        if resource is None or self.policy.cpu_seconds is None:
+            return None
+        cpu_limit = max(1, math.ceil(self.policy.cpu_seconds))
+
+        def apply_limits() -> None:
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit + 1))
+
+        return apply_limits
 
 
 __all__ = ["RuntimeExecutionResult", "RuntimeExecutor"]
