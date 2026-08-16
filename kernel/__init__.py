@@ -6,131 +6,37 @@ Main entry point for the Tony Kernel.
 from __future__ import annotations
 
 from .schemas import (
-    Phase,
-    PhaseStatus,
-    PhaseState,
-    ChangeState,
-    ArtifactRef,
-    GateCheckResult,
-    GateResult,
-    PHASES,
-    ALLOWED_TRANSITIONS,
-    REQUIRED_ARTIFACTS_FOR_TRANSITION,
-    PHASE_COMPLETION_ARTIFACTS,
-    # Evidence & Task Ledger
-    Evidence,
-    EvidenceType,
-    EvidenceStatus,
-    ExecutionRecord,
-    Claim,
-    ClaimStatus,
-    Task,
-    TaskStatus,
-    TaskLedger,
-    # Artifact Gate
-    ArtifactGateResult,
-    ArtifactValidationResult,
-    ArtifactGateResult as ArtifactGateResultEnum,
-    # Retry Budget
-    RetryBudget,
-    AttemptRecord,
+    Phase, PhaseStatus, PhaseState, ChangeState, ArtifactRef, GateCheckResult, GateResult,
+    PHASES, ALLOWED_TRANSITIONS, REQUIRED_ARTIFACTS_FOR_TRANSITION, PHASE_COMPLETION_ARTIFACTS,
+    Evidence, EvidenceType, EvidenceStatus, ExecutionRecord, Claim, ClaimStatus,
+    Task, TaskStatus, TaskLedger, ArtifactGateResult, ArtifactValidationResult,
+    ArtifactGateResult as ArtifactGateResultEnum, RetryBudget, AttemptRecord,
 )
 from .state_machine import (
-    PhaseController,
-    create_initial_state,
-    InvalidTransitionError,
-    MissingArtifactsError,
-    StateMachineError,
-    PhaseNotFoundError,
+    PhaseController, create_initial_state, InvalidTransitionError,
+    MissingArtifactsError, StateMachineError, PhaseNotFoundError,
 )
-from .phase_gate import (
-    PhaseGate,
-    PhaseGateConfig,
-    GateCheckResult,
-)
-from .evidence_ledger import (
-    EvidenceLedger,
-)
-from .task_ledger import (
-    TaskLedger,
-)
-from .artifact_gate import (
-    ArtifactGate,
-)
-from .retry_budget import (
-    RetryBudget,
-    AttemptRecord,
-)
+from .phase_gate import PhaseGate, PhaseGateConfig, GateCheckResult
+from .evidence_ledger import EvidenceLedger
+from .task_ledger import TaskLedger
+from .artifact_gate import ArtifactGate
+from .retry_budget import RetryBudget, AttemptRecord
 from .orchestrator_integration import (
-    KernelOrchestrator,
-    OrchestrationDecision,
-    OrchestrationResult,
-    create_kernel_orchestrator,
+    KernelOrchestrator, OrchestrationDecision, OrchestrationResult, create_kernel_orchestrator,
 )
-from .phase_checksum import (
-    PhaseChecksumRegistry,
-    PhaseChecksum,
-    PhaseChecksumResult,
-    get_global_registry,
-)
+from .phase_checksum import PhaseChecksumRegistry, PhaseChecksum, PhaseChecksumResult, get_global_registry
+from .task_graph import TaskAttempt, TaskGraphError, TaskNode, TaskStateGraph
+from .task_graph_adapter import ledger_to_graph, task_to_node
 
 __all__ = [
-    # Schemas
-    "Phase",
-    "PhaseStatus",
-    "PhaseState",
-    "ChangeState",
-    "ArtifactRef",
-    "GateCheckResult",
-    "GateResult",
-    "PHASES",
-    "ALLOWED_TRANSITIONS",
-    "REQUIRED_ARTIFACTS_FOR_TRANSITION",
-    "PHASE_COMPLETION_ARTIFACTS",
-    # Evidence & Task Ledger
-    "Evidence",
-    "EvidenceType",
-    "EvidenceStatus",
-    "ExecutionRecord",
-    "Claim",
-    "ClaimStatus",
-    "Task",
-    "TaskStatus",
-    "TaskLedger",
-    # Artifact Gate
-    "ArtifactGateResult",
-    "ArtifactValidationResult",
-    "ArtifactGateResultEnum",
-    # Retry Budget
-    "RetryBudget",
-    "AttemptRecord",
-    # State Machine
-    "PhaseController",
-    "create_initial_state",
-    "InvalidTransitionError",
-    "MissingArtifactsError",
-    "StateMachineError",
-    "PhaseNotFoundError",
-    # Phase Gate
-    "PhaseGate",
-    "PhaseGateConfig",
-    "GateCheckResult",
-    # Evidence & Task Ledger
-    "EvidenceLedger",
-    "TaskLedger",
-    # Artifact Gate
-    "ArtifactGate",
-    # Retry Budget
-    "RetryBudget",
-    "AttemptRecord",
-    # Orchestrator Integration
-    "KernelOrchestrator",
-    "OrchestrationDecision",
-    "OrchestrationResult",
-    "create_kernel_orchestrator",
-    # Phase Checksum
-    "PhaseChecksumRegistry",
-    "PhaseChecksum",
-    "PhaseChecksumResult",
-    "get_global_registry",
+    "Phase", "PhaseStatus", "PhaseState", "ChangeState", "ArtifactRef", "GateCheckResult", "GateResult",
+    "PHASES", "ALLOWED_TRANSITIONS", "REQUIRED_ARTIFACTS_FOR_TRANSITION", "PHASE_COMPLETION_ARTIFACTS",
+    "Evidence", "EvidenceType", "EvidenceStatus", "ExecutionRecord", "Claim", "ClaimStatus",
+    "Task", "TaskStatus", "TaskLedger", "ArtifactGateResult", "ArtifactValidationResult", "ArtifactGateResultEnum",
+    "RetryBudget", "AttemptRecord", "PhaseController", "create_initial_state", "InvalidTransitionError",
+    "MissingArtifactsError", "StateMachineError", "PhaseNotFoundError", "PhaseGate", "PhaseGateConfig",
+    "EvidenceLedger", "ArtifactGate", "KernelOrchestrator", "OrchestrationDecision", "OrchestrationResult",
+    "create_kernel_orchestrator", "PhaseChecksumRegistry", "PhaseChecksum", "PhaseChecksumResult",
+    "get_global_registry", "TaskAttempt", "TaskGraphError", "TaskNode", "TaskStateGraph",
+    "ledger_to_graph", "task_to_node",
 ]
