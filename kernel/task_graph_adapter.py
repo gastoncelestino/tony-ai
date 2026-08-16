@@ -1,13 +1,13 @@
-"""Compatibility bridge from the legacy TaskLedger to TaskStateGraph.
+"""Compatibility bridge between TaskLedger and the Task State Graph.
 
-The ledger remains the public storage model for existing callers.  This adapter
-lets the Kernel consume the same tasks as explicit DAG nodes without forcing a
-big-bang migration.
+The Graph is the authoritative task-state model. The ledger remains a
+compatibility projection for existing callers, so graph history is preserved
+when the projection is rebuilt.
 """
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+from dataclasses import replace
 from typing import Optional
 
 from .schemas import Evidence, Task, TaskLedger, TaskStatus
@@ -36,8 +36,10 @@ def task_to_node(task: Task) -> TaskNode:
     if not refs and task.evidence:
         refs = tuple(_evidence_ref(e) for e in task.evidence)
 
-    attempts: tuple[TaskAttempt, ...] = ()
-    if task.started_at is not None:
+    raw_attempts = metadata.get("graph_attempts")
+    if raw_attempts:
+        attempts = tuple(TaskAttempt(**attempt) for attempt in raw_attempts)
+    elif task.started_at is not None:
         attempt_status = {
             TaskStatus.IN_PROGRESS: "running",
             TaskStatus.COMPLETED: "completed",
@@ -53,6 +55,8 @@ def task_to_node(task: Task) -> TaskNode:
                 error=metadata.get("error"),
             ),
         )
+    else:
+        attempts = ()
 
     return TaskNode(
         task_id=task.id,
@@ -75,3 +79,45 @@ def ledger_to_graph(ledger: TaskLedger) -> TaskStateGraph:
         graph = graph.add(task_to_node(task))
     graph.validate()
     return graph
+
+
+def graph_to_ledger(graph: TaskStateGraph, ledger: TaskLedger) -> TaskLedger:
+    """Project authoritative graph state back into the legacy ledger.
+
+    Existing evidence objects and task metadata are retained. Graph attempts,
+    refs, result, rollback and parent are serialized into metadata so a later
+    ledger-to-graph conversion cannot erase execution history.
+    """
+    tasks: dict[str, Task] = {}
+    for task_id, node in graph.nodes.items():
+        previous = ledger.tasks.get(task_id)
+        if previous is None:
+            raise ValueError(f"Cannot project unknown graph task: {task_id}")
+
+        latest = node.attempts[-1] if node.attempts else None
+        metadata = dict(previous.metadata or {})
+        metadata.update({
+            "evidence_refs": node.evidence_refs,
+            "result": node.result,
+            "rollback": node.rollback,
+            "parent": node.parent,
+            "graph_attempts": [
+                {
+                    "attempt_id": a.attempt_id,
+                    "started_at": a.started_at,
+                    "completed_at": a.completed_at,
+                    "status": a.status,
+                    "evidence_refs": a.evidence_refs,
+                    "error": a.error,
+                }
+                for a in node.attempts
+            ],
+        })
+        tasks[task_id] = replace(
+            previous,
+            status=node.status,
+            started_at=latest.started_at if latest else previous.started_at,
+            completed_at=latest.completed_at if latest else previous.completed_at,
+            metadata=metadata,
+        )
+    return TaskLedger(tasks=tasks)
