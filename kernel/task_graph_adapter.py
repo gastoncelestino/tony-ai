@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import replace
+from datetime import datetime
 from typing import Optional
 
 from .schemas import Evidence, Task, TaskLedger, TaskStatus
@@ -29,6 +30,18 @@ def _evidence_ref(evidence: Evidence) -> str:
     return f"evidence:{hashlib.sha256(payload.encode()).hexdigest()}"
 
 
+def _attempt_datetime(value: object) -> Optional[datetime]:
+    """Decode persisted graph attempt timestamps without accepting bad values."""
+    if value is None or isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
 def task_to_node(task: Task) -> TaskNode:
     """Convert one legacy Task into its graph representation."""
     metadata = task.metadata or {}
@@ -38,7 +51,17 @@ def task_to_node(task: Task) -> TaskNode:
 
     raw_attempts = metadata.get("graph_attempts")
     if raw_attempts:
-        attempts = tuple(TaskAttempt(**attempt) for attempt in raw_attempts)
+        attempts = tuple(
+            TaskAttempt(
+                attempt_id=attempt["attempt_id"],
+                started_at=_attempt_datetime(attempt.get("started_at")),
+                completed_at=_attempt_datetime(attempt.get("completed_at")),
+                status=attempt.get("status", "running"),
+                evidence_refs=tuple(attempt.get("evidence_refs", ())),
+                error=attempt.get("error"),
+            )
+            for attempt in raw_attempts
+        )
     elif task.started_at is not None:
         attempt_status = {
             TaskStatus.IN_PROGRESS: "running",
@@ -104,8 +127,8 @@ def graph_to_ledger(graph: TaskStateGraph, ledger: TaskLedger) -> TaskLedger:
             "graph_attempts": [
                 {
                     "attempt_id": a.attempt_id,
-                    "started_at": a.started_at,
-                    "completed_at": a.completed_at,
+                    "started_at": a.started_at.isoformat() if a.started_at else None,
+                    "completed_at": a.completed_at.isoformat() if a.completed_at else None,
                     "status": a.status,
                     "evidence_refs": a.evidence_refs,
                     "error": a.error,
