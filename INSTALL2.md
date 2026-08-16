@@ -1,25 +1,25 @@
-# Tony-AI — Installation
+# Tony-AI — Instalación
 
-## 1. Installation layers
+## 1. Requisitos
 
-Tony-AI has two execution levels:
+Tony-AI tiene dos niveles de ejecución:
 
-- **Development/test environment:** Python 3.10+, Bun, and `requirements-dev.txt`.
-- **Full runtime:** additionally requires OpenCode CLI, Ollama, Docker + Compose, Qdrant, GGA, and tree-sitter dependencies.
+- **Suite local de desarrollo/tests:** Python 3.10+, Bun y las dependencias de `requirements-dev.txt`.
+- **Runtime completo:** además requiere OpenCode CLI, Ollama, Docker + Compose, Qdrant y GGA.
 
-| Requirement | Purpose | Required for |
+| Requisito | Uso | Obligatorio para |
 |---|---|---|
-| Python 3.10+ | MCP servers, Kernel, tooling | Development and runtime |
-| Bun | Plugins and TypeScript tests | Development and OpenCode runtime |
-| OpenCode CLI | Agent runtime and SDD orchestration | Full runtime |
-| Ollama | Local models and embeddings | Full runtime |
-| Docker + Compose | Service infrastructure | Full runtime/setup |
-| GGA | Code review | Full runtime/setup |
-| tree-sitter + language pack | Structural Code Index chunking | Code Index |
+| Python 3.10+ | MCP servers, Kernel y tooling | Desarrollo y runtime |
+| Bun | Plugins y tests TypeScript | Desarrollo y runtime OpenCode |
+| OpenCode CLI | Orquestación de agentes/SDD | Runtime |
+| Ollama | Modelos locales y embeddings | Runtime |
+| Docker + Compose | Qdrant y Ollama | Instalador/runtime |
+| GGA | Revisión de código antes de commit | Instalador/runtime |
+| tree-sitter + `tree-sitter-language-pack` | Chunking estructural del Code Indexer | Desarrollo/runtime |
 
-`setup.sh` is the implementation authority for the actual installation sequence. This document explains the supported setup rather than duplicating every script branch.
+El instalador `setup.sh` valida estos requisitos y falla si no puede completar alguno de los componentes requeridos.
 
-## 2. Clone
+## 2. Clonar el repositorio
 
 ```bash
 git clone https://github.com/gastoncelestino/tony-ai.git
@@ -27,25 +27,45 @@ cd tony-ai
 git checkout dev
 ```
 
-## 3. Recommended setup
+## 3. Instalación recomendada
+
+Ejecutar desde la raíz del repositorio:
 
 ```bash
 ./scripts/setup.sh
 ```
 
-Then run:
+La configuración inicial es reutilizable y ejecuta, secuencialmente:
 
-```bash
-./scripts/health.sh
+1. verifica Python 3.10+, Bun, OpenCode CLI, Docker y Ollama;
+2. verifica GGA y, si no está instalado, intenta clonarlo e instalarlo en un directorio temporal;
+3. comprueba por separado la disponibilidad de Ollama y Qdrant;
+4. inicia mediante Docker solamente el servicio de soporte que falte;
+5. descarga los modelos locales requeridos;
+6. instala `requirements-dev.txt` y verifica `tree_sitter` y `tree_sitter_language_pack`;
+7. regenera `opencode.json` con `TONY_REPO_ROOT` y fuerza `TONY_INDEX_CHUNKER=tree-sitter`;
+8. verifica que `.env.example` existe en el repositorio (no lo modifica);
+9. crea `.env` copiando desde `.env.example` (si no existe ya);
+10. valida que `.env` tiene todas las variables obligatorias y que los URLs/rutas son accesibles;
+11. crea `opencode.json.bak` antes de modificar la configuración.
+
+### Modelos descargados
+
+```text
+qwen3-coder:30b
+carstenuhlig/omnicoder-2-9b:q4_k_m
+deepseek-r1:14b
+ornith:9b
+bge-m3
+nomic-embed-text
 ```
 
-`setup.sh` prepares the environment. `health.sh` verifies an already configured environment; it does not replace installation.
+El modelo canónico de implementación es `carstenuhlig/omnicoder-2-9b:q4_k_m`.
 
-## 4. Environment and persistence
+## 4. Configuración del entorno
 
-The repository uses `.env.example` as the configuration template. The setup process creates the local `.env` when needed.
-
-Typical runtime configuration includes:
+`.env.example` es estático y se entrega con el repositorio.
+El instalador `setup.sh` verifica su existencia y automáticamente crea `.env` copiando la configuración y reemplazando las rutas reales del sistema.
 
 ```env
 TONY_REPO_ROOT=/path/to/tony-ai
@@ -54,64 +74,85 @@ TONY_QDRANT_URL=http://localhost:6333
 TONY_INDEX_CHUNKER=tree-sitter
 ```
 
-The exact defaults consumed by each subsystem are defined by the component configuration and setup scripts. Avoid treating this document as the source of truth for internal storage paths.
+### Persistencia local
 
-For subsystem-specific persistence details, see `ARCHITECTURE.md` and the relevant component README.
+Los valores por defecto de los servidores MCP son archivos locales dentro del repositorio:
 
-## 5. Ollama and Qdrant
+```text
+local-memory/memory.db
+judgment-memory/judgment-memory.db
+code-index/.codeindex/
+.tony-kernel/kernel-state.json
+```
 
-### Existing native Ollama
+Pueden cambiarse mediante las variables que consumen los componentes correspondientes, en particular `LOCAL_MEMORY_DB` y `JUDGMENT_MEMORY_DB` para las bases SQLite.
 
-If Ollama is already available on `http://localhost:11434`, reuse it rather than starting a second instance.
+## 5. Ollama y Qdrant
+
+El instalador detecta cada servicio de forma independiente.
+
+### Ollama nativo
+
+Si Ollama ya está ejecutándose en `http://localhost:11434`, Tony-AI reutiliza esa instancia y no levanta otro contenedor de Ollama.
+
+Verificación:
 
 ```bash
 curl http://localhost:11434/api/tags
 ```
 
-### Qdrant
+Si es necesario iniciarlo manualmente:
+
+```bash
+ollama serve
+```
+
+### Qdrant mediante Docker
 
 ```bash
 cd docker
 docker compose up -d qdrant
 ```
 
-Verify:
+Verificación:
 
 ```bash
 curl http://localhost:6333/readyz
 docker compose ps
 ```
 
-### Both services
+### Ambos servicios mediante Docker
 
-If neither service is available:
+Si ninguno está disponible:
 
 ```bash
 cd docker
 docker compose up -d ollama qdrant
 ```
 
+No ejecute una segunda instancia de Ollama sobre el puerto `11434` si ya existe una instancia nativa activa.
+
 ## 6. GGA
 
-Verify:
+GGA es parte del entorno requerido por el proyecto. Verifique:
 
 ```bash
 gga --version
 ```
 
-The setup script attempts to install GGA when it is missing, according to the current installer implementation.
+`setup.sh` intenta instalarlo automáticamente si `gga` no está en `PATH`.
 
 ## 7. Troubleshooting
 
-### Python version
+### Python no cumple la versión
 
 ```bash
 python3 --version
 ```
 
-Must be 3.10 or newer.
+Debe ser Python 3.10 o superior.
 
-### Bun, OpenCode, or GGA missing
+### Falta Bun, OpenCode o GGA
 
 ```bash
 command -v bun
@@ -119,55 +160,58 @@ command -v opencode
 command -v gga
 ```
 
-### Docker unavailable
+### Docker no responde
 
 ```bash
 docker info
 docker compose version
 ```
 
-### Ollama unavailable
+### Ollama no responde
 
 ```bash
 curl http://localhost:11434/api/tags
 ```
 
-### Qdrant unavailable
+### Qdrant no responde
 
 ```bash
 curl http://localhost:6333/readyz
 cd docker && docker compose up -d qdrant
 ```
 
-### tree-sitter unavailable
+### `tree_sitter` no se puede importar
 
 ```bash
 python3 -m pip install -r requirements-dev.txt
 python3 -c 'import tree_sitter, tree_sitter_language_pack'
 ```
 
-### OpenCode configuration reports invalid paths
+### OpenCode informa rutas inválidas
 
 ```bash
 ./scripts/setup.sh
 bun run tools/validate-config.ts
 ```
 
-The generated configuration should use the current repository root and valid source paths.
+El instalador regenera las rutas MCP utilizando `TONY_REPO_ROOT`.
 
-### Health fails while tests pass
+### El health check falla aunque `make test` pasa
 
-This can be expected. `make test` is designed to run deterministic local tests without requiring external services, while `make health` validates the configured runtime and real service connectivity.
+Esto es posible y no implica necesariamente un fallo del código. `make test` valida la suite local sin servicios externos; `make health` valida además Ollama, Qdrant, MCP y embeddings reales.
 
-## Documentation map
+## Fuentes de verdad
 
-| Document | Responsibility |
-|---|---|
-| `README.md` | Overview and quickstart |
-| `INSTALL.md` | Installation and environment configuration |
-| `ARCHITECTURE.md` | Architecture and component responsibilities |
-| `TESTING.md` | Tests, CI, coverage, and troubleshooting |
-| `AGENTS.md` | Agent/development rules |
-| Component READMEs | Subsystem-specific implementation details |
+- `INSTALL2.md` describe el procedimiento de instalación y configuración.
+- `scripts/setup.sh` es la fuente de verdad para el comportamiento real del instalador.
+- `scripts/health.sh` es la fuente de verdad para el health check.
+- `README.md` es la fuente de verdad para el quickstart general.
+- `ARCHITECTURE.md` es la fuente de verdad para la arquitectura.
+- Código y tests son la fuente definitiva cuando existe una contradicción con la documentación.
 
-If this document conflicts with `setup.sh`, the installer behavior is authoritative.
+## Documentación
+[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.
+[INSTALL.md](INSTALL.md) — instalación y configuración del entorno.
+[ARCHITECTURE.md](ARCHITECTURE.md) — componentes, responsabilidades, flujos, contratos y persistencia.
+[AGENTS.md](AGENTS.md) — reglas operativas para agentes y desarrollo.
+[TESTING.md](TESTING.md) — estrategia, comandos y cobertura de pruebas.
