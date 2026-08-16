@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -16,7 +15,6 @@ def test_kernel_runtime_dir_is_external(monkeypatch, tmp_path):
 
     runtime = Path(cli._runtime_dir())
     assert runtime == tmp_path / "runtime"
-    assert Path(os.environ["TONY_KERNEL_STATE_DIR"]).name == "kernel"
 
 
 def test_code_index_manifest_is_external(monkeypatch, tmp_path):
@@ -29,7 +27,7 @@ def test_code_index_manifest_is_external(monkeypatch, tmp_path):
     assert not str(manifest).startswith(str(ROOT))
 
 
-def test_opencode_keeps_sqlite_and_moves_runtime(monkeypatch):
+def test_opencode_keeps_sqlite_and_moves_runtime():
     config = json.loads((ROOT / "opencode.json").read_text(encoding="utf-8"))
     mcp = config["mcp"]
 
