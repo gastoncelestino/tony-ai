@@ -8,6 +8,7 @@
 
 export interface ToolExecutionObservation {
   tool: string
+  task_id: string | null
   arguments: Record<string, unknown>
   result: unknown
   success: boolean | null
@@ -35,12 +36,21 @@ function readError(value: unknown): string | null {
   return null
 }
 
+function readTaskId(argumentsObject: Record<string, unknown>): string | null {
+  const taskId = argumentsObject.task_id
+  return typeof taskId === "string" && taskId.length > 0 ? taskId : null
+}
+
 /**
  * Normalize the payload delivered by OpenCode's tool.execute.after hook.
  *
  * Success is intentionally nullable: not every tool result has a stable
  * success flag, and the adapter must not manufacture evidence from an
  * unknown result shape.
+ *
+ * Task identity is intentionally strict: only an explicit `task_id` argument
+ * can establish a graph link. Session ids, phases, tool names, and inferred
+ * context are never treated as task identity.
  */
 export function observeToolExecution(
   input: ToolExecutionInput,
@@ -52,6 +62,7 @@ export function observeToolExecution(
 
   return {
     tool: input.tool,
+    task_id: readTaskId(input.arguments),
     arguments: { ...input.arguments },
     result,
     success: readBoolean(resultObject?.success),
