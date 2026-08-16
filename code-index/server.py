@@ -65,6 +65,24 @@ def _extract_project_name(directory: str) -> str:
 DEFAULT_PROJECT = _extract_project_name(PROJECT_ROOT)
 
 
+def _runtime_manifest_path(_root: str) -> str:
+    """Keep the incremental code-index SQLite manifest out of the checkout."""
+    runtime_root = os.environ.get("TONY_RUNTIME_DIR")
+    if runtime_root:
+        runtime_root = os.path.abspath(os.path.expanduser(runtime_root))
+    else:
+        runtime_root = os.path.join(os.path.expanduser("~"), ".tony-ai", DEFAULT_PROJECT)
+    directory = os.path.join(runtime_root, "code-index", ".codeindex")
+    os.makedirs(directory, exist_ok=True)
+    return os.path.join(directory, "manifest.db")
+
+
+# core.py is also used as a standalone library/CLI. The MCP server is the
+# long-lived runtime entrypoint, so override its manifest location here while
+# preserving core.py's public API and the existing SQLite schema.
+core.manifest_path = _runtime_manifest_path
+
+
 # ---------------------------------------------------------------------------
 # Tool handlers
 # ---------------------------------------------------------------------------
