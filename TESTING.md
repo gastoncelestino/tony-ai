@@ -1,235 +1,226 @@
 # Tony-AI — Testing
 
-## 1. Objetivo
-
-Tony-AI separa las pruebas deterministas del código de los smoke tests que requieren infraestructura externa.
-
-La estrategia tiene cuatro capas:
+## Estrategia general
 
 ```text
-                         Tony-AI Testing
-                              │
-          ┌───────────────────┼───────────────────┐
-          ▼                   ▼                   ▼
-       Python             TypeScript          Configuración
-        tests                tests              / OpenCode
-          │                   │                   │
-       pytest              Bun             validate-config
-          │
-          └── runner standalone
-              sin Pytest
-
-                     ┌───────────────────┐
-                     │ Smoke / Health    │
-                     │ Ollama + Qdrant   │
-                     └───────────────────┘
+                    Tony-AI Testing
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+    Python tests      TypeScript tests   Configuración
+    (deterministas)   (deterministas)    (estructura)
+        │                 │                   │
+     pytest          Bun + tree-sitter   validate-config
+     + runner        + real plugins       + opencode.json
+     standalone
+        │
+    Sin Pytest
+    (solo stdlib)
+        │
+        └─── Fallback para CI aislada
+        
+        ┌──────────────────────────────┐
+        │   Smoke tests (separados)    │
+        │   Ollama + Qdrant (opcional) │
+        │   make verify-qdrant         │
+        │   make health                │
+        └──────────────────────────────┘
 ```
 
-La suite local está diseñada para ejecutarse sin Ollama, Qdrant ni Docker. Los servicios externos se validan por separado con `make verify-qdrant` y `make health`.
+## 0. Quick Start
 
-## 2. Prerrequisitos de la suite
-
-Para ejecutar la suite completa se necesita:
-
-- Python 3.10+.
-- Bun 1.3.14 en CI; versiones compatibles de Bun pueden usarse localmente.
-- Dependencias de `requirements-dev.txt` para pytest y cobertura.
-
-Instalación:
+**Solo necesitas verificar que tu cambio no rompió nada:**
 
 ```bash
-python3 -m pip install -r requirements-dev.txt
+make test
 ```
 
-O, para una instalación completa del proyecto:
+Eso ejecuta toda la suite local (Python + TypeScript + validación de config) sin Ollama, Qdrant ni Docker.
+
+**Cambios críticos (Kernel, MCP, config, infraestructura):**
+
+```bash
+make test-all
+make health
+```
+
+Eso es el 95% de lo que necesitas.
+
+---
+
+## 1. Qué necesito
+
+### Requisitos mínimos
+
+- **Python 3.10+** (CI testea 3.10, 3.11, 3.12)
+- **Bun 1.3.14** (o compatible en local)
+- **sqlite3** (para bases persistentes)
+- **make** (Makefile)
+
+### Instalación
+
+**Opción 1: Setup completo**
 
 ```bash
 ./scripts/setup.sh
 ```
 
-La suite Python tiene además un runner standalone basado únicamente en la librería estándar.
+**Opción 2: Manual**
 
-## 3. Comando recomendado
+```bash
+python3 -m pip install -r requirements-dev.txt
+bun install  # si no está instalado
+```
 
-El comando principal es:
+### Verificar instalación
+
+```bash
+python3 --version        # 3.10+
+bun --version            # 1.3.14+
+python3 -m pytest --version
+make --version
+```
+
+### Nota sobre pytest
+
+Pytest es recomendado pero NO obligatorio. Si no está disponible, el Makefile usa automáticamente `tools/run-python-tests.py` (runner standalone basado en stdlib).
+
+```bash
+# Ver si pytest está disponible
+make check-test-deps
+```
+
+---
+
+## 2. Qué comando usar según mi cambio
+
+| Mi cambio | Ejecutar | Nota |
+|-----------|----------|------|
+| Feature/bugfix normal | `make test` | Sin infraestructura |
+| Kernel, MCP, config | `make test-all` | Incluye tests SDD E2E |
+| Kernel + infraestructura | `make test-all` + `make health` | Requiere Ollama, Qdrant |
+| Code Indexer | `make test-all` | tree-sitter es obligatorio |
+| Judgment Memory | `make test-all` | Incluye hooks con mocks |
+| Solo Python | `make test-python` | No necesita Bun |
+| Solo TypeScript | `make test-ts` | Necesita Bun |
+| Verificar SDD E2E | `make verify-sdd-flow` | Solo Python, local |
+| Antes de hacer push | `make test` + `bun run tools/validate-config.ts` + `git diff --check` | Check pre-commit |
+
+---
+
+## 3. Cómo ejecutar tests
+
+### Todas las suites (recomendado)
 
 ```bash
 make test
 ```
 
-`make test` realiza, en este orden general:
+**Qué hace internamente:**
+1. Verifica dependencias mínimas (`check-test-deps`)
+2. Valida convenciones de naming (`check-test-discovery`)
+3. Ejecuta tests Python (`test-python`)
+4. Ejecuta tests TypeScript (`test-ts`)
+5. Valida configuración (`validate-config`)
 
-1. verifica las dependencias mínimas para la suite;
-2. verifica las convenciones de descubrimiento de tests;
-3. ejecuta los tests Python;
-4. ejecuta los tests TypeScript con Bun;
-5. valida `opencode.json`, prompts, agentes, MCP y referencias `{file:...}`.
+**Necesita:** Bun (para TypeScript)
+**No necesita:** Ollama, Qdrant, Docker
 
-**Importante:** `make test` necesita Bun porque incluye la suite TypeScript. No necesita Ollama, Qdrant ni Docker.
-
-Para diagnóstico detallado, se recomienda ejecutar las suites directamente en lugar de depender del fallback del Makefile:
+### Suites individuales
 
 ```bash
-python3 -m pytest tests -v
-bun test tests
-bun run tools/validate-config.ts
+make test-python      # Solo tests Python
+make test-ts          # Solo tests TypeScript (necesita Bun)
+make test-kernel      # Tests Kernel + SDD flow (necesita Bun)
+make test-all         # make test + test-kernel
 ```
 
-## 4. Tests Python
+**Referencia:**
+- `test-python`: Ejecuta pytest o runner standalone (fallback)
+- `test-ts`: Ejecuta con Bun
+- `test-kernel`: Python (`test_kernel_*.py`, `test_sdd_flow_e2e.py`) + TypeScript (`tony_kernel_*.test.ts`)
 
-### Pytest
-
-Para desarrollo y CI:
+### Ejecutar directamente (diagnóstico)
 
 ```bash
+# Python con pytest
 python3 -m pytest tests -v
 ```
-
-### Runner standalone
-
-Permite ejecutar la suite Python sin instalar Pytest:
-
 ```bash
+# Python con runner standalone (sin pytest)
 python3 tools/run-python-tests.py tests
 ```
-
-El runner está pensado para conservar una vía de validación mínima basada solo en stdlib.
-
-### Tests focalizados
-
-Ejemplos:
-
+El runner standalone usa solo stdlib. Si pytest pasó pero standalone no, significa el test depende de algo no instalable sin pip. Usar pytest en ese caso.
 ```bash
-python3 -m pytest tests/test_kernel_state_machine.py -v
-python3 -m pytest tests/test_kernel_integration.py -v
-python3 -m pytest tests/test_code_index_core.py -v
-python3 -m pytest tests/test_judgment_memory_ledger.py -v
-python3 -m pytest tests/test_sdd_flow_e2e.py -v
-```
-
-## 5. Tests TypeScript
-
-Los tests TypeScript usan Bun y el patrón de descubrimiento `*.test.ts`:
-
-```bash
+# TypeScript
 bun test tests
 ```
+```bash
+# Validación de config
+bun run tools/validate-config.ts
+```
+Validación de `opencode.json`, prompts, agentes, MCP y referencias de archivos.
 
-Tests focalizados:
+**Comprueba:**
+- Sintaxis y estructura
+- Agentes configurados
+- Prompts fuente válidos
+- Referencias `{file:...}` correctas
+- MCP servers registrados
+- Convenciones de naming
 
+### Errores frecuentes en config
+
+| Error | Solución |
+|-------|----------|
+| `{file:...}` apunta a archivo inexistente | Corregir referencia |
+| Agente sin prompt fuente válido | Agregar/corregir archivo de prompt |
+| Referencia a bundle eliminado | Usar prompt fuente actual |
+| Test con nombre no descubrible | Respetar convenciones de `tests/` |
+
+---
+
+### Tests específicos
+
+**Python:**
+```bash
+python3 -m pytest tests/test_kernel_state_machine.py -v
+python3 -m pytest tests/test_sdd_flow_e2e.py -v
+python3 -m pytest tests/test_code_index_core.py -v
+```
+
+**TypeScript:**
 ```bash
 bun test tests/tony_kernel_hooks.test.ts
-bun test tests/tony_kernel_integration.test.ts
-bun test tests/tony_kernel_e2e.test.ts
 bun test tests/judgment_memory_hooks.test.ts
 ```
 
-`make check-test-discovery` rechaza archivos TypeScript que no sigan la convención de descubrimiento y también valida los nombres de los tests Python.
-
-## 6. Makefile
-
-Targets principales:
+### Tests por categoría (markers)
 
 ```bash
-make test
-make test-python
-make test-ts
-make test-kernel
-make test-all
-```
-
-### `make test`
-
-Suite normal: Python + TypeScript + validación de configuración.
-
-### `make test-python`
-
-Ejecuta la suite Python, usando pytest cuando está disponible y el runner standalone como fallback.
-
-### `make test-ts`
-
-Ejecuta todos los tests TypeScript con Bun.
-
-### `make test-kernel`
-
-Foco en Kernel y flujo SDD, incluyendo tests Python y TypeScript relacionados.
-
-### `make test-all`
-
-Ejecuta `make test` y agrega `make test-kernel`.
-
-## 7. Cobertura
-
-La cobertura Python usa `coverage` y tiene un umbral inicial de **40%**:
-
-```bash
-make coverage-python
-```
-
-El reporte se genera en:
-
-```text
-coverage.xml
-```
-
-La cobertura TypeScript usa el soporte de cobertura de Bun:
-
-```bash
-make coverage-ts
-```
-
-El reporte se genera en:
-
-```text
-coverage-bun/lcov.info
-```
-
-La cobertura completa se ejecuta con:
-
-```bash
-make coverage
-```
-
-El umbral de 40% es deliberadamente inicial: sirve para detectar regresiones y módulos sin cobertura sin convertir la cobertura en un objetivo artificial. Debe aumentarse a medida que se incorporen pruebas adicionales sobre paths de error, MCP y servicios externos.
-
-## 8. Categorías de tests
-
-Algunos tests Python utilizan markers para aislar problemas específicos:
-
-```bash
-python3 -m pytest -m concurrency
-python3 -m pytest -m mcp
+python3 -m pytest -m concurrency    # Escenarios de concurrencia
+python3 -m pytest -m mcp            # Contrato MCP JSON-RPC
 python3 -m pytest -m "not concurrency"
 ```
 
-### `concurrency`
+---
 
-Comprueba escenarios de concurrencia del estado persistente del Kernel: procesos concurrentes, actualizaciones que no deben perderse, recuperación ante estado corrupto, archivos temporales huérfanos y escrituras interrumpidas.
+## 4. Qué se prueba
 
-### `mcp`
+### Tony Kernel (el corazón)
 
-Comprueba el contrato JSON-RPC de los MCP servers: `initialize`, `tools/list`, `tools/call`, requests inválidos, tools desconocidas, excepciones de handlers, métodos desconocidos, notificaciones y `ping`.
+Máquina de estados, gates, checksums, ledgers, integración TypeScript ↔ Python.
 
-## 9. Tony Kernel y enforcement
+**Cubre:**
+- 8 fases SDD (explore → archive)
+- Phase Gate, Artifact Gate, Scope Guard
+- Retry budget
+- Phase checksums
+- Evidence ledger, task ledger
+- Comportamiento fail-closed (regresiones detectadas inmediatamente)
 
-El Kernel tiene pruebas específicas porque no es solo una librería de estado: aplica reglas del workflow SDD.
-
-La cobertura relevante incluye:
-
-- máquina de estados de las 8 fases SDD;
-- Phase Gate;
-- Artifact Gate;
-- Scope Guard;
-- retry budget;
-- checksums de fase;
-- evidencia y task ledger;
-- integración plugin TypeScript ↔ Kernel Python;
-- comportamiento fail-closed;
-- flujo E2E `explore → archive`.
-
-Tests principales:
-
-```text
+**Tests principales:**
+```
 tests/test_kernel_state_machine.py
 tests/test_kernel_integration.py
 tests/test_kernel_cli.py
@@ -238,128 +229,167 @@ tests/test_kernel_enforcement.py
 tests/test_sdd_flow_e2e.py
 ```
 
-El flujo SDD E2E se puede ejecutar directamente con:
-
+**Ejecutar:**
 ```bash
-make verify-sdd-flow
+make test-kernel
+make verify-sdd-flow  # E2E local sin Ollama/Qdrant
 ```
 
-Este test es local y no debe confundirse con los smoke tests que requieren Ollama o Qdrant.
+### MCP servers (contrato JSON-RPC)
 
-## 10. MCP servers
+Cuatro servidores con interfaz estable:
+- `local-memory/server.py` — memoria persistente
+- `code-index/server.py` — indexación semántica
+- `judgment-memory/server.py` — ledger de juicios
+- `kernel/mcp_server.py` — orquestador
 
-Los cuatro MCP servers deben mantener un contrato JSON-RPC estable:
+**Probado:**
+- `initialize`, `tools/list`, `tools/call`
+- Errores y edge cases (requests inválidos, tools desconocidas)
+- Notificaciones y protocolo
+- Consistencia en `opencode.json`
 
-```text
-local-memory/server.py
-code-index/server.py
-judgment-memory/server.py
-kernel/mcp_server.py
-```
+**Marker:** `pytest -m mcp`
 
-El health check los prueba enviando `initialize`, mientras que los tests unitarios/integración cubren casos de protocolo y herramientas.
+### Judgment Memory
 
-La validación de configuración también comprueba que los MCP registrados en `opencode.json` y sus referencias sean consistentes.
+Plugin real con SQLite temporal + servidor HTTP mock (sin Qdrant real).
 
-## 11. Judgment Memory
+**Cubre:**
+- Persistencia del ledger
+- Normalización de juicios
+- Embeddings y upserts en Qdrant (simulados)
+- Recuperación semántica
+- Thresholds y filtros
+- Degradación si indexado falla
 
-`tests/judgment_memory_hooks.test.ts` importa el plugin real y prueba sus hooks con SQLite temporal y un servidor HTTP local compatible con Ollama/Qdrant.
+Cuando se activa **Judgment Day**, el sistema recupera juicios anteriores similares antes de evaluar. 
+**Test:** `tests/judgment_memory_hooks.test.ts`
 
-El harness cubre, entre otros:
+### Code Indexer
 
-- persistencia del ledger;
-- normalización de juicios;
-- embeddings;
-- upserts en Qdrant;
-- recuperación semántica;
-- thresholds y filtros;
-- inyección del recall en contexto;
-- captura de resultados estructurados;
-- transformación del prompt;
-- degradación cuando el indexado externo falla.
+Indexación semántica con `tree-sitter` obligatoriamente (no regex).
 
-Esto permite probar el comportamiento del plugin sin depender de una instancia real de Ollama o Qdrant.
+**Cubre:**
+- Chunking estructural
+- Indexación incremental
+- Búsqueda semántica
+- Cambios de archivos
 
-## 12. Code Indexer
+**Test:** `tests/test_code_index_core.py`
 
-El Code Indexer usa `tree-sitter` obligatoriamente para chunking estructural.
+**Importante:** Cambiar `TONY_INDEX_CHUNKER` a `regex` no es soportado.
 
-El test principal es:
+### Configuración y prompts
 
-```bash
-python3 -m pytest tests/test_code_index_core.py -v
-```
-
-La suite utiliza HTTP local/mocks para probar embeddings, indexación incremental y comportamiento frente a cambios sin necesitar un Qdrant real.
-
-No se considera válido solucionar un fallo del indexador cambiando `TONY_INDEX_CHUNKER` a `regex`: ese modo no forma parte del contrato soportado del proyecto.
-
-## 13. Configuración y prompts SDD
-
-La configuración se valida directamente; no existe una etapa de generación o materialización de bundles de prompts.
-
-Ejecutar:
+Validación de `opencode.json`, agentes, prompts, MCP y referencias de archivos.
 
 ```bash
 bun run tools/validate-config.ts
 ```
 
-La validación comprueba, entre otras cosas:
+**Comprueba:**
+- Sintaxis y estructura de `opencode.json`
+- Agentes y prompts fuente válidos
+- Referencias `{file:...}` correctas
+- MCP servers registrados
+- Convenciones de naming
 
-- sintaxis y estructura de `opencode.json`;
-- agentes configurados;
-- prompts fuente;
-- referencias `{file:...}`;
-- recursos compartidos;
-- servidores MCP;
-- convenciones de discovery.
+**Errores frecuentes:**
+| Error | Solución |
+|-------|----------|
+| `{file:...}` inexistente | Corregir referencia |
+| Agente sin prompt fuente | Agregar/corregir archivo de prompt |
+| Referencia a bundle eliminado | Usar prompt fuente actual |
+| Test no descubrible | Respetar convenciones de `tests/` |
 
-### Errores frecuentes
+---
 
-- `{file:...}` apunta a un archivo inexistente → corregir la referencia.
-- Agente sin prompt fuente válido → agregar/corregir el archivo.
-- Referencia a un bundle o manifest eliminado → usar el prompt fuente actual.
-- Test con nombre no descubrible → respetar las convenciones de `tests/`.
+## 5. Discovery conventions
 
-## 14. CI
+Tests deben seguir estas convenciones o `make check-test-discovery` las rechazará.
 
-La CI ejecuta la suite en:
+### Python
 
-```text
-Python 3.10
-Python 3.11
-Python 3.12
-Bun 1.3.14
+**Patrón:** `tests/test_*.py` o `tests/*_test.py`
+
+Ejemplos válidos:
+```
+tests/test_kernel_state_machine.py  ✓
+tests/test_sdd_flow_e2e.py          ✓
+tests/judgment_memory_ledger.py     ✗ (no "test_" prefix)
+tests/my_tests.py                   ✗ (no "test_" prefix)
 ```
 
-Cada versión ejecuta:
+**Función/clase dentro:**
+- Test funciones: `test_<description>`
+- Test clases: `Test<Component>`
+
+### TypeScript
+
+**Patrón:** `tests/*.test.ts` (obligatorio)
+
+Ejemplos válidos:
+```
+tests/tony_kernel_hooks.test.ts     ✓
+tests/judgment_memory_hooks.test.ts ✓
+tests/kernel.spec.ts                ✗ (debe ser .test.ts)
+tests/kernel.tests.ts               ✗ (debe ser .test.ts)
+```
+
+### Validación
 
 ```bash
-make test
+make check-test-discovery
 ```
 
-Python 3.12 ejecuta además la cobertura y publica:
+Falla si algún archivo no sigue las convenciones o si hay tests TypeScript pero ninguno descubrible.
 
-```text
-coverage.xml
-coverage-bun/lcov.info
+---
+
+## 6. Coverage
+
+### Python coverage
+
+```bash
+make coverage-python
 ```
 
-Existe un job separado que comprueba el build de Docker.
+**Genera:** `coverage.xml`, `coverage-contexts.json`
 
-La CI no necesita Ollama ni Qdrant para la suite local.
+**Umbral:** 40% inicial (deliberadamente bajo para detectar regresiones sin ser artificial). Aumenta junto con tests reales.
 
-## 15. Smoke tests e infraestructura externa
+**Mide:** Branches de `kernel/`, `code-index/`, `judgment-memory/`, `local-memory/`
 
-Los checks que necesitan infraestructura real están separados de `make test`.
+### TypeScript coverage
 
-### Qdrant
+```bash
+make coverage-ts
+```
+
+**Genera:** `coverage-bun/lcov.info`
+
+### Cobertura completa
+
+```bash
+make coverage
+```
+
+Ejecuta ambas.
+
+---
+
+## 7. Smoke tests e infraestructura externa
+
+Están **completamente separados** de `make test`. Solo ejecutar si tienes Ollama y Qdrant.
+
+### Verificar Qdrant (indexación real)
 
 ```bash
 make verify-qdrant
 ```
 
-Comprueba el roundtrip real de embeddings/indexación/búsqueda contra Ollama y Qdrant.
+Roundtrip real: Ollama → embeddings → Qdrant → búsqueda.
 
 ### Health check completo
 
@@ -367,51 +397,258 @@ Comprueba el roundtrip real de embeddings/indexación/búsqueda contra Ollama y 
 make health
 ```
 
-`health.sh` verifica:
+Verifica:
+- `opencode.json` y portabilidad de rutas
+- Cuatro MCP servers via `initialize`
+- Ollama y modelos de embeddings
+- Qdrant (`/readyz`, `/collections`)
+- Directorios locales escribibles
+- Roundtrip de embeddings
 
-- `opencode.json` y portabilidad de rutas;
-- los cuatro MCP servers mediante `initialize`;
-- Ollama y los modelos de embeddings;
-- Qdrant (`/readyz` y `/collections`);
-- directorios locales escribibles;
-- roundtrip de embeddings mediante `verify-qdrant.ts`.
+**Interpretación:**
+- `make test` pasó pero `make health` falló → problema de infraestructura, no de código
+- Ambas fallaron → revisar código + infraestructura
 
-Un fallo de `make health` puede ser un problema de infraestructura aunque `make test` pase correctamente.
-
-## 16. Limpieza
-
-Para eliminar bases locales y reportes de cobertura generados por las pruebas:
+### Levantar/bajar infraestructura
 
 ```bash
-make clean
+make docker-up    # Ollama + Qdrant en local
+make docker-down
 ```
 
-`make clean` no debe utilizarse como mecanismo de recuperación general del proyecto: elimina estado local deliberadamente.
+---
 
-## 17. Flujo recomendado antes de un commit
+## 8. Troubleshooting
 
-Para un cambio normal:
+### "Test X falla y no sé por qué"
+
+```bash
+# Paso 1: Aislar el test
+python3 -m pytest tests/test_<module>.py::test_<name> -v
+
+# Paso 2: Ver logs completos
+python3 -m pytest tests/test_<module>.py::test_<name> -vv -s
+
+# -s muestra prints y logs en tiempo real
+```
+
+### "Tests pasan localmente pero fallan en CI"
+
+CI ejecuta Python 3.10, 3.11, 3.12. Generalmente:
+
+```bash
+# Verificar tu versión local
+python3 --version
+
+# Testear con versión exacta (si es 3.11 en local, CI puede fallar en 3.10)
+pyenv install 3.10   # o usar Docker
+pyenv local 3.10
+make test
+
+# Verificar Bun
+bun --version  # CI usa 1.3.14
+```
+
+### "make test necesita Bun pero no lo tengo"
+
+```bash
+# Opción 1: Instalar Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Opción 2: Solo tests Python (sin TypeScript)
+make test-python
+```
+
+### "make health falla pero make test pasó"
+
+Infraestructura no disponible (esperado):
+
+```bash
+# Verificar Qdrant
+curl http://localhost:6333/readyz || echo "Qdrant not running"
+
+# Verificar Ollama
+curl http://localhost:11434/api/tags || echo "Ollama not running"
+
+# Si no están corriendo, `make health` falla por diseño
+make docker-up  # Levanta servicios
+```
+
+### "Runner standalone falla pero pytest pasó"
+
+Runner standalone usa solo stdlib. Si pytest pasó pero standalone no:
+
+```bash
+# El test probablemente depende de external packages
+python3 tools/run-python-tests.py tests
+
+# Si falla, es porque usa algo no en stdlib (como pytest)
+# Usar pytest en ese caso
+```
+
+### "Cambié configuración y validate-config falla"
+
+```bash
+# Ver error exacto
+bun run tools/validate-config.ts
+
+# Errors comunes:
+# - {file:...} apunta a archivo que no existe
+# - MCP server en opencode.json no está configurado
+# - Prompt fuente no existe o está mal referenciado
+```
+
+---
+
+## 9. CI (Continuous Integration)
+
+### Cuándo se ejecuta
+
+**Push** a `main` o `dev`
+**Pull request** contra `main` o `dev`
+
+### Qué se ejecuta por versión de Python
+
+Matriz: Python 3.10, 3.11, 3.12 (con Bun 1.3.14)
+
+Para cada versión:
+1. `make check-test-discovery` — valida naming
+2. `make test` — suite local completa
+3. Si Python 3.12: `make coverage` — cobertura completa
+
+### Artifacts (Python 3.12 solamente)
+
+Se publican:
+- `coverage.xml` — cobertura Python (XML para SonarQube/etc)
+- `coverage-contexts.json` — contexto por test (auditoría de redundancia)
+- `coverage-bun/lcov.info` — cobertura TypeScript (LCOV format)
+
+### Job separado: Docker build
+
+Se compila la imagen Docker (timeout: 10 minutos).
+
+### Nota importante
+
+CI **no necesita Ollama ni Qdrant** para la suite local. Solo para smoke tests (que son manuales).
+
+---
+
+## 10. Makefile reference
+
+| Comando | Qué hace | Necesita |
+|---------|----------|----------|
+| `make test` | Python + TypeScript + config | Bun |
+| `make test-python` | Solo tests Python | — |
+| `make test-ts` | Solo tests TypeScript | Bun |
+| `make test-kernel` | Kernel + SDD + TypeScript kernel | Bun |
+| `make test-all` | `test` + `test-kernel` | Bun |
+| `make check-test-discovery` | Valida naming conventions | — |
+| `make check-test-deps` | Verifica pytest + Bun | — |
+| `make verify-sdd-flow` | Flujo E2E SDD local | — |
+| `make coverage-python` | Coverage Python (40% threshold) | — |
+| `make coverage-ts` | Coverage TypeScript | Bun |
+| `make coverage` | Ambas coberturas | Bun |
+| `make verify-qdrant` | Indexación real Ollama + Qdrant | Ollama, Qdrant |
+| `make health` | Health check infraestructura | Ollama, Qdrant |
+| `make docker-up` | Levanta Ollama + Qdrant | Docker |
+| `make docker-down` | Para Ollama + Qdrant | Docker |
+| `make validate-config` | Valida opencode.json | — |
+| `make clean` | Elimina bases + reportes | — |
+| `make bootstrap` | Setup completo del proyecto | — |
+
+**Nota:** `make test` ejecuta internamente: `check-test-deps` → `check-test-discovery` → `test-python` → `test-ts` → `validate-config`
+
+---
+
+## 11. Flujo operacional: Qué ejecutar cuándo
+
+### Antes de hacer `commit`
 
 ```bash
 make test
+```
+
+Verifica que tu código NO rompió nada en la suite local (Python + TypeScript + config).
+
+**Si `make test` falla, NO hagas commit. Arreglá el problema primero.**
+
+### Antes de hacer `push` a rama local
+
+Lo mismo que antes de commit:
+
+```bash
+make test
+```
+
+Si trabajás en una rama que NO es `main` ni `dev`, `make test` es suficiente.
+
+### Antes de hacer `push` a `main` o `dev`
+
+Además de `make test`:
+
+```bash
 bun run tools/validate-config.ts
 git diff --check
 ```
 
-Si el cambio afecta Kernel, MCP, configuración o infraestructura:
+**Qué verifican:**
+- `make test` — suite local completa
+- `bun run tools/validate-config.ts` — `opencode.json`, agentes, prompts, MCP válidos
+- `git diff --check` — sin espacios, líneas sin newline, etc
+
+### ¿Qué es un PR crítico?
+
+Un PR es **crítico** si toca CUALQUIERA de estos:
+
+- **Kernel** — lógica de máquina de estados, gates, enforcement
+- **MCP servers** — cambios en contrato JSON-RPC
+- **Configuración** — `opencode.json`, prompts, agentes
+- **Infraestructura** — Docker, scripts de setup, dependencias
+- **Testing** — cambios en tests, Makefile, discovery conventions
+
+### Antes de hacer PR crítico
 
 ```bash
 make test-all
 make health
 ```
 
-Antes de commit debe ejecutarse además GGA según las convenciones del proyecto.
+**Por qué:**
+- `make test-all` = `make test` + tests específicos de Kernel + SDD E2E
+- `make health` = verifica infraestructura (Ollama, Qdrant, MCP servers)
 
-## 18. Principios de la estrategia
+**Si `make health` falla pero `make test-all` pasó:** problema de infraestructura, no de código. Documentá en el PR.
 
-1. **Local-first:** la mayor parte de la suite debe poder ejecutarse sin servicios externos.
-2. **Deterministic-first:** los contratos del Kernel, MCP, configuración y artifacts se prueban de forma reproducible.
-3. **Infrastructure-separated:** Ollama, Qdrant y Docker se validan mediante smoke tests específicos.
-4. **Real-plugin coverage:** los plugins críticos se prueban utilizando sus entrypoints reales, no solamente mocks de alto nivel.
-5. **Fail-closed:** los tests del Kernel deben detectar cualquier regresión que permita avanzar cuando faltan condiciones obligatorias.
-6. **Incremental coverage:** el umbral de cobertura aumenta junto con la cobertura real de paths de error y componentes externos.
+### Cambios específicos: qué ejecutar adicional
+
+| Si cambias... | Además de `make test`, ejecutar |
+|---|---|
+| Code Indexer (`code-index/`) | `make test-all` + `make verify-qdrant` |
+| Judgment Memory (`judgment-memory/`) | `make test-all` |
+| MCP servers | `make test-all` + `make health` |
+| Configuración (`opencode.json`) | `bun run tools/validate-config.ts` |
+| Makefile | `make check-test-discovery` |
+| Docker | `cd docker && docker compose build` |
+| Scripts de setup | `./scripts/setup.sh` (en clean environment) |
+
+### Resumen rápido
+
+**90% de los cambios:**
+```bash
+make test
+```
+
+**Cambios de Kernel/MCP/Config:**
+```bash
+make test-all
+make health
+```
+
+**Antes de push a main/dev:**
+```bash
+make test
+bun run tools/validate-config.ts
+git diff --check
+```
+
+---
