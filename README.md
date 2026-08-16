@@ -125,41 +125,6 @@ El Kernel comprueba que el cambio esté en condiciones de avanzar antes de permi
 Entre otras cosas, controla: artifacts requeridos; checksums; alcance permitido de los cambios; evidencias; estado de la fase; transiciones válidas.   
 Esto permite que el workflow no dependa únicamente de que un agente "recuerde" qué debe hacer: las condiciones críticas del proceso son verificadas por una capa de control.
 	
-## Arquitectura
-                         ┌──────────────────────────┐
-                         │        OpenCode          │
-                         │   Agent Orchestrator     │
-                         │          + SDD           │
-                         └────────────┬─────────────┘
-                                      │
-                         ┌────────────▼─────────────┐
-                         │       Tony Kernel        │
-                         │                          │
-                         │ Phase Gate · Scope Guard │
-                         │ Artifacts · Checksums    │
-                         │ Evidence · Transitions   │
-                         └────────────┬─────────────┘
-                                      │
-                 ┌────────────────────┼────────────────────┐
-                 │                    │                    │
-                 ▼                    ▼                    ▼
-        ┌────────────────┐   ┌────────────────┐   ┌──────────────────┐
-        │ local-memory   │   │   code-index   │   │ judgment-memory  │
-        │                │   │                │   │                  │
-        │ Memoria        │   │ Búsqueda       │   │ Memoria de       │
-        │ persistente    │   │ semántica      │   │ juicios          │
-        │ SQLite         │   │ del código     │   │                  │
-        └───────┬────────┘   └───────┬────────┘   └────────┬─────────┘
-                │                    │                     │
-                ▼                    ▼                     ▼
-        ┌──────────────┐      ┌────────────────┐    ┌────────────────┐
-        │    SQLite    │      │ Ollama +       │    │ SQLite +       │
-        │              │      │ Qdrant         │    │ Qdrant         │
-        │ decisiones + │      │ embeddings +   │    │ ledger +       │
-        │ contexto     │      │ vector search  │    │ recuperación   │
-        └──────────────┘      └────────────────┘    └────────────────┘
-Para una descripción más profunda de los componentes y sus interfaces, consultá [ARCHITECTURE.md](ARCHITECTURE.md)
-
 # Requisitos
 - **Python 3.10+** — servidores MCP y tooling Python.
 ```bash
@@ -569,10 +534,11 @@ gga run --no-cache   # ignorar cache y revisar todo
 ```
 
 ## Documentación
-[INSTALL.md](INSTALL.md) — instalación y configuración detallada.  
-[ARCHITECTURE.md](ARCHITECTURE.md) — arquitectura interna y componentes.  
-[AGENTS.md](AGENTS.md) — define las reglas de comportamiento y desarrollo que deben seguir los agentes.  
-[TESTING.md](TESTING.md) — es la guía oficial de estrategia y ejecución de pruebas.  
+[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.
+[INSTALL.md](INSTALL.md) — instalación y configuración del entorno.  
+[ARCHITECTURE.md](ARCHITECTURE.md) — componentes, responsabilidades, flujos, contratos y persistencia.  
+[AGENTS.md](AGENTS.md) — reglas operativas para agentes y desarrollo.  
+[TESTING.md](TESTING.md) — estrategia, comandos y cobertura de pruebas.  
 
 ## Estado del proyecto
 `Tony-AI` está diseñado para ejecutarse localmente, manteniendo los modelos, memoria y datos semánticos bajo control del entorno del desarrollador.

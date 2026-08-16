@@ -219,7 +219,8 @@ docker compose -f docker/docker-compose.yml ps
 ```
 
 ## Documentación
-[INSTALL.md](INSTALL.md) — instalación y configuración detallada.  
-[ARCHITECTURE.md](ARCHITECTURE.md) — arquitectura interna y componentes.  
-[AGENTS.md](AGENTS.md) — define las reglas de comportamiento y desarrollo que deben seguir los agentes.  
-[TESTING.md](TESTING.md) — es la guía oficial de estrategia y ejecución de pruebas.
+[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.
+[INSTALL.md](INSTALL.md) — instalación y configuración del entorno.  
+[ARCHITECTURE.md](ARCHITECTURE.md) — componentes, responsabilidades, flujos, contratos y persistencia.  
+[AGENTS.md](AGENTS.md) — reglas operativas para agentes y desarrollo.  
+[TESTING.md](TESTING.md) — estrategia, comandos y cobertura de pruebas.  
