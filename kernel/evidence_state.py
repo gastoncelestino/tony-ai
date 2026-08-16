@@ -56,8 +56,8 @@ def assess_evidence(
     """
     if minimum_valid < 1:
         raise ValueError("minimum_valid must be at least 1")
-    if not 0.0 <= minimum_confidence <= 1.0:
-        raise ValueError("minimum_confidence must be between 0 and 1")
+    if minimum_confidence < 0.0:
+        raise ValueError("minimum_confidence must be non-negative")
 
     refs = tuple(evidence_refs)
     if not evidence:
@@ -67,8 +67,6 @@ def assess_evidence(
             reason="No evidence was provided",
         )
 
-    # Preserve contradictory execution outcomes even when the failed command
-    # is itself invalid evidence according to the normal completion validator.
     successful_outcomes = any(item.exit_code in (None, 0) for item in evidence)
     failed_outcomes = any(item.exit_code not in (None, 0) for item in evidence)
     if successful_outcomes and failed_outcomes:
