@@ -234,7 +234,7 @@ Es el chequeo de salud end-to-end de `Tony-AI`. No instala ni configura cosas: v
 
 Para la instalación detallada, consultá [INSTALL.md](INSTALL.md).
 
-# Cómo empezar con Tony-AI
+# ¿Cómo se usa?
 ```bash
 # 1. Inicializá el proyecto (una sola vez)
 /sdd-init
@@ -267,19 +267,7 @@ El orquestador hace el trabajo pesado: explora el código, arma una propuesta, g
 ```
 
 ```bash
-# 5. Qué ocurre si algo falla
-
-El Kernel bloquea la transición y señala la condición que impide avanzar.
-
-Por ejemplo:
-
-- Artifacts faltantes → completar o regenerar el artifact.
-- Diff fuera de `allowed_files` → revisar el scope.
-- Salto de fase → completar la fase anterior.
-```
-
-```bash
-# 6. Iterar sobre un cambio existente
+# 5. Iterar sobre un cambio existente
 Para retomar un cambio anterior:
 
 /sdd-load <change-id>          # retomá un cambio anterior
@@ -289,95 +277,156 @@ Para retomar un cambio anterior:
 ```
 
 ```bash
-# 7. Activar Judgment Day
+# 6. Activar Judgment Day
 
 `juzgar esto` recupera juicios anteriores relevantes, ejecuta los dos jueces configurados y registra el resultado en Judgment Memory para futuras revisiones.
 
 Actualmente la configuración incluye:
 - `jd-judge-a`
 - `jd-judge-b`
+
+- Resultado podría ser:
+	- JUDGMENT: APPROVED ✅ (ambos jueces de acuerdo)
+	- JUDGMENT: ESCALATED ⚠️ (encontraron cosas, necesita tu revisión)
 ```
 
 ```bash
-# 8. Memoria de prompts
-TonyMem también puede capturar prompts mediante el hook chat.message de tonymem.ts.
+# 7. TonyMem - Memoria Persistente
+Almacena en SQLite (en `.tonymem/memory.db`):
 
-Estas entradas se almacenan con:
-
-type='prompt-capture'
-
-Los prompts capturados se utilizan para reconstruir contexto de la sesión, pero se excluyen de las búsquedas normales de mem_search, ya que son bookkeeping y no decisiones o descubrimientos.
-
-- Llamado por el hook `chat.message` en `tonymem.ts`
-- Captura prompts crudos con `type='prompt-capture'`
-- Excluido de búsquedas por defecto (bookkeeping)
-- Se puede filtrar explícitamente si necesitás revisar prompts
-
-Estas entradas se usan para `mem_context` (recuperar el contexto de la sesión actual) pero **se excluyen por defecto de `mem_search`** — no son decisiones ni descubrimientos, son bookkeeping interno. Si necesitás buscar prompts, filtrá explícitamente por `type='prompt-capture'`.
-```
-
-```bash
-# 9. TonyMem - Memoria Persistente
-`local-memory/` mantiene decisiones, descubrimientos y contexto persistente entre sesiones.
-
-## Cada decisión/descubrimiento se guarda en SQLite
+# Ya está automático con los hooks, pero si querés guardar explícitamente algo:
 mem_save(
   task="manejo retry HTTP",
   observation="usar exponential backoff"
 )
 
-# Luego se recupera en nuevas conversaciones
+# Cuando trabajás en una tarea nueva, TonyMem busca automáticamente:
 mem_search("retry HTTP") → encuentra la decisión guardada
 
-Reutiliza: Decisiones arquitectónicas, bugs resueltos, patrones de código
+# Ciclo práctico: 
+# Sesión 1: Implementas manejo de reintentos
+/sdd-new "agregar reintentos en HTTP client"
+/sdd-apply
+# Se guarda automáticamente: task="retry HTTP", observation="exponential backoff"
+
+# Sesión 2: Necesitás manejar reintentos en otro lugar
+/sdd-new "agregar reintentos en queue processor"
+mem_search("retry HTTP")  # ← recupera la decisión anterior
+# TonyMem sugiere: "recordamos que usaste exponential backoff"
 ```
 
 ```bash
-# 10. Judgment Memory - Lecciones de Revisiones
+# 8. Judgment Memory - Lecciones de Revisiones
+Cuando termina Judgment Day, TonyMem registra automáticamente:
+jd_record(
+  task="validar JWT", 
+  final="approve",  # o "escalated"
+  lesson="siempre verificar signature expiration"
+)
 
-# Después de cada Judgment Day:
-jd_record(task="validar JWT", final="approve", lesson="siempre verificar signature expiration")
-# Futuras tareas similares recuerdan esta lección
+# En futuras tareas similares
+La próxima vez que alguien trabaje con JWT, Judgment Memory recupera:
+jd_recall(task="validar JWT")
+# Devuelve: "recordamos que el último JWT validado necesitaba verificar expiration"
 
-Reutiliza: Errores de review, mejores prácticas validadas
+# Ciclo práctico:
+# Sesión 1: Implementas validación JWT
+/sdd-apply       # código JWT
+/sdd-verify
+/sdd-archive
+juzgar esto      # dos jueces review
+# RESULTADO: Ambos confirman que hay que verificar expiration
+# Se guarda: lesson="siempre verificar signature expiration"
+
+# Sesión 2: Nuevo código de JWT en otro módulo
+/sdd-new "agregar JWT refresh"
+jd_recall("JWT")  # ← se ejecuta automáticamente en step 1 de judgment-day
+# Judgment Memory dice: "vimos antes que necesitas verificar expiration"
+# Los jueces revisan con ese contexto
 ```
 
 ```bash
-# 11. Code Indexer - Conocimiento del Codebase
-- Indexa incrementalmente (solo cambios)
-- Embeddings semánticos con bge-m3
-- Búsquedas como "cómo se maneja la autenticación" te encuentran código relevante
+# 9. Code Indexer - Conocimiento del Codebase
+Pregunta semántica sobre tu codebase
+code_search("cómo se maneja la autenticación")
+# Resultado: te encuentraa funciones, modules y patrones relacionados a auth
+# aunque no tengan esa palabra exacta
 
-Representa: Crecimiento del codebase, patrones emergentes
+code_search("validación de entrada")
+# Encuentra helpers, validators, middlewares que hacen validación
+
+# Ciclo práctico:
+# Sesión: Necesitás agregar rate limiting
+/sdd-new "agregar rate limiting"
+# Durante el explore:
+code_search("cómo se protegen los endpoints")
+# Code Indexer encuentra: middleware de auth, validaciones anteriores
+# con ese contexto, propone una solución similar
 ```
 
 ```bash
-# 12. Hooks de OpenCode (tonymem.ts)
-// Hook que captura automáticamente lo que haces
-"chat.message" → mem_save_prompt() // guarda prompts
-"task.execute.after" → guarda discoveries importantes
+# 10. Cómo funciona el aprendizaje en práctica:
+** Recuperación de contexto previo
+1. /sdd-new → delega sdd-explore + sdd-propose a sub-agentes
+   # Los sub-agentes empiezan de cero
+
+2. mem_search() → encuentra decisión previa sobre JWT
+   # Busca en TonyMem: "¿hemos hablado de JWT antes?"
+   # Encuentra: "decisión anterior: usar RS256 para firmar"
+
+3. code_search() → encuentra cómo funciona auth actual
+   # Code Indexer busca: "¿cómo está implementada la autenticación?"
+   # Encuentra: módulo de login, middleware de validation
+
+4. jd_recall() → recuerda lección sobre token expiration
+   # Judgment Memory busca: "¿qué aprendimos de reviews de JWT?"
+   # Encuentra: "siempre verificar expiration del token"
+   
+- Resultado: Los agentes NO parten de cero, tienen contexto de decisiones, código y lecciones anteriores.
+
+
+** Implementación + Aprendizaje
+5. /sdd-tasks → genera plan con ese contexto
+   # Usa lo que encontró en pasos 2-4
+
+6. /sdd-apply → implementa las tareas
+   # Hooks capturan automáticamente lo que se hace
+
+7. /sdd-verify → valida contra specs
+   # Asegura que respete el diseño
+
+8. /sdd-archive → cierra el cambio, guarda archive-report
+   # Registra la decisión para futuro
+
+9. juzgar esto → dos jueces review
+   # Revisan la implementación
+   # Si encuentran lecciones → se guardan en Judgment Memory
+   
+El ciclo de aprendizaje
+Primera implementación (Sesión 1)
+    ↓
+    ├─ Se toman decisiones (JWT + RS256)
+    ├─ Se encuentran bugs (expiration no se verificaba)
+    ├─ Los jueces descubren → lesson guardada
+    ↓
+Semanas después (Sesión 2)
+    ↓
+    └─ Nuevo request de JWT
+        ├─ mem_search() recupera: "RS256 es nuestro standard"
+        ├─ jd_recall() advierte: "verificar expiration"
+        ├─ code_search() muestra el código anterior
+        └─ Resultado: implementación 10x más rápida y correcta
+
+- Cada componente se alimenta del anterior:
+TonyMem (decisiones) ← de /sdd-archive
+Code Index (código) ← indexa automáticamente
+Judgment Memory (lecciones) ← de juzgar esto
+Hooks (contexto) ← captura mientras trabajás
+Siguiente tarea ← recupera TODO esto
 ```
 
 ```bash
-# 13. Cómo funciona el aprendizaje en práctica:
-Usuario: "Implementa login con refresh token"
-
-1. `/sdd-new` → delega `sdd-explore` + `sdd-propose` a sub-agentes
-2. `mem_search()` → encuentra decisión previa sobre JWT
-3. `code_search()` → encuentra cómo funciona auth actual
-4. `jd_recall()` → recuerda lección sobre token expiration
-5. `/sdd-tasks` → genera plan de implementación
-6. `/sdd-apply` → implementa las tareas
-7. `/sdd-verify` → valida contra specs
-8. `/sdd-archive` → cierra el cambio, guarda `archive-report`
-9. `juzgar esto` → dos jueces review + lesson guardada en `jd_record`
-```
-
-```bash
-# 14. Cómo se reutiliza el conocimiento
-
-Un flujo típico puede verse así:
-
+# 11. Cómo se reutiliza el conocimiento
 Usuario
   │
   │ "Implementa login con refresh token"
@@ -387,14 +436,23 @@ Usuario
   ├── sdd-explore
   ├── sdd-propose
   │
-  ├── mem_search()
-  │      └── recupera decisiones previas
+  ├─── 🔄 RECUPERACIÓN (Ranking de Prioridad)
+  │    │
+  │    ├─ 1️⃣ jd_recall()  [PRIORIDAD ALTA]
+  │    │      └── recupera lecciones de revisiones anteriores
+  │    │          (Judgment Memory - vigencia 90 días si APPROVED)
+  │    │
+  │    ├─ 2️⃣ mem_search()  [PRIORIDAD MEDIA]
+  │    │      └── recupera decisiones previas
+  │    │          (TonyMem - vigencia 30 días)
+  │    │
+  │    └─ 3️⃣ code_search()  [PRIORIDAD BAJA]
+  │           └── encuentra código relacionado
+  │               (Code Index - sin expiración)
   │
-  ├── code_search()
-  │      └── encuentra código relacionado
-  │
-  ├── jd_recall()
-  │      └── recupera lecciones de revisiones anteriores
+  ├─── ⚡ RESOLVER CONFLICTOS
+  │    │ Si se contradicen:
+  │    └─ lesson > decision > code
   │
   ├── sdd-tasks
   │
@@ -403,18 +461,40 @@ Usuario
   ├── sdd-verify
   │
   ├── sdd-archive
+  │    │
+  │    └─ 💾 PERSISTENCIA
+  │       ├─ TonyMem (decisión)      → 30 días vigencia
+  │       └─ Code Index (código)     → indexado permanentemente
   │
   └── juzgar esto
          │
-         ├── jueces
+         ├── jueces [lee independientemente]
+         │
          └── jd_record()
-               └── nueva lección para futuras revisiones
+              │
+              └─ 💾 PERSISTENCIA con PRIORIDAD
+                 ├─ Si APPROVED   → Judgment Memory (90 días)
+                 ├─ Si ESCALATED  → Judgment Memory (sin vigencia)
+                 │                  [marcado como crítico]
+                 │
+                 └─ Nueva lección → alimenta jd_recall()
+                    de futuras revisiones
 
-La diferencia fundamental es que el conocimiento generado durante el trabajo no desaparece al terminar la sesión.
+# El conocimiento generado persiste y se jerarquiza:
+- Las lecciones de errores (Judgment) duran 90 días (si APPROVED)
+- Las decisiones normales duran 30 días
+- El código indexado crece sin expiración
 
-Tony-AI conserva decisiones, descubrimientos, contexto, conocimiento, semántico del código, resultados de revisiones, lecciones de Judgment Day.
+# Almacena en tres sistemas con propósitos distintos:
+- TonyMem → decisiones y descubrimientos (búsqueda: 30 días vigencia)
+- Judgment Memory → lecciones de errores encontrados (búsqueda: 90 días si APPROVED)
+- Code Index → patrones del código (búsqueda: permanente, crece con codebase)
 
-Ese conocimiento puede recuperarse posteriormente para informar nuevas tareas.
+# Recuperación jerárquica en nuevas tareas:
+- Primero: lecciones de revisiones anteriores (si existen)
+- Luego: decisiones implementadas (si aún son vigentes)
+- Finalmente: patrones de código similar
+** Si hay contradicción, la lección gana (lesson > decision > code)"
 ```
 ## Comandos
 | Comando | Descripción | Fuente | Offline |
