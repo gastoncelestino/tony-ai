@@ -651,4 +651,8 @@ bun run tools/validate-config.ts
 git diff --check
 ```
 
----
+## Documentación
+[INSTALL.md](INSTALL.md) — instalación y configuración detallada.  
+[ARCHITECTURE.md](ARCHITECTURE.md) — arquitectura interna y componentes.  
+[AGENTS.md](AGENTS.md) — define las reglas de comportamiento y desarrollo que deben seguir los agentes.  
+[TESTING.md](TESTING.md) — es la guía oficial de estrategia y ejecución de pruebas.  

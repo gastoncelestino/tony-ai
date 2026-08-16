@@ -17,7 +17,7 @@ Tony-AI tiene dos niveles de ejecución:
 | GGA | Revisión de código antes de commit | Bootstrap/runtime |
 | tree-sitter + `tree-sitter-language-pack` | Chunking estructural del Code Indexer | Desarrollo/runtime |
 
-El bootstrap oficial valida estos requisitos y falla si no puede completar alguno de los checks críticos. Aunque Ollama puede ejecutarse fuera de Docker, `setup.sh` requiere que el daemon de Docker esté disponible porque también administra los servicios de soporte.
+El instalador `setup.sh` valida estos requisitos y falla si no puede completar alguno de los componentes requeridos.
 
 ## 2. Clonar el repositorio
 
@@ -27,7 +27,7 @@ cd tony-ai
 git checkout dev
 ```
 
-## 3. Bootstrap recomendado
+## 3. Instalación recomendada
 
 Ejecutar desde la raíz del repositorio:
 
@@ -35,7 +35,7 @@ Ejecutar desde la raíz del repositorio:
 ./scripts/setup.sh
 ```
 
-El bootstrap es idempotente y realiza, en este orden general:
+La configuración inicial es reutilizable y ejecuta, secuencialmente:
 
 1. verifica Python 3.10+, Bun, OpenCode CLI, Docker y Ollama;
 2. verifica GGA y, si no está instalado, intenta clonarlo e instalarlo en un directorio temporal;
@@ -146,109 +146,7 @@ gga --version
 
 `setup.sh` intenta instalarlo automáticamente si `gga` no está en `PATH`. Para instalaciones manuales, asegúrese de que el ejecutable quede disponible en `PATH`, normalmente mediante `~/.local/bin`.
 
-## 7. tree-sitter
-
-El Code Indexer usa **tree-sitter obligatoriamente** para chunking estructural. No existe un modo soportado basado en regex.
-
-La dependencia se instala desde:
-
-```bash
-python3 -m pip install -r requirements-dev.txt
-```
-
-Verificación:
-
-```bash
-python3 -c 'import tree_sitter, tree_sitter_language_pack; print("tree-sitter OK")'
-```
-
-Si aparece un error de importación, corrija la instalación de Python antes de continuar. No cambie `TONY_INDEX_CHUNKER` a `regex` para ocultar el problema.
-
-## 8. OpenCode y MCP
-
-`opencode.json` registra los servidores MCP y los agentes del proyecto. El bootstrap reemplaza las rutas locales frágiles por referencias basadas en `TONY_REPO_ROOT`.
-
-Verifique la configuración:
-
-```bash
-bun run tools/validate-config.ts
-```
-
-Y, si OpenCode está instalado:
-
-```bash
-opencode mcp list
-```
-
-El health check también verifica que los cuatro servidores MCP puedan responder a `initialize`:
-
-- `local-memory/server.py`
-- `code-index/server.py`
-- `judgment-memory/server.py`
-- `kernel/mcp_server.py`
-
-## 9. Verificación después de instalar
-
-### Suite local
-
-No requiere Ollama, Qdrant ni Docker:
-
-```bash
-make test
-```
-
-También puede ejecutarse la suite Python directamente:
-
-```bash
-python3 -m pytest tests
-python3 tools/run-python-tests.py tests
-```
-
-El segundo comando es el runner Python standalone y no requiere Pytest.
-
-### Health check completo
-
-Requiere la infraestructura externa disponible:
-
-```bash
-make health
-```
-
-`health.sh` verifica configuración de OpenCode, los cuatro MCP servers, Ollama, Qdrant, almacenamiento local y un roundtrip real de embeddings/Qdrant.
-
-### Smoke test de Qdrant
-
-```bash
-make verify-qdrant
-```
-
-### Validación de configuración
-
-```bash
-make validate-config
-```
-
-## 10. Comandos de desarrollo habituales
-
-```bash
-make test
-make test-python
-make test-ts
-make test-kernel
-make coverage
-make health
-```
-
-Para levantar o detener los servicios Docker:
-
-```bash
-make docker-up
-make docker-down
-```
-
-`make docker-up` levanta el stack definido en `docker/docker-compose.yml` y muestra los logs del proceso de pull de Ollama.
-
-## 11. Troubleshooting
+## 7. Troubleshooting
 
 ### Python no cumple la versión
 
@@ -324,10 +222,8 @@ curl http://localhost:6333/readyz
 docker compose -f docker/docker-compose.yml ps
 ```
 
-## 12. Referencias
-
-- [README.md](README.md) — introducción, quickstart y uso.
-- [ARCHITECTURE.md](ARCHITECTURE.md) — arquitectura, memoria, SDD y Tony Kernel.
-- [TESTING.md](TESTING.md) — estrategia completa de pruebas y CI.
-- `scripts/setup.sh` — bootstrap reproducible del entorno.
-- `scripts/health.sh` — verificación end-to-end.
+## Documentación
+[INSTALL.md](INSTALL.md) — instalación y configuración detallada.  
+[ARCHITECTURE.md](ARCHITECTURE.md) — arquitectura interna y componentes.  
+[AGENTS.md](AGENTS.md) — define las reglas de comportamiento y desarrollo que deben seguir los agentes.  
+[TESTING.md](TESTING.md) — es la guía oficial de estrategia y ejecución de pruebas.
