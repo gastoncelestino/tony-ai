@@ -6,7 +6,7 @@ TaskLedger is maintained as a compatibility projection for existing callers.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable, Sequence
+from typing import Callable, Mapping, Sequence
 
 from .evidence_state import EvidenceAssessment
 from .orchestrator_integration import (
@@ -14,6 +14,7 @@ from .orchestrator_integration import (
     OrchestrationDecision,
     OrchestrationResult,
 )
+from .quality_gates import QualityGateEvaluation, QualityGatePolicy
 from .retrieval_policy import RetrievalDecision, retrieve_until_sufficient
 from .schemas import Evidence, TaskStatus
 from .task_graph import TaskGraphError, TaskStateGraph
@@ -23,9 +24,10 @@ from .task_graph_adapter import _evidence_ref, graph_to_ledger, ledger_to_graph
 class TaskGraphKernelOrchestrator(KernelOrchestrator):
     """Kernel orchestrator whose task-state authority is the DAG."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, quality_gate_policy: QualityGatePolicy | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.task_graph = TaskStateGraph()
+        self.quality_gate_policy = quality_gate_policy or QualityGatePolicy()
 
     def _project_ledger(self) -> None:
         """Keep the legacy ledger synchronized from authoritative graph state."""
@@ -68,6 +70,20 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             confidence=confidence,
         )
         return assessment
+
+    def evaluate_quality_gates(
+        self,
+        results: Mapping[str, object],
+        *,
+        paths: Sequence[str] = (),
+        risk: str | None = None,
+    ) -> QualityGateEvaluation:
+        """Let the Kernel arbitrate declarative quality-gate results.
+
+        This is deliberately evaluation-only: the Kernel selects applicable
+        gates and decides ALLOW/BLOCK, but it does not execute the gates.
+        """
+        return self.quality_gate_policy.evaluate(results, paths=paths, risk=risk)
 
     def retrieve_task_evidence(
         self,
