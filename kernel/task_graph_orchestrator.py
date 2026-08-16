@@ -16,6 +16,9 @@ from .orchestrator_integration import (
 )
 from .quality_gates import QualityGateEvaluation, QualityGatePolicy
 from .retrieval_policy import RetrievalDecision, retrieve_until_sufficient
+from .runtime_policy import RuntimePolicy
+from .runtime_policy_binding import RuntimePolicyBinding
+from .runtime_guard import RuntimeAuthorization
 from .schemas import Evidence, TaskStatus
 from .task_graph import TaskGraphError, TaskStateGraph
 from .task_graph_adapter import _evidence_ref, graph_to_ledger, ledger_to_graph
@@ -24,14 +27,32 @@ from .task_graph_adapter import _evidence_ref, graph_to_ledger, ledger_to_graph
 class TaskGraphKernelOrchestrator(KernelOrchestrator):
     """Kernel orchestrator whose task-state authority is the DAG."""
 
-    def __init__(self, *args, quality_gate_policy: QualityGatePolicy | None = None, **kwargs):
+    def __init__(self, *args, quality_gate_policy: QualityGatePolicy | None = None,
+                 runtime_policy: RuntimePolicy | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.task_graph = TaskStateGraph()
         self.quality_gate_policy = quality_gate_policy or QualityGatePolicy()
+        self.runtime_policy = RuntimePolicyBinding(runtime_policy)
 
     def _project_ledger(self) -> None:
         """Keep the legacy ledger synchronized from authoritative graph state."""
         self.task_ledger = graph_to_ledger(self.task_graph, self.task_ledger)
+
+    def authorize_tool(self, tool: str) -> RuntimeAuthorization:
+        """Authorize a tool through the configured runtime policy."""
+        return self.runtime_policy.authorize_tool(tool)
+
+    def authorize_path(self, path: str) -> RuntimeAuthorization:
+        """Authorize a path through the configured runtime policy."""
+        return self.runtime_policy.authorize_path(path)
+
+    def authorize_command(self, command: str) -> RuntimeAuthorization:
+        """Authorize a command through the configured runtime policy."""
+        return self.runtime_policy.authorize_command(command)
+
+    def authorize_network(self) -> RuntimeAuthorization:
+        """Authorize network access through the configured runtime policy."""
+        return self.runtime_policy.authorize_network()
 
     def add_task(self, task_id: str, description: str, phase: str,
                  dependencies: tuple = (), files: tuple = ()) -> None:
@@ -62,12 +83,8 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             raise TaskGraphError(f"Unknown task: {task_id}")
         refs = tuple(_evidence_ref(item) for item in evidence)
         _, assessment = self.task_graph.assess_completion_evidence(
-            task_id,
-            evidence,
-            refs,
-            minimum_valid=minimum_valid,
-            minimum_confidence=minimum_confidence,
-            confidence=confidence,
+            task_id, evidence, refs, minimum_valid=minimum_valid,
+            minimum_confidence=minimum_confidence, confidence=confidence,
         )
         return assessment
 
@@ -78,11 +95,7 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
         paths: Sequence[str] = (),
         risk: str | None = None,
     ) -> QualityGateEvaluation:
-        """Let the Kernel arbitrate declarative quality-gate results.
-
-        This is deliberately evaluation-only: the Kernel selects applicable
-        gates and decides ALLOW/BLOCK, but it does not execute the gates.
-        """
+        """Let the Kernel arbitrate declarative quality-gate results."""
         return self.quality_gate_policy.evaluate(results, paths=paths, risk=risk)
 
     def retrieve_task_evidence(
@@ -94,12 +107,7 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
         minimum_valid: int = 1,
         minimum_confidence: float = 0.75,
     ) -> RetrievalDecision:
-        """Perform bounded retrieval for an in-progress task.
-
-        The retrieval policy controls repetition. This method only commits
-        evidence to the task graph when the final assessment is sufficient;
-        low-confidence and contradictory results remain available to judgment.
-        """
+        """Perform bounded retrieval for an in-progress task."""
         node = self.task_graph.get(task_id)
         if node is None:
             raise TaskGraphError(f"Unknown task: {task_id}")
@@ -114,9 +122,7 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             return evidence
 
         decision = retrieve_until_sufficient(
-            collect,
-            max_attempts=max_attempts,
-            minimum_valid=minimum_valid,
+            collect, max_attempts=max_attempts, minimum_valid=minimum_valid,
             minimum_confidence=minimum_confidence,
         )
         if decision.assessment.can_progress:
@@ -163,9 +169,7 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             )
 
         refs = tuple(_evidence_ref(e) for e in validated_evidence)
-        self.task_graph, assessment = self.task_graph.assess_completion_evidence(
-            task_id, validated_evidence, refs
-        )
+        self.task_graph, assessment = self.task_graph.assess_completion_evidence(task_id, validated_evidence, refs)
         if not assessment.can_progress:
             return OrchestrationResult(
                 decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
