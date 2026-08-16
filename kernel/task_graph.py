@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
-from .schemas import Phase, TaskStatus
+from .schemas import Evidence, Phase, TaskStatus
+from .evidence_state import EvidenceAssessment, assess_evidence
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +118,31 @@ class TaskStateGraph:
         timestamp = now or datetime.now()
         attempt = TaskAttempt(attempt_id=node.attempt_count + 1, started_at=timestamp)
         return self._replace(replace(node, status=TaskStatus.IN_PROGRESS, attempts=node.attempts + (attempt,)))
+
+    def assess_completion_evidence(
+        self,
+        task_id: str,
+        evidence: Sequence[Evidence],
+        evidence_refs: Sequence[str],
+        *,
+        minimum_valid: int = 1,
+        minimum_confidence: float = 0.75,
+        confidence: Optional[float] = None,
+    ) -> tuple["TaskStateGraph", EvidenceAssessment]:
+        """Assess evidence and complete only when the assessment is sufficient."""
+        node = self._require(task_id)
+        if node.status != TaskStatus.IN_PROGRESS:
+            raise TaskGraphError(f"Task {task_id} is not in progress")
+        assessment = assess_evidence(
+            evidence,
+            evidence_refs=evidence_refs,
+            minimum_valid=minimum_valid,
+            minimum_confidence=minimum_confidence,
+            confidence=confidence,
+        )
+        if not assessment.can_progress:
+            return self, assessment
+        return self.complete(task_id, assessment.evidence_refs), assessment
 
     def complete(
         self,
