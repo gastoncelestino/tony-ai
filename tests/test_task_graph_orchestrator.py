@@ -64,13 +64,12 @@ def test_completed_task_has_graph_evidence_refs():
     assert node.attempts[-1].status == "completed"
 
 
-def test_graph_rejects_dependency_cycle_during_task_addition():
+def test_graph_rejects_unknown_dependency_during_task_addition():
     kernel = _kernel()
-    kernel.add_task("a", "a", Phase.APPLY.value, dependencies=("b",))
 
     try:
-        kernel.add_task("b", "b", Phase.APPLY.value, dependencies=("a",))
+        kernel.add_task("task", "task", Phase.APPLY.value, dependencies=("missing",))
     except ValueError:
         pass
     else:
-        raise AssertionError("cyclic task graph must be rejected")
+        raise AssertionError("unknown task dependency must be rejected")
