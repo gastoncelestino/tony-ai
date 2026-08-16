@@ -24,6 +24,7 @@ from .retry_budget import RetryBudget, AttemptRecord
 from .orchestrator_integration import (
     KernelOrchestrator, OrchestrationDecision, OrchestrationResult, create_kernel_orchestrator,
 )
+from .task_graph_orchestrator import TaskGraphKernelOrchestrator
 from .phase_checksum import PhaseChecksumRegistry, PhaseChecksum, PhaseChecksumResult, get_global_registry
 from .task_graph import TaskAttempt, TaskGraphError, TaskNode, TaskStateGraph
 from .task_graph_adapter import ledger_to_graph, task_to_node
@@ -35,8 +36,8 @@ __all__ = [
     "Task", "TaskStatus", "TaskLedger", "ArtifactGateResult", "ArtifactValidationResult", "ArtifactGateResultEnum",
     "RetryBudget", "AttemptRecord", "PhaseController", "create_initial_state", "InvalidTransitionError",
     "MissingArtifactsError", "StateMachineError", "PhaseNotFoundError", "PhaseGate", "PhaseGateConfig",
-    "EvidenceLedger", "ArtifactGate", "KernelOrchestrator", "OrchestrationDecision", "OrchestrationResult",
-    "create_kernel_orchestrator", "PhaseChecksumRegistry", "PhaseChecksum", "PhaseChecksumResult",
-    "get_global_registry", "TaskAttempt", "TaskGraphError", "TaskNode", "TaskStateGraph",
-    "ledger_to_graph", "task_to_node",
+    "EvidenceLedger", "ArtifactGate", "KernelOrchestrator", "TaskGraphKernelOrchestrator",
+    "OrchestrationDecision", "OrchestrationResult", "create_kernel_orchestrator",
+    "PhaseChecksumRegistry", "PhaseChecksum", "PhaseChecksumResult", "get_global_registry",
+    "TaskAttempt", "TaskGraphError", "TaskNode", "TaskStateGraph", "ledger_to_graph", "task_to_node",
 ]
