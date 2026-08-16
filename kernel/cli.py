@@ -16,6 +16,21 @@ import os
 import sys
 from typing import Any, Optional
 
+
+def _runtime_dir() -> str:
+    configured = os.environ.get("TONY_RUNTIME_DIR")
+    if configured:
+        return os.path.abspath(os.path.expanduser(configured))
+    repo_root = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
+    project = os.path.basename(os.path.abspath(repo_root)) or "default"
+    return os.path.join(os.path.expanduser("~"), ".tony-ai", project)
+
+
+_RUNTIME_DIR = _runtime_dir()
+os.environ.setdefault("TONY_KERNEL_STATE_DIR", os.path.join(_RUNTIME_DIR, "kernel"))
+if getattr(sys, "pycache_prefix", None) is None:
+    sys.pycache_prefix = os.path.join(_RUNTIME_DIR, "pycache")
+
 from .persistence import load_orchestrator, update_orchestrator, reset_state
 from .artifact_store import disk_artifact_store, disk_artifact_hasher
 from .schemas import ArtifactRef, Evidence, EvidenceType
@@ -143,8 +158,6 @@ def _main(argv: list) -> None:
         except json.JSONDecodeError:
             print(json.dumps({"error": "artifacts must be a JSON array"}), file=sys.stderr)
             sys.exit(1)
-        # Evidence is optional and backward-compatible: callers that only
-        # pass phase + artifacts (2 args) still work, evidence defaults to [].
         evidence_raw = []
         if len(args) > 2:
             try:
