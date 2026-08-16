@@ -178,11 +178,11 @@ class TaskStateGraph:
         return self._replace(replace(node, status=TaskStatus.PENDING))
 
     def rollback_task(self, task_id: str, rollback: Optional[dict] = None) -> "TaskStateGraph":
-        """Terminally mark a failed task as rolled back."""
+        """Move a failed task to the existing terminal BLOCKED state."""
         node = self._require(task_id)
         if node.status != TaskStatus.FAILED:
             raise TaskGraphError(f"Task {task_id} is not failed")
-        return self._replace(replace(node, status=TaskStatus.ROLLED_BACK, rollback=rollback or node.rollback))
+        return self._replace(replace(node, status=TaskStatus.BLOCKED, rollback=rollback or node.rollback))
 
     def _require(self, task_id: str) -> TaskNode:
         node = self.nodes.get(task_id)
