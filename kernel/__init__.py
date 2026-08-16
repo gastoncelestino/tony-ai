@@ -24,6 +24,7 @@ from .quality_gates import (
     GateCondition, QualityGate, QualityGateDecision, QualityGateEvaluation,
     QualityGatePolicy, QualityGateStatus,
 )
+from .runtime_guard import RuntimeAuthorization, RuntimePolicyGuard, RuntimePolicyViolation
 from .task_ledger import TaskLedger
 from .artifact_gate import ArtifactGate
 from .retry_budget import RetryBudget, AttemptRecord
@@ -43,6 +44,7 @@ __all__ = [
     "RetrievalAttempt", "RetrievalDecision", "retrieve_until_sufficient",
     "GateCondition", "QualityGate", "QualityGateDecision", "QualityGateEvaluation",
     "QualityGatePolicy", "QualityGateStatus",
+    "RuntimeAuthorization", "RuntimePolicyGuard", "RuntimePolicyViolation",
     "Task", "TaskStatus", "TaskLedger", "ArtifactGateResult", "ArtifactValidationResult", "ArtifactGateResultEnum",
     "RetryBudget", "AttemptRecord", "PhaseController", "create_initial_state", "InvalidTransitionError",
     "MissingArtifactsError", "StateMachineError", "PhaseNotFoundError", "PhaseGate", "PhaseGateConfig",
