@@ -219,7 +219,7 @@ docker compose -f docker/docker-compose.yml ps
 ```
 
 ## Documentación
-[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.
+[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.   
 [INSTALL.md](INSTALL.md) — instalación y configuración del entorno.  
 [ARCHITECTURE.md](ARCHITECTURE.md) — componentes, responsabilidades, flujos, contratos y persistencia.  
 [AGENTS.md](AGENTS.md) — reglas operativas para agentes y desarrollo.  
