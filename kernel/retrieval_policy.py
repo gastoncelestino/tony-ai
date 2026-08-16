@@ -44,6 +44,7 @@ def retrieve_until_sufficient(
     max_attempts: int = 2,
     minimum_valid: int = 1,
     minimum_confidence: float = 0.75,
+    evidence_ref_builder: Callable[[Evidence], str] | None = None,
 ) -> RetrievalDecision:
     """Run bounded retrieval until evidence is sufficient or retrieval is exhausted.
 
@@ -54,6 +55,9 @@ def retrieve_until_sufficient(
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
 
+    ref_builder = evidence_ref_builder or (
+        lambda evidence: f"retrieval:evidence:{id(evidence)}"
+    )
     attempts: list[RetrievalAttempt] = []
     assessment = assess_evidence(
         (), minimum_valid=minimum_valid, minimum_confidence=minimum_confidence
@@ -61,7 +65,7 @@ def retrieve_until_sufficient(
 
     for attempt_no in range(1, max_attempts + 1):
         evidence = tuple(retriever(attempt_no))
-        refs = tuple(f"retrieval:{attempt_no}:{index}" for index, _ in enumerate(evidence, 1))
+        refs = tuple(ref_builder(item) for item in evidence)
         assessment = assess_evidence(
             evidence,
             evidence_refs=refs,
