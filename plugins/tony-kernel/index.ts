@@ -12,6 +12,7 @@ import { spawn } from "node:child_process"
 import { join } from "path"
 import { fileURLToPath } from "url"
 import { dirname } from "path"
+import { observeToolExecution } from "./tool-observation"
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
 const KERNEL_DIR = join(PLUGIN_DIR, "..", "..", "kernel")
@@ -149,17 +150,6 @@ class KernelClient implements KernelClientLike {
     missing_artifacts: string[]
     missing_evidence: string[]
   }> {
-    // NOTE: kernel.cli's record_phase_completion command exits 0 with a
-    // JSON body even when the decision is a BLOCK (e.g.
-    // block_evidence_required for fabricated evidence, or
-    // block_artifact_invalid). It's not a process-level error, so
-    // runKernelCommand's exit-code check alone won't catch it — the
-    // caller MUST inspect `allowed`/`decision` in the returned body.
-    // Previously this method returned void and discarded that body
-    // entirely, so taskExecuteAfterHook would report success while the
-    // kernel silently left the phase as "running" (never marked
-    // complete). Found via a probe reproducing the fabricated-evidence
-    // e2e case at the real hook layer, not just the CLI layer.
     const result = await this.runKernelCommand(["record_phase_completion", phase, JSON.stringify(artifacts), JSON.stringify(evidence)])
     return {
       ...result,
@@ -173,15 +163,6 @@ class KernelClient implements KernelClientLike {
     reason: string
     scope_violations: string[]
   }> {
-    // NOTE: kernel.cli's `check_scope` command reads git_diff as a raw
-    // positional argv string (it does NOT json.loads it) — only
-    // allowed_files is JSON-encoded on the Python side. spawn() with an
-    // args array passes each element as a literal argv entry (no shell),
-    // so newlines in the diff survive intact without needing JSON
-    // escaping. JSON.stringify-ing gitDiff here would wrap it in quotes
-    // and escape its newlines as literal "\n", which kernel.cli's
-    // _parse_diff_files() can't match against — so scope violations would
-    // never be detected. Bug found via the real-bridge integration test.
     const result = await this.runKernelCommand(["check_scope", gitDiff, JSON.stringify(allowedFiles)])
     return {
       ...result,
@@ -283,7 +264,6 @@ export function isNonFsmAgent(subAgent: string): boolean {
 
 export function derivePhase(args: Record<string, unknown>): string | null {
   if (typeof args.phase === "string" && args.phase.length > 0) {
-    // Strip "sdd-" prefix for kernel compatibility
     return args.phase.replace(/^sdd-/, "")
   }
 
@@ -291,7 +271,6 @@ export function derivePhase(args: Record<string, unknown>): string | null {
     const subAgent = args.subagent_type
 
     if (isKernelPhase(subAgent)) {
-      // Strip "sdd-" prefix for kernel compatibility
       return subAgent.replace(/^sdd-/, "")
     }
 
@@ -307,12 +286,6 @@ export function derivePhase(args: Record<string, unknown>): string | null {
 
 // ─── Hook: task.execute.before ────────────────────────────────────────────
 
-/**
- * Hook that intercepts task delegations before they execute.
- * Validates against the Kernel state machine before allowing delegation.
- * 
- * Fail-closed: any Kernel error blocks the delegation.
- */
 export async function taskExecuteBeforeHook(
   input: DelegationInput,
   output: DelegationOutput
@@ -352,18 +325,18 @@ export async function taskExecuteBeforeHook(
 
 // ─── Hook: task.execute.after ─────────────────────────────────────────────
 
-/**
- * Hook that captures task completion and records phase completion.
- * 
- * Fail-closed: any Kernel error or missing artifacts blocks completion.
- */
 export async function taskExecuteAfterHook(
   input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
   output: unknown
 ): Promise<void> {
+  const observation = observeToolExecution(input, output)
+
+  // Non-Task tools are observed at the same OpenCode boundary but remain
+  // side-effect free for now. This is the seam for the later evidence and
+  // authorization layers; OpenCode remains responsible for actual execution.
   if (input.tool !== "Task") return
 
-  const args = input.arguments as Record<string, unknown>
+  const args = observation.arguments
   const phase = derivePhase(args)
 
   if (phase === null) {
@@ -371,7 +344,9 @@ export async function taskExecuteAfterHook(
   }
 
   try {
-    const outputText = typeof output === "string" ? output : JSON.stringify(output)
+    const outputText = typeof observation.result === "string"
+      ? observation.result
+      : JSON.stringify(observation.result)
     const success = !outputText.includes("error") && !outputText.includes("Error")
 
     if (!success) {
@@ -392,11 +367,6 @@ export async function taskExecuteAfterHook(
 
     const client = await getKernelClient()
 
-    // Scope Guard: opt-in. A sub-agent that reports a gitDiff is asserting
-    // "here's what I touched" — when it does, we verify that diff against
-    // the allowed files for this delegation before letting the phase
-    // complete. Callers that don't report a diff skip this check (same as
-    // before), but the check is now reachable and fail-closed once wired.
     if (gitDiff.length > 0) {
       const scopeResult = await client.checkScope(gitDiff, allowedFiles)
       if (!scopeResult.allowed) {
@@ -410,7 +380,6 @@ export async function taskExecuteAfterHook(
       }
     })
 
-    // Post-phase validation: verify the phase is actually complete in the kernel
     const status = await client.getStatus()
     const currentPhase = status.current_phase
     if (currentPhase !== phase) {
@@ -433,24 +402,18 @@ export async function taskExecuteAfterHook(
   }
 }
 
-// ─── Plugin Definition ───────────────────────────────────────────────────
-
 const TonyKernelPlugin: Plugin = {
   name: "tony-kernel",
   version: "1.0.0",
   description: "Tony Kernel — Deterministic hook for phase transitions, evidence tracking, and scope enforcement",
-  
   hooks: {
     "tool.execute.before": taskExecuteBeforeHook,
     "tool.execute.after": taskExecuteAfterHook,
   },
-  
   async onLoad() {
     console.log("[tony-kernel] Plugin loaded, kernel integration active")
   },
-  
   async onUnload() {
-    // Cleanup if needed
   }
 }
 
