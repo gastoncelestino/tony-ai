@@ -25,6 +25,7 @@ from .quality_gates import (
     QualityGatePolicy, QualityGateStatus,
 )
 from .runtime_guard import RuntimeAuthorization, RuntimePolicyGuard, RuntimePolicyViolation
+from .runtime_policy import RuntimePolicy, RuntimePolicyError
 from .runtime_executor import RuntimeExecutionResult, RuntimeExecutor
 from .runtime_evidence import execution_result_to_evidence
 from .task_ledger import TaskLedger
@@ -46,7 +47,7 @@ __all__ = [
     "RetrievalAttempt", "RetrievalDecision", "retrieve_until_sufficient",
     "GateCondition", "QualityGate", "QualityGateDecision", "QualityGateEvaluation",
     "QualityGatePolicy", "QualityGateStatus",
-    "RuntimeAuthorization", "RuntimePolicyGuard", "RuntimePolicyViolation",
+    "RuntimeAuthorization", "RuntimePolicy", "RuntimePolicyError", "RuntimePolicyGuard", "RuntimePolicyViolation",
     "RuntimeExecutionResult", "RuntimeExecutor", "execution_result_to_evidence",
     "Task", "TaskStatus", "TaskLedger", "ArtifactGateResult", "ArtifactValidationResult", "ArtifactGateResultEnum",
     "RetryBudget", "AttemptRecord", "PhaseController", "create_initial_state", "InvalidTransitionError",
