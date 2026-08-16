@@ -1,4 +1,4 @@
-"""Integration tests for the incremental Task State Graph orchestration layer."""
+"""Integration tests for the Task State Graph orchestration layer."""
 
 from datetime import datetime
 
@@ -69,17 +69,48 @@ def test_completed_task_has_graph_evidence_refs():
     assert node.status == TaskStatus.COMPLETED
     assert node.evidence_refs
     assert node.attempts[-1].status == "completed"
+    assert kernel.task_ledger.tasks["task"].status == TaskStatus.COMPLETED
+
+
+def test_failed_retry_preserves_attempts_across_ledger_projection():
+    kernel = _kernel()
+    kernel.add_task("task", "task", Phase.APPLY.value)
+    assert kernel.start_task("task") is True
+    assert kernel.fail_task("task", "first failure") is True
+    assert kernel.retry_task("task") is True
+    assert kernel.start_task("task") is True
+
+    node = kernel.get_task_graph().nodes["task"]
+    assert node.status == TaskStatus.IN_PROGRESS
+    assert node.attempt_count == 2
+    assert node.attempts[0].status == "failed"
+    assert node.attempts[0].error == "first failure"
+    assert node.attempts[1].status == "running"
+
+    # Reconstructing from the compatibility projection must retain history.
+    from kernel.task_graph_adapter import ledger_to_graph
+    projected = ledger_to_graph(kernel.task_ledger)
+    assert projected.nodes["task"].attempt_count == 2
+    assert projected.nodes["task"].attempts[0].error == "first failure"
+
+
+def test_rollback_is_exposed_by_graph_orchestrator():
+    kernel = _kernel()
+    kernel.add_task("task", "task", Phase.APPLY.value)
+    assert kernel.start_task("task") is True
+    assert kernel.fail_task("task", "irrecoverable") is True
+    assert kernel.rollback_task("task", {"action": "restore"}) is True
+
+    node = kernel.get_task_graph().nodes["task"]
+    assert node.status == TaskStatus.BLOCKED
+    assert node.rollback == {"action": "restore"}
 
 
 def test_graph_rejects_unknown_dependency_during_task_addition():
     kernel = _kernel()
 
-    try:
+    with pytest.raises(ValueError):
         kernel.add_task("task", "task", Phase.APPLY.value, dependencies=("missing",))
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("unknown task dependency must be rejected")
 
 
 def _graph() -> TaskStateGraph:
