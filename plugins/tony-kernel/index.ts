@@ -13,11 +13,10 @@ import { join } from "path"
 import { fileURLToPath } from "url"
 import { dirname } from "path"
 import { observeToolExecution } from "./tool-observation"
+import { observationToEvidence } from "./tool-evidence"
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
 const KERNEL_DIR = join(PLUGIN_DIR, "..", "..", "kernel")
-
-// ─── Types ────────────────────────────────────────────────────────────────
 
 interface CanStartPhaseResult {
   decision: string
@@ -50,6 +49,16 @@ export interface KernelClientLike {
     subAgent: string,
     taskId?: string
   ): Promise<void>
+  completeTask(
+    taskId: string,
+    evidence: unknown[],
+  ): Promise<{
+    decision: string
+    allowed: boolean
+    reason: string
+    missing_artifacts: string[]
+    missing_evidence: string[]
+  }>
   recordPhaseCompletion(
     phase: string,
     artifacts: Array<{
@@ -78,8 +87,6 @@ export interface KernelClientLike {
   getStatus(): Promise<Record<string, unknown>>
 }
 
-// ─── Errors ───────────────────────────────────────────────────────────────
-
 export class KernelBlockedError extends Error {
   constructor(message: string) {
     super(message)
@@ -93,8 +100,6 @@ export class KernelUnavailableError extends Error {
     this.name = "KernelUnavailableError"
   }
 }
-
-// ─── Kernel Python Subprocess Client ──────────────────────────────────────
 
 class KernelClient implements KernelClientLike {
   private kernelModulePath: string
@@ -135,12 +140,25 @@ class KernelClient implements KernelClientLike {
   }
 
   async canStartPhase(phase: string): Promise<CanStartPhaseResult> {
-    const result = await this.runKernelCommand(["can_start_phase", phase])
-    return result
+    return this.runKernelCommand(["can_start_phase", phase])
   }
 
   async recordDelegation(phase: string, subAgent: string, taskId?: string): Promise<void> {
     await this.runKernelCommand(["record_delegation", phase, subAgent, taskId || ""])
+  }
+
+  async completeTask(taskId: string, evidence: unknown[]): Promise<{
+    decision: string
+    allowed: boolean
+    reason: string
+    missing_artifacts: string[]
+    missing_evidence: string[]
+  }> {
+    const result = await this.runKernelCommand(["complete_task", taskId, JSON.stringify(evidence)])
+    return {
+      ...result,
+      allowed: result.allowed === true,
+    }
   }
 
   async recordPhaseCompletion(phase: string, artifacts: Array<{ kind: string; path: string; store: string; hash?: string }>, evidence: unknown[] = []): Promise<{
@@ -175,8 +193,6 @@ class KernelClient implements KernelClientLike {
   }
 }
 
-// ─── Global Kernel Client ────────────────────────────────────────────────
-
 let kernelClient: KernelClientLike | null = null
 
 async function getKernelClient(): Promise<KernelClientLike> {
@@ -191,8 +207,6 @@ export function __setKernelClientForTests(
 ): void {
   kernelClient = client
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────
 
 function phaseTransitionBlockedMessage(result: CanStartPhaseResult): string {
   return (
@@ -284,8 +298,6 @@ export function derivePhase(args: Record<string, unknown>): string | null {
   )
 }
 
-// ─── Hook: task.execute.before ────────────────────────────────────────────
-
 export async function taskExecuteBeforeHook(
   input: DelegationInput,
   output: DelegationOutput
@@ -323,17 +335,30 @@ export async function taskExecuteBeforeHook(
   }
 }
 
-// ─── Hook: task.execute.after ─────────────────────────────────────────────
-
 export async function taskExecuteAfterHook(
   input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
   output: unknown
 ): Promise<void> {
   const observation = observeToolExecution(input, output)
+  const evidence = observationToEvidence(observation)
 
-  // Non-Task tools are observed at the same OpenCode boundary but remain
-  // side-effect free for now. This is the seam for the later evidence and
-  // authorization layers; OpenCode remains responsible for actual execution.
+  if (evidence) {
+    try {
+      const client = await getKernelClient()
+      const result = await client.completeTask(evidence.task_id, [evidence.evidence])
+      if (!result.allowed) {
+        throw new KernelBlockedError(
+          `[Tony Kernel] Task completion rejected for "${evidence.task_id}": ${result.reason}`
+        )
+      }
+      return
+    } catch (error) {
+      if (error instanceof KernelBlockedError) throw error
+      throw new KernelUnavailableError(kernelErrorMessage("Task evidence", error))
+    }
+  }
+
+  // Non-task tools without an explicit task_id remain observation-only.
   if (input.tool !== "Task") return
 
   const args = observation.arguments
