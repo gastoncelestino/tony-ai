@@ -1,12 +1,10 @@
 """Task-graph aware orchestration facade.
 
 This is the incremental integration layer between the legacy TaskLedger and
-TaskStateGraph.  The graph is consulted first for task-level transitions;
-the ledger remains synchronized for backwards compatibility.
+TaskStateGraph. The graph is consulted first for task-level transitions; the
+ledger remains synchronized for backwards compatibility.
 """
 from __future__ import annotations
-
-from typing import Optional
 
 from .orchestrator_integration import (
     KernelOrchestrator,
@@ -47,25 +45,27 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
         return True
 
     def complete_task(self, task_id: str, evidence: list = None) -> OrchestrationResult:
-        """Validate the legacy evidence, then require a graph transition."""
+        """Require an in-progress graph node, then synchronize completion."""
+        node = self.task_graph.get(task_id)
+        if node is None or node.status.value != "in_progress":
+            return OrchestrationResult(
+                decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
+                reason=f"Task {task_id} is not in progress in the task graph",
+                current_phase=self.change_state.current_phase.value,
+            )
+
         result = super().complete_task(task_id, evidence)
         if result.decision != OrchestrationDecision.PROCEED:
             return result
 
-        task = self.task_ledger.tasks[task_id]
-        refs = tuple(self.task_graph.nodes[task_id].evidence_refs)
-        if not refs:
-            # The legacy completion succeeded, but the graph must never accept
-            # a completion without stable evidence references.
+        self._sync_task_graph()
+        node = self.task_graph.get(task_id)
+        if node is None or not node.evidence_refs:
             return OrchestrationResult(
                 decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
-                reason=f"Task {task_id} has no graph evidence references",
+                reason=f"Task {task_id} completed without graph evidence references",
                 current_phase=self.change_state.current_phase.value,
             )
-
-        # The ledger has already completed the task; rebuild the graph so its
-        # node reflects the durable legacy state and evidence refs.
-        self._sync_task_graph()
         return result
 
     def get_task_graph(self) -> TaskStateGraph:
