@@ -5,14 +5,16 @@ TaskLedger is maintained as a compatibility projection for existing callers.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 from .orchestrator_integration import (
     KernelOrchestrator,
     OrchestrationDecision,
     OrchestrationResult,
 )
 from .schemas import TaskStatus
-from .task_graph import TaskGraphError, TaskNode, TaskStateGraph
-from .task_graph_adapter import graph_to_ledger, ledger_to_graph
+from .task_graph import TaskGraphError, TaskStateGraph
+from .task_graph_adapter import _evidence_ref, graph_to_ledger, ledger_to_graph
 
 
 class TaskGraphKernelOrchestrator(KernelOrchestrator):
@@ -29,8 +31,6 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
     def add_task(self, task_id: str, description: str, phase: str,
                  dependencies: tuple = (), files: tuple = ()) -> None:
         super().add_task(task_id, description, phase, dependencies, files)
-        # Addition is the one operation sourced from the legacy API; from this
-        # point onward the graph owns all task state transitions.
         self.task_graph = ledger_to_graph(self.task_ledger)
 
     def start_task(self, task_id: str) -> bool:
@@ -74,11 +74,11 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
                 current_phase=self.change_state.current_phase.value,
             )
 
-        refs = tuple(self._evidence_ref(e) for e in validated_evidence)
+        refs = tuple(_evidence_ref(e) for e in validated_evidence)
         self.task_graph = self.task_graph.complete(task_id, refs)
-        # Preserve the concrete Evidence objects in the compatibility ledger.
+
+        # Preserve concrete Evidence objects in the compatibility projection.
         existing = self.task_ledger.tasks[task_id]
-        from dataclasses import replace
         self.task_ledger = self.task_ledger.__class__(
             tasks={**self.task_ledger.tasks,
                    task_id: replace(existing, evidence=tuple(validated_evidence))}
@@ -105,6 +105,15 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
         """Move a failed graph node back to pending without losing attempts."""
         try:
             self.task_graph = self.task_graph.retry(task_id)
+            self._project_ledger()
+            return True
+        except TaskGraphError:
+            return False
+
+    def rollback_task(self, task_id: str, rollback: dict = None) -> bool:
+        """Move a failed graph node to BLOCKED and preserve rollback metadata."""
+        try:
+            self.task_graph = self.task_graph.rollback_task(task_id, rollback=rollback)
             self._project_ledger()
             return True
         except TaskGraphError:
