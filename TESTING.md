@@ -34,8 +34,7 @@
 ```bash
 make test
 ```
-
-Eso ejecuta toda la suite local (Python + TypeScript + validación de config) sin Ollama, Qdrant ni Docker.
+Ejecuta la suite local estándar (Python + TypeScript + validación de config) sin Ollama, Qdrant ni Docker.
 
 **Cambios críticos (Kernel, MCP, config, infraestructura):**
 
@@ -139,7 +138,8 @@ make test-all         # make test + test-kernel
 - `test-python`: Ejecuta pytest o runner standalone (fallback)
 - `test-ts`: Ejecuta con Bun
 - `test-kernel`: Python (`test_kernel_*.py`, `test_sdd_flow_e2e.py`) + TypeScript (`tony_kernel_*.test.ts`)
-
+  - Con Pytest: ejecuta la suite Kernel completa.
+  - Sin Pytest/fallback: ejecuta el subconjunto compatible con el runner standalone.
 ### Ejecutar directamente (diagnóstico)
 
 ```bash
