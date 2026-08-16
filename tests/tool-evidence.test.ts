@@ -40,5 +40,5 @@ test("preserves failure evidence when task identity is explicit", () => {
 
   expect(evidence?.task_id).toBe("task-1")
   expect(evidence?.success).toBe(false)
-  expect(evidence?.error).toBe("command failed")
+  expect(evidence?.metadata.error).toBe("command failed")
 })
