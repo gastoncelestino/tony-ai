@@ -23,10 +23,11 @@ def _kernel():
 def test_retrieval_completes_task_after_second_attempt():
     kernel = _kernel()
     calls = []
+    retrieved = _evidence()
 
     def retriever(attempt):
         calls.append(attempt)
-        return () if attempt == 1 else (_evidence(),)
+        return () if attempt == 1 else (retrieved,)
 
     decision = kernel.retrieve_task_evidence("task", retriever, max_attempts=2)
 
@@ -34,7 +35,7 @@ def test_retrieval_completes_task_after_second_attempt():
     assert decision.assessment.state is EvidenceState.SUFFICIENT
     assert kernel.task_graph.get("task").status is TaskStatus.COMPLETED
     assert kernel.task_graph.get("task").evidence_refs
-    assert kernel.task_ledger.tasks["task"].evidence == (_evidence(),)
+    assert kernel.task_ledger.tasks["task"].evidence == (retrieved,)
 
 
 def test_retrieval_exhaustion_does_not_complete_task():
