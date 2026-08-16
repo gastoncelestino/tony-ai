@@ -1,6 +1,10 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre tests locales y smoke tests externos.
 
+TONY_RUNTIME_DIR ?= $(HOME)/.tony-ai/tony-ai
+export TONY_RUNTIME_DIR
+export PYTHONPYCACHEPREFIX := $(TONY_RUNTIME_DIR)/pycache
+
 .PHONY: test test-all check-test-deps check-test-discovery test-python test-ts test-kernel check-coverage-deps coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
 # Ejecuta la suite normal: tests Python + TypeScript + validación de configuración.
@@ -69,7 +73,6 @@ health:
 docker-up:
 	@cd docker && docker compose up -d && docker compose logs -f ollama-pull
 
-# Detiene los servicios Docker.
 docker-down:
 	@cd docker && docker compose down
 
