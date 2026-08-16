@@ -13,6 +13,7 @@ CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-carstenuhlig/omnicoder-2-9b:q4_k_m}"
 OLLAMA_URL="${TONY_OLLAMA_URL:-http://localhost:11434}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
+TONY_INDEX_CHUNKER=tree-sitter
 PASS=0; FAIL=0
 ok() { printf "  \033[32mok\033[0m   %s\n" "$1"; PASS=$((PASS+1)); }
 bad() { printf "  \033[31mFAIL\033[0m %s\n" "$1"; FAIL=$((FAIL+1)); }
@@ -182,7 +183,7 @@ else
   REQUIRED_VARS=("TONY_REPO_ROOT" "TONY_OLLAMA_URL" "TONY_QDRANT_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
   
   # Source .env en subshell
-  if ENV_CHECK=$(bash -c "set -a; source '${REPO_ROOT}/.env' 2>/dev/null; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
+  if ENV_CHECK=$(bash -c "set -a; source '${REPO_ROOT}/.env'; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
     mapfile -t ENV_VALUES < <(echo "$ENV_CHECK")
     MISSING=0
     for i in "${!REQUIRED_VARS[@]}"; do
