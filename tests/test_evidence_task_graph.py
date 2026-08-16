@@ -7,14 +7,14 @@ from kernel.schemas import Evidence, EvidenceType, Phase, TaskStatus
 from kernel.task_graph_orchestrator import TaskGraphKernelOrchestrator
 
 
-def _evidence(claim="tests pass", exit_code=0):
+def _evidence(claim="tests pass", exit_code=0, timestamp=None):
     return Evidence(
         type=EvidenceType.TEST,
         claim=claim,
         command="pytest",
         exit_code=exit_code,
         stdout="1 passed" if exit_code == 0 else "failed",
-        timestamp=datetime.now(),
+        timestamp=timestamp or datetime(2026, 1, 1),
     )
 
 
@@ -40,8 +40,8 @@ def test_low_confidence_is_distinct_from_no_evidence():
 
 
 def test_contradictory_evidence_requires_judgment():
-    first = _evidence("claim")
-    second = _evidence("claim", exit_code=1)
+    first = _evidence("claim", timestamp=datetime(2026, 1, 1))
+    second = _evidence("claim", exit_code=1, timestamp=datetime(2026, 1, 2))
     assessment = assess_evidence((first, second))
     assert assessment.state is EvidenceState.CONTRADICTORY
     assert assessment.needs_judgment
