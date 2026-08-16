@@ -157,6 +157,8 @@ class TaskStateGraph:
         node = self._require(task_id)
         if node.status != TaskStatus.IN_PROGRESS:
             raise TaskGraphError(f"Task {task_id} is not in progress")
+        if not error:
+            raise TaskGraphError(f"Task {task_id} failure requires an error")
         timestamp = now or datetime.now()
         attempt = node.attempts[-1]
         failed_attempt = replace(attempt, completed_at=timestamp, status="failed", error=error)
@@ -169,10 +171,18 @@ class TaskStateGraph:
         return self._replace(updated)
 
     def retry(self, task_id: str) -> "TaskStateGraph":
+        """Move a failed task back to pending without discarding attempt history."""
         node = self._require(task_id)
         if node.status != TaskStatus.FAILED:
             raise TaskGraphError(f"Task {task_id} is not failed")
         return self._replace(replace(node, status=TaskStatus.PENDING))
+
+    def rollback_task(self, task_id: str, rollback: Optional[dict] = None) -> "TaskStateGraph":
+        """Terminally mark a failed task as rolled back."""
+        node = self._require(task_id)
+        if node.status != TaskStatus.FAILED:
+            raise TaskGraphError(f"Task {task_id} is not failed")
+        return self._replace(replace(node, status=TaskStatus.ROLLED_BACK, rollback=rollback or node.rollback))
 
     def _require(self, task_id: str) -> TaskNode:
         node = self.nodes.get(task_id)
