@@ -13,8 +13,8 @@ Tony-AI tiene dos niveles de ejecución:
 | Bun | Plugins y tests TypeScript | Desarrollo y runtime OpenCode |
 | OpenCode CLI | Orquestación de agentes/SDD | Runtime |
 | Ollama | Modelos locales y embeddings | Runtime |
-| Docker + Compose | Qdrant y Ollama | Bootstrap/runtime |
-| GGA | Revisión de código antes de commit | Bootstrap/runtime |
+| Docker + Compose | Qdrant y Ollama | Instalador/runtime |
+| GGA | Revisión de código antes de commit | Instalador/runtime |
 | tree-sitter + `tree-sitter-language-pack` | Chunking estructural del Code Indexer | Desarrollo/runtime |
 
 El instalador `setup.sh` valida estos requisitos y falla si no puede completar alguno de los componentes requeridos.
@@ -206,7 +206,7 @@ Ejecute nuevamente:
 bun run tools/validate-config.ts
 ```
 
-El bootstrap regenera las rutas MCP utilizando `TONY_REPO_ROOT`.
+El instalador regenera las rutas MCP utilizando `TONY_REPO_ROOT`.
 
 ### El health check falla aunque `make test` pasa
 
