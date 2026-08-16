@@ -155,17 +155,78 @@ PY
 else bad "no se encontro ${OPENCODE_JSON}"; fi
 
 hdr ".env"
-cat > "${REPO_ROOT}/.env.example" <<ENVEOF
-# Tony-AI bootstrap env. Copia a .env o exporta en tu shell.
-TONY_REPO_ROOT=${REPO_ROOT}
-TONY_OLLAMA_URL=http://localhost:11434
-TONY_QDRANT_URL=http://localhost:6333
-JUDGMENT_EMBED_MODEL=nomic-embed-text
-CODE_EMBED_MODEL=bge-m3
-TONY_IMPLEMENTATION_MODEL=carstenuhlig/omnicoder-2-9b:q4_k_m
-TONY_INDEX_CHUNKER=tree-sitter
-ENVEOF
-ok ".env.example escrito con requisitos obligatorios"
+if [[ ! -f "${REPO_ROOT}/.env.example" ]]; then
+  bad ".env.example no existe en ${REPO_ROOT}"
+else
+  ok ".env.example encontrado (no modificado)"
+  
+  if [[ -f "${REPO_ROOT}/.env" ]]; then
+    ok ".env ya existe (no sobrescrito)"
+  else
+    # Copiar .env.example a .env, reemplazando placeholders con valores reales
+    if sed "s|/path/to/tony-ai|${REPO_ROOT}|g" "${REPO_ROOT}/.env.example" > "${REPO_ROOT}/.env"; then
+      ok ".env creado desde .env.example (con rutas absolutas)"
+    else
+      bad "no se pudo crear .env desde .env.example"
+    fi
+  fi
+fi
+
+hdr ".env (validación)"
+if [[ ! -f "${REPO_ROOT}/.env" ]]; then
+  bad ".env no existe en ${REPO_ROOT}"
+else
+  # Cargar .env en un subshell para validar sin contaminar scope global
+  set +u  # Permitir undefined vars temporalmente
+  ENV_VALID=0
+  REQUIRED_VARS=("TONY_REPO_ROOT" "TONY_OLLAMA_URL" "TONY_QDRANT_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
+  
+  # Source .env en subshell
+  if ENV_CHECK=$(bash -c "set -a; source '${REPO_ROOT}/.env' 2>/dev/null; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
+    mapfile -t ENV_VALUES < <(echo "$ENV_CHECK")
+    MISSING=0
+    for i in "${!REQUIRED_VARS[@]}"; do
+      if [[ -z "${ENV_VALUES[$i]}" ]]; then
+        bad "variable requerida ${REQUIRED_VARS[$i]} falta o vacía en .env"
+        MISSING=$((MISSING+1))
+      fi
+    done
+    
+    if [[ "${MISSING}" -eq 0 ]]; then
+      # Validar valores
+      TONY_REPO_ROOT="$(grep '^TONY_REPO_ROOT=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
+      TONY_OLLAMA_URL="$(grep '^TONY_OLLAMA_URL=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
+      TONY_QDRANT_URL="$(grep '^TONY_QDRANT_URL=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
+      
+      if [[ ! -d "${TONY_REPO_ROOT}" ]]; then
+        bad "TONY_REPO_ROOT=${TONY_REPO_ROOT} no es un directorio válido"
+      else
+        ok "TONY_REPO_ROOT=${TONY_REPO_ROOT} válido"
+      fi
+      
+      if [[ ! "${TONY_OLLAMA_URL}" =~ ^https?:// ]]; then
+        bad "TONY_OLLAMA_URL debe ser http(s)://"
+      elif curl -sf -m 5 "${TONY_OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
+        ok "TONY_OLLAMA_URL=${TONY_OLLAMA_URL} accesible"
+      else
+        bad "TONY_OLLAMA_URL=${TONY_OLLAMA_URL} no es accesible"
+      fi
+      
+      if [[ ! "${TONY_QDRANT_URL}" =~ ^https?:// ]]; then
+        bad "TONY_QDRANT_URL debe ser http(s)://"
+      elif curl -sf -m 5 "${TONY_QDRANT_URL}/readyz" >/dev/null 2>&1; then
+        ok "TONY_QDRANT_URL=${TONY_QDRANT_URL} accesible"
+      else
+        bad "TONY_QDRANT_URL=${TONY_QDRANT_URL} no es accesible"
+      fi
+    else
+      bad ".env tiene ${MISSING} variable(s) faltante(s) o vacía(s)"
+    fi
+  else
+    bad "no se pudo parsear .env"
+  fi
+  set -u  # Re-enable undefined var check
+fi
 
 hdr "Resumen"
 echo "  Pasados: ${PASS}"

@@ -44,9 +44,11 @@ La configuración inicial es reutilizable y ejecuta, secuencialmente:
 5. descarga los modelos locales requeridos;
 6. instala `requirements-dev.txt` y verifica `tree_sitter` y `tree_sitter_language_pack`;
 7. regenera `opencode.json` con `TONY_REPO_ROOT` y fuerza `TONY_INDEX_CHUNKER=tree-sitter`;
-8. escribe `.env.example` con la configuración detectada.
+8. verifica que `.env.example` existe en el repositorio (no lo modifica);
+9. crea `.env` copiando desde `.env.example` (si no existe ya);
+10. valida que `.env` tiene todas las variables obligatorias y que los URLs/rutas son accesibles.
 
-El script también crea `opencode.json.bak` antes de modificar la configuración. Ese archivo es generado y no debe versionarse.
+El script también crea `opencode.json.bak` antes de modificar la configuración. Ambos son archivos generados y no deben versionarse.
 
 ### Modelos descargados
 
@@ -63,16 +65,23 @@ El modelo canónico de implementación es `carstenuhlig/omnicoder-2-9b:q4_k_m`.
 
 ## 4. Configuración del entorno
 
-El bootstrap genera `.env.example`. Si se necesita una configuración persistente para el shell local:
+`.env.example` es estático y se entrega con el repositorio (contiene placeholders como `/path/to/tony-ai`). El bootstrap verifica su existencia y automáticamente crea `.env` copiando la configuración y reemplazando los placeholders con las rutas reales del sistema (la primera vez).
+
+Si necesitás recrear `.env` desde `.env.example`:
 
 ```bash
+# En Linux/macOS:
+sed 's|/path/to/tony-ai|'"$(pwd)"'|g' .env.example > .env
+
+# O simplemente:
 cp .env.example .env
+# y luego editar TONY_REPO_ROOT con la ruta absoluta
 ```
 
-Los endpoints principales son:
+El archivo `.env.example` tiene placeholders que se reemplazan automáticamente:
 
 ```env
-TONY_REPO_ROOT=/ruta/absoluta/al/clone
+TONY_REPO_ROOT=/path/to/tony-ai          # → reemplazado con ruta real
 TONY_OLLAMA_URL=http://localhost:11434
 TONY_QDRANT_URL=http://localhost:6333
 TONY_INDEX_CHUNKER=tree-sitter
