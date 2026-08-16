@@ -1,8 +1,4 @@
-"""Tony Kernel — Evidence assessment state machine.
-
-Separates absence of evidence from weak evidence so orchestration can choose
-between retrieval, corroboration, judgment, and progression deterministically.
-"""
+"""Tony Kernel — Evidence assessment state machine."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -54,16 +50,33 @@ def assess_evidence(
 ) -> EvidenceAssessment:
     """Assess evidence without performing retrieval.
 
-    ``confidence`` can be supplied by an upstream retriever/judge. When it is
-    absent, this layer derives a conservative execution-outcome confidence.
-    ``NO_EVIDENCE`` remains distinct from ``LOW_CONFIDENCE``.
+    Contradictory execution outcomes are detected from the supplied evidence
+    before validity filtering can erase the failed outcome. This preserves the
+    distinction between ``INSUFFICIENT`` and ``CONTRADICTORY``.
     """
+    if minimum_valid < 1:
+        raise ValueError("minimum_valid must be at least 1")
+    if not 0.0 <= minimum_confidence <= 1.0:
+        raise ValueError("minimum_confidence must be between 0 and 1")
+
     refs = tuple(evidence_refs)
     if not evidence:
         return EvidenceAssessment(
             state=EvidenceState.NO_EVIDENCE,
             evidence_refs=refs,
             reason="No evidence was provided",
+        )
+
+    # Preserve contradictory execution outcomes even when the failed command
+    # is itself invalid evidence according to the normal completion validator.
+    successful_outcomes = any(item.exit_code in (None, 0) for item in evidence)
+    failed_outcomes = any(item.exit_code not in (None, 0) for item in evidence)
+    if successful_outcomes and failed_outcomes:
+        return EvidenceAssessment(
+            state=EvidenceState.CONTRADICTORY,
+            evidence_refs=refs,
+            confidence=0.0,
+            reason="Evidence contains contradictory execution outcomes",
         )
 
     valid = tuple(item for item in evidence if item.validate() == EvidenceStatus.VALID)
@@ -75,17 +88,10 @@ def assess_evidence(
         )
 
     successful = sum(1 for item in valid if item.exit_code in (None, 0))
-    failed = sum(1 for item in valid if item.exit_code not in (None, 0))
-    if successful and failed:
-        return EvidenceAssessment(
-            state=EvidenceState.CONTRADICTORY,
-            evidence_refs=refs,
-            confidence=0.0,
-            reason="Valid evidence contains contradictory execution outcomes",
-        )
-
     derived_confidence = successful / max(1, len(valid))
-    effective_confidence = derived_confidence if confidence is None else max(0.0, min(1.0, confidence))
+    effective_confidence = (
+        derived_confidence if confidence is None else max(0.0, min(1.0, confidence))
+    )
     if effective_confidence < minimum_confidence:
         return EvidenceAssessment(
             state=EvidenceState.LOW_CONFIDENCE,
