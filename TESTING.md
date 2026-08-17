@@ -1,7 +1,6 @@
 # Tony-AI — Testing
 
 ## Estrategia general
-
 ```text
                     Tony-AI Testing
                           │
@@ -26,58 +25,45 @@
         │   make health                │
         └──────────────────────────────┘
 ```
-
 ## 1. Qué necesito
-
 ### Requisitos mínimos
-
 - **Python 3.10+** (CI testea 3.10, 3.11, 3.12)
 - **Bun 1.3.14** (o compatible en local)
 - **sqlite3** (para bases persistentes)
 - **make** (Makefile)
 
 ### Instalación
-
 **Opción 1: Setup completo**
-
 ```bash
 ./scripts/setup.sh
 ```
 
 **Opción 2: Manual**
-
 ```bash
 python3 -m pip install -r requirements-dev.txt
 bun install  # si no está instalado
 ```
 
 ### Verificar instalación
-
 ```bash
-python3 --version        # 3.10+
-bun --version            # 1.3.14+
-python3 -m pytest --version
-make --version
+python3 --version        		# 3.10+
+bun --version            		# 1.3.14+
+python3 -m pytest --version		# pytest x.x.x
+make --version					# GNU Make x.x.x
 ```
 
 ### Verificar pytest
-
 ```bash
 # Ver si pytest está disponible
-make check-test-deps
+make check-test-deps			# pytest x.x.x
 ```
-
 ---
 
 ## 2. Qué comando usar según mi cambio
-
 | Mi cambio | Ejecutar | Nota |
 |-----------|----------|------|
 | Feature/bugfix normal | `make test` | Sin infraestructura |
-| Kernel, MCP, config | `make test-all` | Incluye tests SDD E2E |
-| Kernel + infraestructura | `make test-all` + `make health` | Requiere Ollama, Qdrant |
-| Code Indexer | `make test-all` | tree-sitter es obligatorio |
-| Judgment Memory | `make test-all` | Incluye hooks con mocks |
+| Kernel, MCP, config | `make test-all` | Incluye tests SDD E2E Code Indexer Judgment Memory |
 | Solo Python | `make test-python` | No necesita Bun |
 | Solo TypeScript | `make test-ts` | Necesita Bun |
 | Verificar SDD E2E | `make verify-sdd-flow` | Solo Python, local |
