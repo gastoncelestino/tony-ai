@@ -260,7 +260,8 @@ test("respuesta vacía del Kernel -> bloquea", async () => {
 
 test("recordDelegation falla -> KernelUnavailableError", async () => {
   const { client, calls } = makeFakeClient({
-    recordDelegationThrows: new Error("record failed"),
+    allowed: true,
+    recordDelegationThrows: new Error("kernel write failed"),
   })
   __setKernelClientForTests(client)
 
@@ -305,236 +306,276 @@ test("tool authorization failure -> KernelUnavailableError", async () => {
   expect(calls.authorizeTool).toEqual(["Read"])
 })
 
-test("phase explícita tiene prioridad sobre subagent_type", async () => {
+// ─── PHASE DERIVATION ───────────────────────────────────────────────────
+
+test("phase explícita tiene prioridad sobre subagent_type", () => {
+  expect(
+    derivePhase({
+      phase: "verify",
+      subagent_type: "sdd-apply",
+    })
+  ).toBe("verify")
+})
+
+test("subagent conocido -> deriva la fase correcta", () => {
+  expect(
+    derivePhase({
+      subagent_type: "sdd-spec",
+    })
+  ).toBe("spec")
+
+  expect(
+    derivePhase({
+      subagent_type: "sdd-design",
+    })
+  ).toBe("design")
+
+  expect(
+    derivePhase({
+      subagent_type: "sdd-verify",
+    })
+  ).toBe("verify")
+})
+
+test("subagent desconocido -> KernelBlockedError", () => {
+  expect(() =>
+    derivePhase({
+      subagent_type: "algo-desconocido",
+    })
+  ).toThrow(KernelBlockedError)
+})
+
+test("sin phase ni subagent_type -> KernelBlockedError", () => {
+  expect(() => derivePhase({})).toThrow(KernelBlockedError)
+})
+
+test("subagent desconocido NO cae silenciosamente en apply", async () => {
   const { client, calls } = makeFakeClient()
   __setKernelClientForTests(client)
 
-  await taskExecuteBeforeHook(task({
-    phase: "spec",
-    subagent_type: "sdd-apply",
-  }), {
-    success: true,
-  })
-
-  expect(calls.canStartPhase).toEqual(["spec"])
-})
-
-test("subagent conocido -> deriva la fase correcta", async () => {
-  const { client, calls } = makeFakeClient()
-  __setKernelClientForTests(client)
-
-  await taskExecuteBeforeHook(task({ subagent_type: "sdd-spec" }), {
-    success: true,
-  })
-
-  expect(calls.canStartPhase).toEqual(["spec"])
-})
-
-test("subagent desconocido -> KernelBlockedError", async () => {
-  const { client } = makeFakeClient()
-  __setKernelClientForTests(client)
-
   await expect(
-    taskExecuteBeforeHook(task({ subagent_type: "unknown-agent" }), {
-      success: true,
-    })
+    taskExecuteBeforeHook(
+      task({
+        subagent_type: "algo-desconocido",
+      }),
+      {
+        success: true,
+      }
+    )
   ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  expect(calls.canStartPhase).toEqual([])
 })
 
-test("sin phase ni subagent_type -> KernelBlockedError", async () => {
-  const { client } = makeFakeClient()
-  __setKernelClientForTests(client)
-
-  await expect(
-    taskExecuteBeforeHook(task({}), {
-      success: true,
-    })
-  ).rejects.toBeInstanceOf(KernelBlockedError)
-})
-
-// ─── AFTER HOOK ─────────────────────────────────────────────────────────
-
-// Remaining after-hook contract tests intentionally preserve the existing
-// phase/evidence behavior; the before-hook authorization is covered above.
+// ─── AFTER HOOK ──────────────────────────────────────────────────────────
 
 test("after hook con artifacts -> registra completion", async () => {
+  const { client, calls } = makeFakeClient({
+    statusPhase: "spec",
+  })
+  __setKernelClientForTests(client)
+
+  await taskExecuteAfterHook(
+    task({
+      subagent_type: "sdd-spec",
+      artifacts: artifacts(),
+    }),
+    "success"
+  )
+
+  expect(calls.recordPhaseCompletion).toEqual(["spec"])
+  expect(calls.getStatus).toBe(1)
+})
+
+test("after hook sin artifacts -> KernelBlockedError", async () => {
   const { client, calls } = makeFakeClient()
   __setKernelClientForTests(client)
 
-  await taskExecuteAfterHook(task({
-    subagent_type: "sdd-spec",
-    artifacts: artifacts(),
-  }), {
-    success: true,
-    result: "ok",
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  expect(calls.recordPhaseCompletion).toEqual([])
+})
+
+test("after hook con artifacts vacíos -> KernelBlockedError", async () => {
+  const { client, calls } = makeFakeClient()
+  __setKernelClientForTests(client)
+
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: [],
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  expect(calls.recordPhaseCompletion).toEqual([])
+})
+
+test("after hook con task fallida -> KernelBlockedError", async () => {
+  const { client, calls } = makeFakeClient()
+  __setKernelClientForTests(client)
+
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+      }),
+      "Error: sub-agent failed"
+    )
+  ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  expect(calls.recordPhaseCompletion).toEqual([])
+})
+
+test("recordPhaseCompletion falla -> KernelUnavailableError", async () => {
+  const { client, calls } = makeFakeClient({
+    completionThrows: new Error("kernel write failed"),
   })
+  __setKernelClientForTests(client)
+
+  await expect(
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+      }),
+      "success"
+    )
+  ).rejects.toBeInstanceOf(KernelUnavailableError)
 
   expect(calls.recordPhaseCompletion).toEqual(["spec"])
 })
 
-test("after hook sin artifacts -> KernelBlockedError", async () => {
-  const { client } = makeFakeClient()
-  __setKernelClientForTests(client)
-
-  await expect(
-    taskExecuteAfterHook(task({ subagent_type: "sdd-spec" }), {
-      success: true,
-      result: "ok",
-    })
-  ).rejects.toBeInstanceOf(KernelBlockedError)
-})
-
-test("after hook con artifacts vacíos -> KernelBlockedError", async () => {
-  const { client } = makeFakeClient()
-  __setKernelClientForTests(client)
-
-  await expect(
-    taskExecuteAfterHook(task({
-      subagent_type: "sdd-spec",
-      artifacts: [],
-    }), {
-      success: true,
-      result: "ok",
-    })
-  ).rejects.toBeInstanceOf(KernelBlockedError)
-})
-
-test("after hook con task fallida -> KernelBlockedError", async () => {
-  const { client } = makeFakeClient()
-  __setKernelClientForTests(client)
-
-  await expect(
-    taskExecuteAfterHook(task({
-      subagent_type: "sdd-spec",
-      artifacts: artifacts(),
-    }), {
-      success: true,
-      result: "error: failed",
-    })
-  ).rejects.toBeInstanceOf(KernelBlockedError)
-})
-
-test("recordPhaseCompletion falla -> KernelUnavailableError", async () => {
-  const { client } = makeFakeClient({
-    completionThrows: new Error("completion failed"),
+test("post-phase validation incorrecta -> KernelBlockedError", async () => {
+  const { client, calls } = makeFakeClient({
+    statusPhase: "explore",
   })
   __setKernelClientForTests(client)
 
   await expect(
-    taskExecuteAfterHook(task({
-      subagent_type: "sdd-spec",
-      artifacts: artifacts(),
-    }), {
-      success: true,
-      result: "ok",
-    })
-  ).rejects.toBeInstanceOf(KernelUnavailableError)
-})
-
-test("post-phase validation incorrecta -> KernelBlockedError", async () => {
-  const { client } = makeFakeClient({ statusPhase: "design" })
-  __setKernelClientForTests(client)
-
-  await expect(
-    taskExecuteAfterHook(task({
-      subagent_type: "sdd-spec",
-      artifacts: artifacts(),
-    }), {
-      success: true,
-      result: "ok",
-    })
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+      }),
+      "success"
+    )
   ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  expect(calls.recordPhaseCompletion).toEqual(["spec"])
+  expect(calls.getStatus).toBe(1)
 })
+
+// ─── SCOPE GUARD (gap #3: checkScope was defined but never called) ───────
 
 test("after hook sin gitDiff -> no llama a checkScope (opt-in, compat hacia atrás)", async () => {
   const { client, calls } = makeFakeClient()
   __setKernelClientForTests(client)
 
-  await taskExecuteAfterHook(task({
-    subagent_type: "sdd-spec",
-    artifacts: artifacts(),
-  }), {
-    success: true,
-    result: "ok",
-  })
+  await taskExecuteAfterHook(
+    task({
+      subagent_type: "sdd-spec",
+      artifacts: artifacts(),
+    }),
+    "success"
+  )
 
   expect(calls.checkScope).toEqual([])
+  expect(calls.recordPhaseCompletion).toEqual(["spec"])
 })
 
-test("after hook con gitDiff dentro de scope -> completion procede", async () => {
-  const { client, calls } = makeFakeClient()
+test("after hook con gitDiff dentro de scope -> procede y registra completion", async () => {
+  const { client, calls } = makeFakeClient({ scopeAllowed: true })
   __setKernelClientForTests(client)
 
-  await taskExecuteAfterHook(task({
-    subagent_type: "sdd-spec",
-    artifacts: artifacts(),
-    gitDiff: "diff --git a/openspec/spec.md b/openspec/spec.md",
-    allowedFiles: ["openspec/**"],
-  }), {
-    success: true,
-    result: "ok",
-  })
+  await taskExecuteAfterHook(
+    task({
+      subagent_type: "sdd-spec",
+      artifacts: artifacts(),
+      gitDiff: "+++ b/openspec/spec.md\n",
+      allowedFiles: ["openspec/*"],
+    }),
+    "success"
+  )
 
-  expect(calls.checkScope).toEqual([{
-    gitDiff: "diff --git a/openspec/spec.md b/openspec/spec.md",
-    allowedFiles: ["openspec/**"],
-  }])
+  expect(calls.checkScope).toEqual([
+    { gitDiff: "+++ b/openspec/spec.md\n", allowedFiles: ["openspec/*"] },
+  ])
   expect(calls.recordPhaseCompletion).toEqual(["spec"])
 })
 
 test("after hook con gitDiff fuera de scope -> KernelBlockedError, NO registra completion", async () => {
   const { client, calls } = makeFakeClient({
     scopeAllowed: false,
+    scopeViolations: ["kernel/schemas.py"],
   })
   __setKernelClientForTests(client)
 
   await expect(
-    taskExecuteAfterHook(task({
-      subagent_type: "sdd-spec",
-      artifacts: artifacts(),
-      gitDiff: "diff --git a/src/unrelated.ts b/src/unrelated.ts",
-      allowedFiles: ["openspec/**"],
-    }), {
-      success: true,
-      result: "ok",
-    })
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+        gitDiff: "+++ b/kernel/schemas.py\n",
+        allowedFiles: ["openspec/*"],
+      }),
+      "success"
+    )
   ).rejects.toBeInstanceOf(KernelBlockedError)
 
+  // La violación de scope debe bloquear ANTES de tocar recordPhaseCompletion.
+  expect(calls.checkScope.length).toBe(1)
   expect(calls.recordPhaseCompletion).toEqual([])
 })
 
 test("checkScope falla (Kernel caído) -> KernelUnavailableError", async () => {
-  const { client } = makeFakeClient({
-    checkScopeThrows: new Error("scope process failed"),
+  const { client, calls } = makeFakeClient({
+    checkScopeThrows: new Error("kernel process failed"),
   })
   __setKernelClientForTests(client)
 
   await expect(
-    taskExecuteAfterHook(task({
-      subagent_type: "sdd-spec",
-      artifacts: artifacts(),
-      gitDiff: "diff --git a/openspec/spec.md b/openspec/spec.md",
-      allowedFiles: ["openspec/**"],
-    }), {
-      success: true,
-      result: "ok",
-    })
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+        gitDiff: "+++ b/openspec/spec.md\n",
+        allowedFiles: ["openspec/*"],
+      }),
+      "success"
+    )
   ).rejects.toBeInstanceOf(KernelUnavailableError)
+
+  expect(calls.recordPhaseCompletion).toEqual([])
 })
 
 test("recordPhaseCompletion bloqueado por evidencia inválida -> KernelBlockedError (no 'success' silencioso)", async () => {
-  const { client } = makeFakeClient({
+  const { client, calls } = makeFakeClient({
     completionAllowed: false,
+    completionMissingEvidence: ["command claim without exit_code"],
   })
   __setKernelClientForTests(client)
 
   await expect(
-    taskExecuteAfterHook(task({
-      subagent_type: "sdd-spec",
-      artifacts: artifacts(),
-    }), {
-      success: true,
-      result: "ok",
-    })
+    taskExecuteAfterHook(
+      task({
+        subagent_type: "sdd-spec",
+        artifacts: artifacts(),
+        evidence: [{ type: "command", claim: "confío en que anduvo" }],
+      }),
+      "success"
+    )
   ).rejects.toBeInstanceOf(KernelBlockedError)
+
+  expect(calls.recordPhaseCompletion).toEqual(["spec"])
 })
