@@ -25,13 +25,27 @@ CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 # Solo eliminamos los que este proceso haya creado, preservando cualquier
 # estado local que ya existiera antes de ejecutar make health.
 HEALTH_TMP_DIRS=()
+HEALTH_DB_DIR=""
 cleanup_health_dirs() {
   local d
   for d in "${HEALTH_TMP_DIRS[@]}"; do
     rm -rf -- "$d"
   done
+  if [[ -n "${HEALTH_DB_DIR}" ]]; then
+    rm -rf -- "${HEALTH_DB_DIR}"
+  fi
 }
 trap cleanup_health_dirs EXIT
+
+# Los MCP de memoria inicializan SQLite al arrancar. Health debe comprobar que
+# arrancan sin tocar la memoria persistente del proyecto, por eso cada probe
+# usa dos DB temporales dentro de un directorio efimero.
+if ! HEALTH_DB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/tony-ai-health-db.XXXXXX")"; then
+  echo "FAIL     MCP: no pude crear directorio temporal para SQLite"
+  exit 1
+fi
+HEALTH_LOCAL_MEMORY_DB="${HEALTH_DB_DIR}/memory.db"
+HEALTH_JUDGMENT_MEMORY_DB="${HEALTH_DB_DIR}/judgment-memory.db"
 
 declare -A STATUS=([OpenCode]=0 [MCP]=0 [Ollama]=0 [Qdrant]=0 [Disk]=0 [embeddings]=0)
 declare -a MSGS=()
@@ -62,7 +76,10 @@ fi
 mcp_probe() {
   local script="$1"
   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}' \
-    | timeout 10 python3 "${REPO_ROOT}/${script}" 2>/dev/null \
+    | env \
+        LOCAL_MEMORY_DB="${HEALTH_LOCAL_MEMORY_DB}" \
+        JUDGMENT_MEMORY_DB="${HEALTH_JUDGMENT_MEMORY_DB}" \
+        timeout 10 python3 "${REPO_ROOT}/${script}" 2>/dev/null \
     | grep -q '"serverInfo"'
 }
 MCP_OK=1
@@ -71,7 +88,7 @@ mcp_probe "code-index/server.py"       || MCP_OK=0
 mcp_probe "judgment-memory/server.py"  || MCP_OK=0
 mcp_probe "kernel/mcp_server.py"       || MCP_OK=0
 emit MCP "${MCP_OK}" \
-  "$([[ $MCP_OK -eq 1 ]] && echo 'los 4 servers arrancan' || echo 'al menos un server MCP fallo al initialize')"
+  "$([[ $MCP_OK -eq 1 ]] && echo 'los 4 servers arrancan con SQLite temporal' || echo 'al menos un server MCP fallo al initialize')"
 
 # 3. Ollama
 if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
