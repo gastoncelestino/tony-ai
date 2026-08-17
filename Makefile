@@ -24,16 +24,16 @@ check-test-discovery:
 
 # Python usa pytest cuando está disponible y conserva el runner standalone como fallback.
 test-python: check-test-deps check-test-discovery
-	@python3 -m pytest tests -q 2>/dev/null || python3 tests/python_verify.py tests
+	@python3 -m pytest tests -q 2>/dev/null || python3 tests/verification/python_verify.py tests
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@python3 -m pytest tests/python/kernel/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/python/kernel/test_kernel_*.py tests/test_sdd_flow_e2e.py
-	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; bun test tests/ts/kernel/tony_kernel_*.test.ts
+	@python3 -m pytest tests/kernel/python/test_kernel_*.py tests/functional/sdd/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/verification/python_verify.py tests/kernel/python/test_kernel_*.py tests/functional/sdd/test_sdd_flow_e2e.py
+	@set -e; ln -sfn ../../../plugins tests/kernel/plugins; ln -sfn .test-e2e-tmp tests/kernel/.test-e2e-tmp; trap 'rm -f tests/kernel/plugins tests/kernel/.test-e2e-tmp' EXIT; bun test tests/kernel/ts/tony_kernel_*.test.ts
 
 # TypeScript se ejecuta con Bun.
 test-ts: check-test-deps check-test-discovery
-	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; bun test tests
+	@set -e; ln -sfn ../../../plugins tests/kernel/plugins; ln -sfn .test-e2e-tmp tests/kernel/.test-e2e-tmp; trap 'rm -f tests/kernel/plugins tests/kernel/.test-e2e-tmp' EXIT; bun test tests
 
 check-coverage-deps: check-test-deps
 	@python3 -c 'import coverage; print("coverage", coverage.__version__)'
@@ -43,20 +43,20 @@ coverage: check-coverage-deps coverage-python coverage-ts
 
 # Coverage Python mide branches y conserva contexto por test para auditorías de redundancia.
 coverage-python: check-coverage-deps
-	@python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing --cov-report=xml:coverage.xml || (rm -f .coverage && coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests)
+	@python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing --cov-report=xml:coverage.xml || (rm -f .coverage && coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/verification/python_verify.py tests)
 	@coverage report -m --fail-under=40
 	@coverage xml -o coverage.xml
 	@coverage json --show-contexts -o coverage-contexts.json
 
 # Coverage TypeScript usa el reporte LCOV de Bun.
 coverage-ts: check-test-deps check-test-discovery
-	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; rm -rf coverage-bun; bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests; test -s coverage-bun/lcov.info
+	@set -e; ln -sfn ../../../plugins tests/kernel/plugins; ln -sfn .test-e2e-tmp tests/kernel/.test-e2e-tmp; trap 'rm -f tests/kernel/plugins tests/kernel/.test-e2e-tmp' EXIT; rm -rf coverage-bun; bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests; test -s coverage-bun/lcov.info
 
 verify-qdrant:
-	@bun run tests/judgment_qdrant.verify.ts
+	@bun run tests/functional/judgment_memory/judgment_memory_qdrant.verify.ts
 
 verify-sdd-flow:
-	@python3 tests/test_sdd_flow_e2e.py
+	@python3 tests/functional/sdd/test_sdd_flow_e2e.py
 
 bootstrap:
 	@bash scripts/setup.sh
@@ -75,6 +75,6 @@ clean:
 	@rm -rf coverage-bun
 
 validate-config:
-	@bun run tests/validate_config.verify.ts
+	@bun run tests/verification/validate_config.verify.ts
 
-# Kernel tests are consolidated by contract in seven Python suites; TS remains a separate plugin contract layer.
+# Kernel tests are consolidated by contract; functional and verification tests are grouped by domain.
