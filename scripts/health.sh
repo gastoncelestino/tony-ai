@@ -4,7 +4,7 @@
 #
 # Componentes:
 #   OpenCode     opencode.json existe, parsea y no tiene rutas absolutas.
-#   MCP          los 3 servers arrancan y responden 'initialize' JSON-RPC.
+#   MCP          los 4 servers arrancan y responden 'initialize' JSON-RPC.
 #   Ollama       /api/tags responde y los modelos de embedding estan pull-eados.
 #   Qdrant       /readyz 200 y /collections responde.
 #   Disk         directorios .tonymem/ existen y son escribibles.

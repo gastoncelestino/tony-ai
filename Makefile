@@ -10,8 +10,9 @@ export PYTHONPYCACHEPREFIX := $(TONY_RUNTIME_DIR)/pycache
 # Ejecuta la suite normal: tests Python + TypeScript + validación de configuración.
 test: check-test-deps check-test-discovery test-python test-ts validate-config
 
-# test-all agrega las pruebas específicas del kernel y del flujo SDD end-to-end.
-test-all: test test-kernel
+# Prueba total: suite normal + tests específicos de Kernel/SDD + health e2e con infraestructura real.
+# health reutiliza verify-qdrant para cubrir el roundtrip Ollama -> embeddings -> Qdrant -> búsqueda.
+test-all: test test-kernel health
 
 check-test-deps:
 	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
