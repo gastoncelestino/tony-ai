@@ -28,7 +28,7 @@ test-python: check-test-deps check-test-discovery
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@python3 -m pytest tests/python/kernel/test_kernel_*.py tests/python/kernel/fase/*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/python/kernel/test_kernel_cli.py tests/python/kernel/test_kernel_enforcement.py tests/python/kernel/fase/test_artifact_gate.py tests/python/kernel/fase/test_evidence_ledger.py tests/test_sdd_flow_e2e.py
+	@python3 -m pytest tests/python/kernel/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/python/kernel/test_kernel_*.py tests/test_sdd_flow_e2e.py
 	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; bun test tests/ts/kernel/tony_kernel_*.test.ts
 
 # TypeScript se ejecuta con Bun.
@@ -51,34 +51,30 @@ coverage-python: check-coverage-deps
 # Coverage TypeScript usa el reporte LCOV de Bun.
 coverage-ts: check-test-deps check-test-discovery
 	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; rm -rf coverage-bun; bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests; test -s coverage-bun/lcov.info
-# Smoke test de conexión/configuración de Qdrant.
+
 verify-qdrant:
 	@bun run tests/judgment_qdrant.verify.ts
 
-# Smoke test end-to-end del flujo SDD.
 verify-sdd-flow:
 	@python3 tests/test_sdd_flow_e2e.py
 
-# Bootstrap inicial del entorno local.
 bootstrap:
 	@bash scripts/setup.sh
 
-# Health check del proyecto.
 health:
 	@bash scripts/health.sh
 
-# Levanta los servicios Docker y muestra el proceso de pull de Ollama.
 docker-up:
 	@cd docker && docker compose up -d && docker compose logs -f ollama-pull
 
 docker-down:
 	@cd docker && docker compose down
 
-# Limpieza de bases locales y artefactos de coverage.
 clean:
 	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db coverage.xml coverage-contexts.json
 	@rm -rf coverage-bun
 
-# Valida la configuración de OpenCode/proyecto.
 validate-config:
 	@bun run tests/validate_config.verify.ts
+
+# Kernel tests are consolidated by contract in seven Python suites; TS remains a separate plugin contract layer.
