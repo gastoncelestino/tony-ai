@@ -197,7 +197,20 @@ Máquina de estados, gates, checksums, ledgers, integración TypeScript ↔ Pyth
 - Retry budget
 - Phase checksums
 - Evidence ledger, task ledger
+- Task dependencies y enforcement de evidencia de tareas
+- State Machine y transiciones válidas
 - Comportamiento fail-closed (regresiones detectadas inmediatamente)
+
+**Cobertura específica validada:**
+- Dependencias entre tareas: una tarea dependiente no puede iniciarse hasta completar sus dependencias.
+- Evidencia de tareas: una tarea no puede completarse sin evidencia válida.
+- Artifact Gate: artifacts faltantes, inválidos o inconsistentes bloquean el flujo.
+- Phase Gate: transiciones inválidas, fases incompletas y artifacts requeridos bloquean el avance.
+- Phase checksums: modificaciones o artifacts faltantes son detectados.
+- Retry Budget: intentos, agotamiento, acciones y reset se mantienen por fase/tarea.
+- Evidence Ledger: claims requeridos sin evidencia válida quedan sin soporte.
+- Scope Guard: cambios fuera del scope permitido bloquean la operación.
+- State Machine: estado inicial, transiciones, completado de fases y resumen de estado.
 
 **Tests principales:**
 ```
@@ -207,6 +220,15 @@ tests/test_kernel_cli.py
 tests/test_kernel_hardening.py
 tests/test_kernel_enforcement.py
 tests/test_sdd_flow_e2e.py
+tests/test_task_dependencies.py
+tests/test_task_evidence.py
+tests/test_phase_checksum.py
+tests/test_retry_budget.py
+tests/test_artifact_gate.py
+tests/test_phase_gate.py
+tests/test_evidence_ledger.py
+tests/test_orchestrator_scope.py
+tests/test_state_machine.py
 ```
 
 **Ejecutar:**
