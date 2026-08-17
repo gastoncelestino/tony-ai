@@ -1,5 +1,3 @@
-import pytest
-
 from kernel.evidence_lineage import EvidenceLineageError, validate_evidence_refs
 from kernel.schemas import Phase, TaskStatus
 from kernel.task_graph import TaskNode, TaskStateGraph
@@ -10,7 +8,7 @@ def _graph() -> TaskStateGraph:
         TaskNode(
             task_id="task-1",
             description="test",
-            phase=Phase.IMPLEMENT,
+            phase=Phase.APPLY,
             status=TaskStatus.IN_PROGRESS,
             evidence_refs=("evidence:a", "evidence:b"),
         )
@@ -25,10 +23,18 @@ def test_validate_evidence_refs_accepts_refs_attached_to_task():
 
 
 def test_validate_evidence_refs_rejects_unknown_ref():
-    with pytest.raises(EvidenceLineageError, match="not attached"):
+    try:
         validate_evidence_refs(_graph(), "task-1", ["evidence:missing"])
+    except EvidenceLineageError as exc:
+        assert "not attached" in str(exc)
+    else:
+        raise AssertionError("expected EvidenceLineageError")
 
 
 def test_validate_evidence_refs_rejects_unknown_task():
-    with pytest.raises(EvidenceLineageError, match="Unknown task"):
+    try:
         validate_evidence_refs(_graph(), "missing", ["evidence:a"])
+    except EvidenceLineageError as exc:
+        assert "Unknown task" in str(exc)
+    else:
+        raise AssertionError("expected EvidenceLineageError")
