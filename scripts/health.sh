@@ -112,8 +112,8 @@ EMB_MSG="judgment_qdrant.verify.ts paso"
 if [[ "${STATUS[Ollama]}" -eq 1 && "${STATUS[Qdrant]}" -eq 1 ]]; then
   if ! command -v bun >/dev/null 2>&1; then
     EMB_OK=0; EMB_MSG="bun no instalado - no puedo correr judgment_qdrant.verify.ts"
-  elif ! (cd "${REPO_ROOT}/judgment-memory" \
-          && timeout 90 bun run tests/judgment_qdrant.verify.ts) >/tmp/verify.log 2>&1; then
+  elif ! (cd "${REPO_ROOT}" \
+           && timeout 90 bun run tests/judgment_qdrant.verify.ts) >/tmp/verify.log 2>&1; then
     EMB_OK=0; EMB_MSG="judgment_qdrant.verify.ts fallo - tail: $(tail -3 /tmp/verify.log | tr '\n' ' ')"
   fi
 else

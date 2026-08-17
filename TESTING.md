@@ -60,9 +60,7 @@ python3 -m pytest --version
 make --version
 ```
 
-### Nota sobre pytest
-
-Pytest es recomendado pero NO obligatorio. Si no está disponible, el Makefile usa automáticamente `tests/python_verify.py` (runner standalone basado en stdlib).
+### Verificar pytest
 
 ```bash
 # Ver si pytest está disponible
@@ -113,13 +111,6 @@ make test-ts          # Solo tests TypeScript (necesita Bun)
 make test-kernel      # Tests Kernel + SDD flow (necesita Bun)
 make test-all         # make test + test-kernel
 ```
-
-**Referencia:**
-- `test-python`: Ejecuta pytest o runner standalone (fallback)
-- `test-ts`: Ejecuta con Bun
-- `test-kernel`: Python (`test_kernel_*.py`, `test_sdd_flow_e2e.py`) + TypeScript (`tony_kernel_*.test.ts`)
-  - Con Pytest: ejecuta la suite Kernel completa.
-  - Sin Pytest/fallback: ejecuta el subconjunto compatible con el runner standalone.
 ### Ejecutar directamente (diagnóstico)
 
 ```bash
@@ -575,8 +566,6 @@ Verifica que tu código NO rompió nada en la suite local (Python + TypeScript +
 **Si `make test` falla, NO hagas commit. Arreglá el problema primero.**
 
 ### Antes de hacer `push` a rama local
-
-Lo mismo que antes de commit:
 
 ```bash
 make test
