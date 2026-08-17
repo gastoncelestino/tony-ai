@@ -203,7 +203,7 @@ Ejecute nuevamente:
 
 ```bash
 ./scripts/setup.sh
-bun run tools/validate-config.ts
+bun run tests/validate_config.verify.ts
 ```
 
 El instalador regenera las rutas MCP utilizando `TONY_REPO_ROOT`.

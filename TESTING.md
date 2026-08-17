@@ -83,7 +83,7 @@ make check-test-deps
 | Solo Python | `make test-python` | No necesita Bun |
 | Solo TypeScript | `make test-ts` | Necesita Bun |
 | Verificar SDD E2E | `make verify-sdd-flow` | Solo Python, local |
-| Antes de hacer push | `make test` + `bun run tools/validate-config.ts` + `git diff --check` | Check pre-commit |
+| Antes de hacer push | `make test` + `bun run tests/validate_config.verify.ts` + `git diff --check` | Check pre-commit |
 
 ---
 
@@ -137,7 +137,7 @@ bun test tests
 ```
 ```bash
 # Validación de config
-bun run tools/validate-config.ts
+bun run tests/validate_config.verify.ts
 ```
 Validación de `opencode.json`, prompts, agentes, MCP y referencias de archivos.
 
@@ -287,7 +287,7 @@ Indexación semántica con `tree-sitter` obligatoriamente (no regex).
 Validación de `opencode.json`, agentes, prompts, MCP y referencias de archivos.
 
 ```bash
-bun run tools/validate-config.ts
+bun run tests/validate_config.verify.ts
 ```
 
 **Comprueba:**
@@ -492,7 +492,7 @@ python3 tools/run-python-tests.py tests
 
 ```bash
 # Ver error exacto
-bun run tools/validate-config.ts
+bun run tests/validate_config.verify.ts
 
 # Errors comunes:
 # - {file:...} apunta a archivo que no existe
@@ -589,13 +589,13 @@ Si trabajás en una rama que NO es `main` ni `dev`, `make test` es suficiente.
 Además de `make test`:
 
 ```bash
-bun run tools/validate-config.ts
+bun run tests/validate_config.verify.ts
 git diff --check
 ```
 
 **Qué verifican:**
 - `make test` — suite local completa
-- `bun run tools/validate-config.ts` — `opencode.json`, agentes, prompts, MCP válidos
+- `bun run tests/validate_config.verify.ts` — `opencode.json`, agentes, prompts, MCP válidos
 - `git diff --check` — sin espacios, líneas sin newline, etc
 
 ### ¿Qué es un PR crítico?
@@ -628,7 +628,7 @@ make health
 | Code Indexer (`code-index/`) | `make test-all` + `make verify-qdrant` |
 | Judgment Memory (`judgment-memory/`) | `make test-all` |
 | MCP servers | `make test-all` + `make health` |
-| Configuración (`opencode.json`) | `bun run tools/validate-config.ts` |
+| Configuración (`opencode.json`) | `bun run tests/validate_config.verify.ts` |
 | Makefile | `make check-test-discovery` |
 | Docker | `cd docker && docker compose build` |
 | Scripts de setup | `./scripts/setup.sh` (en clean environment) |
@@ -649,7 +649,7 @@ make health
 **Antes de push a main/dev:**
 ```bash
 make test
-bun run tools/validate-config.ts
+bun run tests/validate_config.verify.ts
 git diff --check
 ```
 

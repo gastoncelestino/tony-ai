@@ -83,4 +83,4 @@ clean:
 
 # Valida la configuración de OpenCode/proyecto.
 validate-config:
-	@bun run tools/validate-config.ts
+	@bun run tests/validate_config.verify.ts
