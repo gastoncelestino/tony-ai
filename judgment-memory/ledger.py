@@ -146,45 +146,30 @@ def stats(project: str = "default") -> dict:
         if row.get("agreement"):
             by_agreement[row["agreement"]] = by_agreement.get(row["agreement"], 0) + 1
     total = len(rows)
-    return {
-        "project": project,
-        "total_judgments": total,
-        "by_final": by_final,
-        "by_agreement": by_agreement,
-        "contradiction_rate": round(by_agreement.get("contradiction", 0) / total, 3) if total else 0.0,
-    }
+    return {"project": project, "total_judgments": total, "by_final": by_final, "by_agreement": by_agreement, "contradiction_rate": round(by_agreement.get("contradiction", 0) / total, 3) if total else 0.0}
 
 
 def normalize(record: dict) -> str:
     judge_a = record.get("judge_a") or {}
     judge_b = record.get("judge_b") or {}
     parts = [f"task: {record.get('task', '')}", f"outcome: {record.get('final', '')}"]
-    if record.get("agreement"):
-        parts.append(f"agreement: {record['agreement']}")
-    if judge_a.get("decision"):
-        parts.append(f"judge_a ({judge_a.get('model', '?')}): {judge_a['decision']}")
-    if judge_b.get("decision"):
-        parts.append(f"judge_b ({judge_b.get('model', '?')}): {judge_b['decision']}")
-    if record.get("fix"):
-        parts.append(f"fix: {record['fix']}")
-    if record.get("lesson"):
-        parts.extend([f"lesson: {record['lesson']}", record["lesson"]])
+    if record.get("agreement"): parts.append(f"agreement: {record['agreement']}")
+    if judge_a.get("decision"): parts.append(f"judge_a ({judge_a.get('model', '?')}): {judge_a['decision']}")
+    if judge_b.get("decision"): parts.append(f"judge_b ({judge_b.get('model', '?')}): {judge_b['decision']}")
+    if record.get("fix"): parts.append(f"fix: {record['fix']}")
+    if record.get("lesson"): parts.extend([f"lesson: {record['lesson']}", record["lesson"]])
     return "\n".join(parts)
 
 
 def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_URL) -> list:
-    if not texts:
-        return []
+    if not texts: return []
     payload = json.dumps({"model": model, "input": texts}).encode("utf-8")
     req = urllib.request.Request(f"{base_url}/api/embed", data=payload, headers={"Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Could not reach Ollama at {base_url}: {exc}") from exc
+        with urllib.request.urlopen(req, timeout=120) as resp: body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as exc: raise RuntimeError(f"Could not reach Ollama at {base_url}: {exc}") from exc
     embeddings = body.get("embeddings")
-    if not embeddings:
-        raise RuntimeError(f"Ollama returned no embeddings: {body}")
+    if not embeddings: raise RuntimeError(f"Ollama returned no embeddings: {body}")
     return embeddings
 
 
@@ -193,31 +178,23 @@ def _qdrant_request(method: str, path: str, body: dict = None, base_url: str = Q
     req = urllib.request.Request(f"{base_url}{path}", data=data, headers={"Content-Type": "application/json"}, method=method)
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
-            raw = resp.read()
-            return json.loads(raw) if raw else {}
+            raw = resp.read(); return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"Qdrant {method} {path} failed ({exc.code}): {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Could not reach Qdrant at {base_url}{path}: {exc}") from exc
+        detail = exc.read().decode("utf-8", errors="ignore"); raise RuntimeError(f"Qdrant {method} {path} failed ({exc.code}): {detail}") from exc
+    except urllib.error.URLError as exc: raise RuntimeError(f"Could not reach Qdrant at {base_url}{path}: {exc}") from exc
 
 
 def collection_name(project: str) -> str:
-    safe = re.sub(r"[^a-zA-Z0-9_-]", "-", project)
-    return f"jdmem_{safe}"
+    return f"jdmem_{re.sub(r'[^a-zA-Z0-9_-]', '-', project)}"
 
 
 def qdrant_ensure_collection(collection: str, dim: int, base_url: str = QDRANT_URL) -> None:
-    try:
-        _qdrant_request("GET", f"/collections/{collection}", base_url=base_url)
-        return
-    except RuntimeError:
-        _qdrant_request("PUT", f"/collections/{collection}", {"vectors": {"size": dim, "distance": "Cosine"}}, base_url=base_url)
+    try: _qdrant_request("GET", f"/collections/{collection}", base_url=base_url); return
+    except RuntimeError: _qdrant_request("PUT", f"/collections/{collection}", {"vectors": {"size": dim, "distance": "Cosine"}}, base_url=base_url)
 
 
 def qdrant_upsert(collection: str, points: list, base_url: str = QDRANT_URL) -> None:
-    if points:
-        _qdrant_request("PUT", f"/collections/{collection}/points?wait=true", {"points": points}, base_url=base_url)
+    if points: _qdrant_request("PUT", f"/collections/{collection}/points?wait=true", {"points": points}, base_url=base_url)
 
 
 def qdrant_search(collection: str, vector: list, limit: int = 5, base_url: str = QDRANT_URL) -> list:
@@ -229,16 +206,23 @@ def point_id_for(project: str, execution_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"jdmem:{project}:{execution_id}"))
 
 
-def record_judgment(record: dict, embed_model: str = EMBED_MODEL, ollama_url: str = OLLAMA_URL, qdrant_url: str = QDRANT_URL, index: bool = True) -> dict:
+def record_judgment(record: dict, embed_model: str = EMBED_MODEL, ollama_url: str = OLLAMA_URL, qdrant_url: str = QDRANT_URL, index: bool = True, evidence_validator=None) -> dict:
+    """Persist a judgment after optional evidence-lineage validation.
+
+    The validator is injected by the control plane so this memory package does
+    not import or own the Task State Graph. It must return normalized refs or
+    raise before any SQLite write occurs.
+    """
     project = record.get("project", "default")
+    if evidence_validator is not None:
+        normalized_refs = evidence_validator(record.get("evidence_refs") or [])
+        record = {**record, "evidence_refs": list(normalized_refs)}
     pid = point_id_for(project, record["execution_id"])
     ledger_result = save_judgment(record, point_id=pid)
-    if not index:
-        return {**ledger_result, "indexed": False}
+    if not index: return {**ledger_result, "indexed": False}
     try:
         vec = embed_texts([normalize(record)], model=embed_model, base_url=ollama_url)[0]
-        coll = collection_name(project)
-        qdrant_ensure_collection(coll, len(vec), base_url=qdrant_url)
+        coll = collection_name(project); qdrant_ensure_collection(coll, len(vec), base_url=qdrant_url)
         qdrant_upsert(coll, [{"id": pid, "vector": vec, "payload": {**record, "project": project}}], base_url=qdrant_url)
         return {**ledger_result, "indexed": True, "point_id": pid, "collection": coll}
     except (RuntimeError, OSError) as exc:
@@ -246,19 +230,10 @@ def record_judgment(record: dict, embed_model: str = EMBED_MODEL, ollama_url: st
 
 
 def recall(task: str, project: str = "default", limit: int = 5, ollama_url: str = OLLAMA_URL, qdrant_url: str = QDRANT_URL) -> dict:
-    try:
-        vec = embed_texts([task], base_url=ollama_url)[0]
-        hits = qdrant_search(collection_name(project), vec, limit=limit, base_url=qdrant_url)
-    except (RuntimeError, OSError):
-        return {"available": False, "results": []}
+    try: vec = embed_texts([task], base_url=ollama_url)[0]; hits = qdrant_search(collection_name(project), vec, limit=limit, base_url=qdrant_url)
+    except (RuntimeError, OSError): return {"available": False, "results": []}
     results = []
     for hit in hits:
-        if hit.get("score", 0.0) < RECALL_SCORE_THRESHOLD:
-            continue
-        payload = dict(hit.get("payload") or {})
-        payload["score"] = hit.get("score", 0.0)
-        results.append(payload)
+        if hit.get("score", 0.0) < RECALL_SCORE_THRESHOLD: continue
+        payload = dict(hit.get("payload") or {}); payload["score"] = hit.get("score", 0.0); results.append(payload)
     return {"available": True, "results": results}
-
-
-__all__ = ["connect", "init_db", "save_judgment", "history", "stats", "normalize", "embed_texts", "collection_name", "qdrant_ensure_collection", "qdrant_upsert", "qdrant_search", "point_id_for", "record_judgment", "recall"]
