@@ -1,0 +1,32 @@
+{
+  "sources": [
+    {
+      "id": "python",
+      "name": "Python 3.14",
+      "library_id": "/websites/python_3_14",
+      "url": "https://docs.python.org/3.14/",
+      "enabled": true
+    },
+    {
+      "id": "fastapi",
+      "name": "FastAPI",
+      "library_id": "/fastapi/fastapi",
+      "url": "https://fastapi.tiangolo.com/",
+      "enabled": true
+    },
+    {
+      "id": "react",
+      "name": "React",
+      "library_id": "/reactjs/react.dev",
+      "url": "https://react.dev/",
+      "enabled": true
+    },
+    {
+      "id": "postgresql",
+      "name": "PostgreSQL",
+      "library_id": "/postgres/postgres",
+      "url": "https://www.postgresql.org/docs/",
+      "enabled": true
+    }
+  ]
+}
