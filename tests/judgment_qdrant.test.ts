@@ -12,10 +12,9 @@
  *   - Qdrant reachable (`docker run -p 6333:6333 qdrant/qdrant`)
  *   - Bun installed (ships with OpenCode's plugin runtime already)
  *
- * Run from the judgment-memory/ directory (or anywhere, paths below are
- * relative to this file):
+ * Run from the repository root:
  *
- *   bun run tests/judgment_qdrant.test.ts
+ *   bun test tests/judgment_qdrant.test.ts
  *
  * Uses a throwaway project name (`__verify_qdrant_ts__`) and collection so
  * it never touches real judgment data, and deletes the collection at the
@@ -31,7 +30,7 @@ import {
   searchPoints,
   semanticSearch,
   upsertPoints,
-} from "../../plugins/qdrant"
+} from "../plugins/qdrant"
 
 const PROJECT = "__verify_qdrant_ts__"
 const COLLECTION = collectionName(PROJECT)
