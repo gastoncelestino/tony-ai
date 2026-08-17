@@ -47,22 +47,10 @@ jobs:
         run: make test
         shell: bash
 
-      - name: Run Python coverage
+      - name: Run complete coverage
         if: matrix.python-version == '3.12'
         run: make coverage
         shell: bash
-
-      - name: Upload coverage report
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.python-version }}
-          include-hidden-files: true
-          path: |
-            coverage.xml
-            coverage-contexts.json
-            coverage-bun/lcov.info
-          if-no-files-found: error
 
   docker-build:
     name: Docker Build Test
