@@ -2,98 +2,38 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tony-ai.local/schemas/judgment-record.json",
   "title": "judgment-memory.record",
-  "description": "One persisted outcome of a Judgment Day lineage (see skills/judgment-day/SKILL.md + skills/_shared/review-ledger-contract.md). This is the payload judgment-memory/ledger.py writes to SQLite, embeds, and upserts into Qdrant — and the shape jd_recall returns.",
+  "description": "One persisted outcome of a Judgment Day lineage.",
   "type": "object",
   "required": ["execution_id", "task", "final", "created_at"],
   "properties": {
-    "execution_id": {
-      "type": "string",
-      "description": "Stable id for this judgment run, e.g. 'jd-001' or the review-ledger transaction's lineageId."
+    "execution_id": { "type": "string" },
+    "project": { "type": "string", "default": "default" },
+    "task": { "type": "string" },
+    "type": { "type": "string", "enum": ["judgment"], "default": "judgment" },
+    "judge_a": { "$ref": "#/$defs/judgeVerdict" },
+    "judge_b": { "$ref": "#/$defs/judgeVerdict" },
+    "agreement": { "type": "string", "enum": ["confirmed", "suspect", "contradiction"] },
+    "winner": { "type": ["string", "null"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "final": { "type": "string", "enum": ["approve", "reject", "escalated"] },
+    "fix": { "type": "string" },
+    "lesson": { "type": "string" },
+    "source_lineage_id": { "type": "string" },
+    "evidence_refs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Stable references to the evidence that justified or contradicted this judgment."
     },
-    "project": {
-      "type": "string",
-      "default": "default",
-      "description": "Same project scoping convention TonyMem uses (git-remote-derived by the plugin)."
-    },
-    "task": {
-      "type": "string",
-      "description": "Short description of what was judged, e.g. 'optimize query', 'refactor API'."
-    },
-    "type": {
-      "type": "string",
-      "enum": ["judgment"],
-      "default": "judgment",
-      "description": "Reserved for future record kinds; judgment-memory only ever writes 'judgment' today."
-    },
-    "judge_a": {
-      "$ref": "#/$defs/judgeVerdict"
-    },
-    "judge_b": {
-      "$ref": "#/$defs/judgeVerdict"
-    },
-    "agreement": {
-      "type": "string",
-      "enum": ["confirmed", "suspect", "contradiction"],
-      "description": "Output of the Agreement Engine: 'confirmed' = both judges agree, 'suspect' = one judge only, 'contradiction' = judges disagree (routes to human escalation, never auto-fixed — see review-ledger-contract.md)."
-    },
-    "winner": {
-      "type": ["string", "null"],
-      "description": "Which judge's verdict the Agreement Engine sided with, if applicable. Null on contradiction."
-    },
-    "confidence": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 1,
-      "description": "Agreement Engine confidence score for the final decision."
-    },
-    "final": {
-      "type": "string",
-      "enum": ["approve", "reject", "escalated"],
-      "description": "Terminal outcome. Mirrors review-ledger-contract.md's transaction.state terminal values (approved/escalated), collapsed to the fix agent's vocabulary."
-    },
-    "fix": {
-      "type": "string",
-      "description": "One-line summary of the fix applied, if any (e.g. 'added index')."
-    },
-    "lesson": {
-      "type": "string",
-      "description": "The reusable takeaway — this is the field embedded and searched. Should stand alone without the rest of the record for recall to be useful."
-    },
-    "source_lineage_id": {
-      "type": "string",
-      "description": "Pointer back to the review-ledger-contract.md transaction.lineageId this record was derived from, if run through the standard Judgment Day skill."
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    }
+    "created_at": { "type": "string", "format": "date-time" }
   },
   "$defs": {
     "judgeVerdict": {
       "type": "object",
       "required": ["model", "decision"],
       "properties": {
-        "model": { "type": "string", "description": "e.g. 'qwen3', 'deepseek' — matches agent.<name>.model in opencode.json." },
+        "model": { "type": "string" },
         "decision": { "type": "string", "enum": ["approve", "reject"] }
       }
     }
-  },
-  "examples": [
-    {
-      "execution_id": "jd-001",
-      "project": "default",
-      "task": "optimize query",
-      "type": "judgment",
-      "judge_a": { "model": "qwen3", "decision": "approve" },
-      "judge_b": { "model": "deepseek", "decision": "reject" },
-      "agreement": "contradiction",
-      "winner": null,
-      "confidence": 0.91,
-      "final": "reject",
-      "fix": "added index",
-      "lesson": "check execution plan before optimization",
-      "source_lineage_id": "lin-8f2a",
-      "created_at": "2026-07-20T12:00:00Z"
-    }
-  ]
+  }
 }
