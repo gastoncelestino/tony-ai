@@ -22,7 +22,7 @@ import {
   __setKernelClientForTests,
   KernelBlockedError,
   KernelUnavailableError,
-} from "../plugins/tony-kernel/index"
+} from "../plugins/tony-kernel"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@
 """
 Prueba definitiva del flujo SDD completo (explore -> archive) contra el
 kernel REAL, vía `python3 -m kernel.cli` — el mismo subprocess que invoca
-plugins/tony-kernel/index.ts. No usa mocks en ningún punto.
+plugins/tony-kernel.ts. No usa mocks en ningún punto.
 
 Uso:
     pytest tests/test_sdd_flow_e2e.py        # vía pytest (recomendado)
@@ -60,7 +60,7 @@ class FlowRunner:
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def run_cli(self, *args: str) -> tuple[int, dict | str]:
-        """Invoca kernel.cli exactamente como lo hace plugins/tony-kernel/index.ts,
+        """Invoca kernel.cli exactamente como lo hace plugins/tony-kernel.ts,
         pero con estado y artifacts redirigidos al tmp_dir aislado."""
         env = {
             **os.environ,
