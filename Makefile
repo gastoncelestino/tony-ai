@@ -76,3 +76,5 @@ clean:
 
 validate-config:
 	@bun run tests/validate_config.verify.ts
+
+# Kernel tests are consolidated by contract in seven Python suites; TS remains a separate plugin contract layer.
