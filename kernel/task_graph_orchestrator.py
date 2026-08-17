@@ -11,6 +11,7 @@ from typing import Callable, Mapping, Sequence
 from .evidence_state import EvidenceAssessment
 from .orchestrator_integration import KernelOrchestrator, OrchestrationDecision, OrchestrationResult
 from .quality_gates import QualityGateEvaluation, QualityGatePolicy
+from .retrieval_decision import RetrievalAction, RetrievalArbitration, arbitrate_retrieval
 from .retrieval_policy import RetrievalDecision, retrieve_until_sufficient
 from .runtime_evidence import execution_result_to_evidence
 from .runtime_executor import RuntimeExecutionResult, RuntimeExecutor
@@ -73,6 +74,10 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
         )
         return assessment
 
+    def arbitrate_retrieval(self, assessment: EvidenceAssessment) -> RetrievalArbitration:
+        """Return the Kernel's deterministic next action for an assessment."""
+        return arbitrate_retrieval(assessment)
+
     def execute_task(self, task_id: str, command: Sequence[str], *,
                      executor: RuntimeExecutor, claim: str | None = None,
                      cwd: str | None = None) -> OrchestrationResult:
@@ -112,14 +117,15 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             return evidence
         decision = retrieve_until_sufficient(collect, max_attempts=max_attempts,
             minimum_valid=minimum_valid, minimum_confidence=minimum_confidence)
-        if decision.assessment.can_progress:
+        arbitration = arbitrate_retrieval(decision.assessment)
+        if arbitration.action is RetrievalAction.TRANSITION:
             refs = tuple(_evidence_ref(item) for item in collected)
             self.task_graph = self.task_graph.complete(task_id, refs)
             existing = self.task_ledger.tasks[task_id]
             self.task_ledger = self.task_ledger.__class__(tasks={**self.task_ledger.tasks,
                 task_id: replace(existing, evidence=tuple(collected))})
             self._project_ledger()
-        return decision
+        return replace(decision, assessment=arbitration.assessment)
 
     def complete_task(self, task_id: str, evidence: list = None) -> OrchestrationResult:
         node = self.task_graph.get(task_id)
