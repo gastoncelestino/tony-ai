@@ -21,6 +21,18 @@ QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
 EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
 CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 
+# Los directorios usados exclusivamente para este health check son efimeros.
+# Solo eliminamos los que este proceso haya creado, preservando cualquier
+# estado local que ya existiera antes de ejecutar make health.
+HEALTH_TMP_DIRS=()
+cleanup_health_dirs() {
+  local d
+  for d in "${HEALTH_TMP_DIRS[@]}"; do
+    rm -rf -- "$d"
+  done
+}
+trap cleanup_health_dirs EXIT
+
 declare -A STATUS=([OpenCode]=0 [MCP]=0 [Ollama]=0 [Qdrant]=0 [Disk]=0 [embeddings]=0)
 declare -a MSGS=()
 
@@ -99,6 +111,7 @@ for d in "${REPO_ROOT}/.tonymem" \
     if ! mkdir -p "$d" 2>/dev/null; then
       DISK_OK=0; DISK_MSG="no pude crear $d"; break
     fi
+    HEALTH_TMP_DIRS+=("$d")
   fi
   if [[ ! -w "$d" ]]; then
     DISK_OK=0; DISK_MSG="$d no es escribible"; break
