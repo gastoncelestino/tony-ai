@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-RUNNER = ROOT / "tools" / "python_verify.py"
+RUNNER = ROOT / "tests" / "python_verify.py"
 
 
 class PythonTestRunnerTests(unittest.TestCase):
