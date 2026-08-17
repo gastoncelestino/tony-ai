@@ -1,5 +1,5 @@
 /**
- * judgment_qdrant.test.ts — smoke test for plugins/qdrant.ts against REAL local
+ * judgment_qdrant.verify.ts — smoke test for plugins/qdrant.ts against REAL local
  * Ollama + Qdrant. Not a mock-based regression test like test_ledger.py —
  * this exists specifically to close the gap that one doesn't cover: the
  * TS/Bun HTTP client was only type-checked (tsc), never executed against
@@ -14,7 +14,7 @@
  *
  * Run from the repository root:
  *
- *   bun test tests/judgment_qdrant.test.ts
+ *   bun run tests/judgment_qdrant.verify.ts
  *
  * Uses a throwaway project name (`__verify_qdrant_ts__`) and collection so
  * it never touches real judgment data, and deletes the collection at the

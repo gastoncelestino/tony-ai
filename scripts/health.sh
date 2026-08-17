@@ -8,7 +8,7 @@
 #   Ollama       /api/tags responde y los modelos de embedding estan pull-eados.
 #   Qdrant       /readyz 200 y /collections responde.
 #   Disk         directorios .tonymem/ existen y son escribibles.
-#   embeddings   judgment_qdrant.test.ts pasa (roundtrip embed+upsert+search).
+#   embeddings   judgment_qdrant.verify.ts pasa (roundtrip embed+upsert+search).
 
 set -uo pipefail
 
@@ -106,15 +106,15 @@ for d in "${REPO_ROOT}/.tonymem" \
 done
 emit Disk "${DISK_OK}" "${DISK_MSG}"
 
-# 6. embeddings: subshell reusando judgment_qdrant.test.ts (sin duplicar logica)
+# 6. embeddings: subshell reusando judgment_qdrant.verify.ts (sin duplicar logica)
 EMB_OK=1
-EMB_MSG="judgment_qdrant.test.ts paso"
+EMB_MSG="judgment_qdrant.verify.ts paso"
 if [[ "${STATUS[Ollama]}" -eq 1 && "${STATUS[Qdrant]}" -eq 1 ]]; then
   if ! command -v bun >/dev/null 2>&1; then
-    EMB_OK=0; EMB_MSG="bun no instalado - no puedo correr judgment_qdrant.test.ts"
+    EMB_OK=0; EMB_MSG="bun no instalado - no puedo correr judgment_qdrant.verify.ts"
   elif ! (cd "${REPO_ROOT}/judgment-memory" \
-          && timeout 90 bun run tests/judgment_qdrant.test.ts) >/tmp/verify.log 2>&1; then
-    EMB_OK=0; EMB_MSG="judgment_qdrant.test.ts fallo - tail: $(tail -3 /tmp/verify.log | tr '\n' ' ')"
+          && timeout 90 bun run tests/judgment_qdrant.verify.ts) >/tmp/verify.log 2>&1; then
+    EMB_OK=0; EMB_MSG="judgment_qdrant.verify.ts fallo - tail: $(tail -3 /tmp/verify.log | tr '\n' ' ')"
   fi
 else
   EMB_OK=0; EMB_MSG="skipped - Ollama o Qdrant estan abajo"
