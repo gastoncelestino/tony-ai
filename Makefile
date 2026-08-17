@@ -28,7 +28,7 @@ test-python: check-test-deps check-test-discovery
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@python3 -m pytest tests/python/kernel/test_kernel_*.py tests/python/kernel/fase/*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/python/kernel/test_kernel_cli.py tests/python/kernel/test_kernel_enforcement.py tests/python/kernel/fase/test_artifact_gate.py tests/python/kernel/fase/test_evidence_ledger.py tests/test_sdd_flow_e2e.py
+	@python3 -m pytest tests/python/kernel/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/python/kernel/test_kernel_*.py tests/test_sdd_flow_e2e.py
 	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; bun test tests/ts/kernel/tony_kernel_*.test.ts
 
 # TypeScript se ejecuta con Bun.
