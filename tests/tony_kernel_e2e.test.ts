@@ -134,6 +134,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   __setKernelClientForTests(null)
+  // The final test must not leave .test-e2e-tmp behind in the repository.
+  cleanupTestDir()
 })
 
 // ─── FULL SDD FLOW ───────────────────────────────────────────────────────
