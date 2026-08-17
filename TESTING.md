@@ -29,7 +29,6 @@
 ### Requisitos mínimos
 - **Python 3.10+** (CI testea 3.10, 3.11, 3.12)
 - **Bun 1.3.14** (o compatible en local)
-- **sqlite3** (para bases persistentes)
 - **make** (Makefile)
 
 ### Instalación
@@ -67,7 +66,8 @@ make check-test-deps			# pytest x.x.x
 | Solo Python | `make test-python` | No necesita Bun |
 | Solo TypeScript | `make test-ts` | Necesita Bun |
 | Verificar SDD E2E | `make verify-sdd-flow` | Solo Python, local |
-| Antes de hacer push | `make test` + `bun run tests/validate_config.verify.ts` + `git diff --check` | Check pre-commit |
+| Ollama + Qdrant up | `make docker-up` | Levanta Docker |
+| Ollama + Qdrant down | `make docker-down` | Baja Docker |
 
 ---
 
