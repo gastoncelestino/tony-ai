@@ -20,6 +20,7 @@ from .phase_gate import PhaseGate, PhaseGateConfig, GateCheckResult
 from .evidence_ledger import EvidenceLedger
 from .evidence_state import EvidenceAssessment, EvidenceState, assess_evidence
 from .retrieval_policy import RetrievalAttempt, RetrievalDecision, retrieve_until_sufficient
+from .retrieval_decision import RetrievalAction, RetrievalArbitration, arbitrate_retrieval
 from .quality_gates import (
     GateCondition, QualityGate, QualityGateDecision, QualityGateEvaluation,
     QualityGatePolicy, QualityGateStatus,
@@ -45,6 +46,7 @@ __all__ = [
     "Evidence", "EvidenceType", "EvidenceStatus", "ExecutionRecord", "Claim", "ClaimStatus",
     "EvidenceAssessment", "EvidenceState", "assess_evidence",
     "RetrievalAttempt", "RetrievalDecision", "retrieve_until_sufficient",
+    "RetrievalAction", "RetrievalArbitration", "arbitrate_retrieval",
     "GateCondition", "QualityGate", "QualityGateDecision", "QualityGateEvaluation",
     "QualityGatePolicy", "QualityGateStatus",
     "RuntimeAuthorization", "RuntimePolicy", "RuntimePolicyError", "RuntimePolicyGuard", "RuntimePolicyViolation",
