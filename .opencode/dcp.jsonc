@@ -43,13 +43,13 @@
     // scripts/calibrate-ctx.sh) or DCP's percentage math is wrong.
     "modelMaxLimits": {
       "ollama/qwen3-coder:30b": "75%",
-      "ollama/omnicoder:9b": "70%",
+      "ollama/carstenuhlig/omnicoder-2-9b:q4_k_m": "70%",
       "ollama/deepseek-r1:14b": "70%",
       "ollama/ornith:9b": "70%"
     },
     "modelMinLimits": {
       "ollama/qwen3-coder:30b": "40%",
-      "ollama/omnicoder:9b": "35%",
+      "ollama/carstenuhlig/omnicoder-2-9b:q4_k_m": "35%",
       "ollama/deepseek-r1:14b": "35%",
       "ollama/ornith:9b": "35%"
     },
