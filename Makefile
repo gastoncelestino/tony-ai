@@ -4,6 +4,7 @@
 TONY_RUNTIME_DIR ?= $(HOME)/.tony-ai/tony-ai
 export TONY_RUNTIME_DIR
 export PYTHONPYCACHEPREFIX := $(TONY_RUNTIME_DIR)/pycache
+export PYTHONPATH := $(CURDIR):$(PYTHONPATH)
 
 .PHONY: test test-all check-test-deps check-test-discovery test-python test-ts test-kernel check-coverage-deps coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
@@ -17,9 +18,9 @@ check-test-deps:
 	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
 	@command -v bun >/dev/null 2>&1 || (echo "ERROR: falta Bun."; exit 1)
 
-# Mantiene las convenciones de descubrimiento: TypeScript *.test.ts, verificaciones *.verify.ts y Python test_*.py/*_test.py.
+# Mantiene las convenciones de descubrimiento recursivo: TypeScript *.test.ts, verificaciones *.verify.ts y Python test_*.py/*_test.py.
 check-test-discovery:
-	@set -eu; invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' ! -name '*.verify.ts' -print); invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' ! -name 'python_verify.py' -print); if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; echo "✓ Test naming/discovery conventions valid"
+	@set -eu; invalid_ts=$$(find tests -type f -name '*.ts' ! -name '*.test.ts' ! -name '*.verify.ts' -print); invalid_py=$$(find tests -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' ! -name 'python_verify.py' -print); if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; test -n "$$(find tests -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; echo "✓ Test naming/discovery conventions valid"
 
 # Python usa pytest cuando está disponible y conserva el runner standalone como fallback.
 test-python: check-test-deps check-test-discovery
@@ -27,12 +28,12 @@ test-python: check-test-deps check-test-discovery
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
-	@bun test tests/tony_kernel_*.test.ts
+	@python3 -m pytest tests/python/kernel/test_kernel_*.py tests/python/kernel/fase/*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/python/kernel/test_kernel_cli.py tests/python/kernel/test_kernel_enforcement.py tests/python/kernel/fase/test_artifact_gate.py tests/python/kernel/fase/test_evidence_ledger.py tests/test_sdd_flow_e2e.py
+	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; bun test tests/ts/kernel/tony_kernel_*.test.ts
 
 # TypeScript se ejecuta con Bun.
 test-ts: check-test-deps check-test-discovery
-	@bun test tests
+	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; bun test tests
 
 check-coverage-deps: check-test-deps
 	@python3 -c 'import coverage; print("coverage", coverage.__version__)'
@@ -49,10 +50,7 @@ coverage-python: check-coverage-deps
 
 # Coverage TypeScript usa el reporte LCOV de Bun.
 coverage-ts: check-test-deps check-test-discovery
-	@rm -rf coverage-bun
-	@bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests
-	@test -s coverage-bun/lcov.info
-
+	@set -e; ln -sfn ../../plugins tests/ts/plugins; ln -sfn tests/ts/.test-e2e-tmp .test-e2e-tmp; trap 'rm -f tests/ts/plugins .test-e2e-tmp' EXIT; rm -rf coverage-bun; bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests; test -s coverage-bun/lcov.info
 # Smoke test de conexión/configuración de Qdrant.
 verify-qdrant:
 	@bun run tests/judgment_qdrant.verify.ts

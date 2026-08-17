@@ -4,7 +4,7 @@ import os
 import sys
 import unittest
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
 sys.path.insert(0, REPO_ROOT)
 
 from kernel.schemas import ArtifactRef, Phase, PhaseStatus
