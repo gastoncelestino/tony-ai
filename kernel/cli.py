@@ -33,6 +33,8 @@ if getattr(sys, "pycache_prefix", None) is None:
 
 from .persistence import load_orchestrator, update_orchestrator, reset_state
 from .artifact_store import disk_artifact_store, disk_artifact_hasher
+from .runtime_policy import RuntimePolicy, RuntimePolicyError
+from .runtime_policy_binding import RuntimePolicyBinding
 from .schemas import ArtifactRef, Evidence, EvidenceType
 from .task_graph_persistence import mutate_with_task_graph
 
@@ -49,6 +51,23 @@ def _build_hasher():
 
 def _load():
     return load_orchestrator(artifact_store=_build_store(), artifact_hasher=_build_hasher())
+
+
+def _runtime_policy_binding() -> RuntimePolicyBinding:
+    raw = os.environ.get("TONY_RUNTIME_POLICY")
+    if not raw:
+        return RuntimePolicyBinding()
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimePolicyError("TONY_RUNTIME_POLICY must be valid JSON") from exc
+    if not isinstance(data, dict):
+        raise RuntimePolicyError("TONY_RUNTIME_POLICY must be a JSON object")
+    return RuntimePolicyBinding(RuntimePolicy.from_mapping(data))
+
+
+def _runtime_authorization_result(result) -> dict:
+    return {"allowed": result.allowed, "reason": result.reason}
 
 
 def _result_to_dict(r) -> dict:
@@ -130,6 +149,21 @@ def _main(argv: list) -> None:
     if command == "reset":
         reset_state()
         print(json.dumps({"ok": True}))
+        return
+
+    if command == "authorize_tool":
+        tool = _cmd_arg(args, 0, "tool")
+        print(json.dumps(_runtime_authorization_result(_runtime_policy_binding().authorize_tool(tool))))
+        return
+
+    if command == "authorize_command":
+        command_value = _cmd_arg(args, 0, "command")
+        print(json.dumps(_runtime_authorization_result(_runtime_policy_binding().authorize_command(command_value))))
+        return
+
+    if command == "authorize_path":
+        path = _cmd_arg(args, 0, "path")
+        print(json.dumps(_runtime_authorization_result(_runtime_policy_binding().authorize_path(path))))
         return
 
     if command == "can_start_phase":
