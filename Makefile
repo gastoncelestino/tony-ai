@@ -45,11 +45,9 @@ coverage: check-coverage-deps coverage-python coverage-ts
 coverage-python: check-coverage-deps
 	@tmpdir=$$(mktemp -d); trap 'rm -rf "$$tmpdir"' EXIT; export COVERAGE_FILE="$$tmpdir/.coverage"; python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
 
-# Coverage TypeScript usa el reporte LCOV de Bun.
+# Coverage TypeScript muestra el reporte en pantalla y no conserva artefactos de Bun.
 coverage-ts: check-test-deps check-test-discovery
-	@rm -rf coverage-bun
-	@bun test --coverage --coverage-reporter=lcov --coverage-dir=coverage-bun tests
-	@test -s coverage-bun/lcov.info
+	@tmpdir=$$(mktemp -d); trap 'rm -rf "$$tmpdir"' EXIT; bun test --coverage --coverage-reporter=text --coverage-dir="$$tmpdir" tests
 
 # Smoke test de conexión/configuración de Qdrant.
 verify-qdrant:
