@@ -71,10 +71,7 @@ make check-test-deps			# pytest x.x.x
 | Configuración | `make validate-config` | Valida `opencode.json`, prompts, agentes, MCP y referencias | Bun |
 ---
 
-## 3. Cómo ejecutar tests
-
-### Ejecutar directamente (diagnóstico)
-
+## 3. Cómo ejecutar tests directamente
 ```bash
 # Python con pytest
 python3 -m pytest tests -v
