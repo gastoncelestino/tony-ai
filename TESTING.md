@@ -109,8 +109,33 @@ make test
 make test-python      # Solo tests Python
 make test-ts          # Solo tests TypeScript (necesita Bun)
 make test-kernel      # Tests Kernel + SDD flow (necesita Bun)
-make test-all         # make test + test-kernel
+make test-all         # make test + test-kernel + health
 ```
+### Health check completo
+
+```bash
+make health
+```
+
+Verifica:
+- `opencode.json` y portabilidad de rutas
+- Cuatro MCP servers via `initialize`
+- Ollama y modelos de embeddings
+- Qdrant (`/readyz`, `/collections`)
+- Directorios locales escribibles
+- Roundtrip de embeddings
+
+**Interpretación:**
+- `make test` pasó pero `make health` falló → problema de infraestructura, no de código
+- Ambas fallaron → revisar código + infraestructura
+
+### Levantar/bajar infraestructura
+
+```bash
+make docker-up    # Ollama + Qdrant en local
+make docker-down
+```
+
 ### Ejecutar directamente (diagnóstico)
 
 ```bash
@@ -383,31 +408,6 @@ make verify-qdrant
 ```
 
 Roundtrip real: Ollama → embeddings → Qdrant → búsqueda.
-
-### Health check completo
-
-```bash
-make health
-```
-
-Verifica:
-- `opencode.json` y portabilidad de rutas
-- Cuatro MCP servers via `initialize`
-- Ollama y modelos de embeddings
-- Qdrant (`/readyz`, `/collections`)
-- Directorios locales escribibles
-- Roundtrip de embeddings
-
-**Interpretación:**
-- `make test` pasó pero `make health` falló → problema de infraestructura, no de código
-- Ambas fallaron → revisar código + infraestructura
-
-### Levantar/bajar infraestructura
-
-```bash
-make docker-up    # Ollama + Qdrant en local
-make docker-down
-```
 
 ---
 
