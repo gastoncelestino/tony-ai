@@ -56,19 +56,19 @@ make check-test-deps			# pytest x.x.x
 | Feature | Ejecutar | Verifica | Necesita |
 |-----------|----------|------|------|
 | Setup Completo | `make bootstrap` | Validación Proyecto | No necesita Bun |
-| Kernel, MCP, config | `make test-all` | `test` + `test-kernel` + `health` | Bun |
+| Suite completa + infraestructura | `make test-all` | `test` + `test-kernel` + `health` | Bun + Ollama + Qdrant |
 | Feature/bugfix normal | `make test` | Python + TypeScript + config | Bun |
-| Solo Python | `make test-python` | Solo tests Python | No necesita Bun |
+| Solo Python | `make test-python` | Solo tests Python | Bun |
 | Solo TypeScript | `make test-ts` | Solo tests TypeScript | Bun |
 | Health check | `make health` | Health check infraestructura | Ollama, Qdrant |
 | Indexación real Ollama + Qdrant | `make verify-qdrant` | verifica Qdrant | Ollama, Qdrant |
 | Kernel | `make test-kernel` | Kernel + SDD + TypeScript kernel | Bun |
 | Verificar SDD E2E | `make verify-sdd-flow` | Flujo E2E SDD local | No necesita Bun |
 | Valida naming conventions | `make check-test-discovery` | Validación Discovery | No necesita Bun |
-| Python coverage | `make coverage-python` | Coverage Python (40% threshold) | No necesita Bun |
+| Python coverage | `make coverage-python` | Coverage Python (40% threshold) | Bun |
 | TypeScript coverage | `make coverage-ts` | Coverage TypeScript | Bun |
 | Cobertura completa Python + TS | `make coverage` | Coverage Python + TypeScript | Bun |
-| Valida naming conventions | `make validate-config` | Validación Discovery | No necesita Bun |
+| Configuración | `make validate-config` | Valida `opencode.json`, prompts, agentes, MCP y referencias | Bun |
 ---
 
 ## 3. Cómo ejecutar tests
