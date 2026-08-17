@@ -41,12 +41,9 @@ check-coverage-deps: check-test-deps
 
 coverage: check-coverage-deps coverage-python coverage-ts
 
-# Coverage Python mide branches y conserva contexto por test para auditorías de redundancia.
+# Coverage Python mide branches y muestra el reporte en pantalla; todo el estado de coverage vive en /tmp.
 coverage-python: check-coverage-deps
-	@python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing --cov-report=xml:coverage.xml || (rm -f .coverage && coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests)
-	@coverage report -m --fail-under=40
-	@coverage xml -o coverage.xml
-	@coverage json --show-contexts -o coverage-contexts.json
+	@tmpdir=$$(mktemp -d); trap 'rm -rf "$$tmpdir"' EXIT; export COVERAGE_FILE="$$tmpdir/.coverage"; python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
 
 # Coverage TypeScript usa el reporte LCOV de Bun.
 coverage-ts: check-test-deps check-test-discovery
