@@ -90,7 +90,7 @@ make check-test-deps
 ### Todas las suites (recomendado)
 
 ```bash
-make test
+make test-all
 ```
 
 **Qué hace internamente:**
@@ -99,6 +99,8 @@ make test
 3. Ejecuta tests Python (`test-python`)
 4. Ejecuta tests TypeScript (`test-ts`)
 5. Valida configuración (`validate-config`)
+6. make test-kernel
+7. make health
 
 **Necesita:** Bun (para TypeScript)
 **No necesita:** Ollama, Qdrant, Docker
@@ -109,7 +111,6 @@ make test
 make test-python      # Solo tests Python
 make test-ts          # Solo tests TypeScript (necesita Bun)
 make test-kernel      # Tests Kernel + SDD flow (necesita Bun)
-make test-all         # make test + test-kernel + health
 ```
 ### Health check completo
 
@@ -554,61 +555,15 @@ CI **no necesita Ollama ni Qdrant** para la suite local. Solo para smoke tests (
 ---
 
 ## 11. Flujo operacional: Qué ejecutar cuándo
-
-### Antes de hacer `commit`
+### Antes de hacer `commit`, `push` a rama local, a `main` o `dev`
 
 ```bash
-make test
+make test # verifica suite local completa
 ```
 
 Verifica que tu código NO rompió nada en la suite local (Python + TypeScript + config).
 
 **Si `make test` falla, NO hagas commit. Arreglá el problema primero.**
-
-### Antes de hacer `push` a rama local
-
-```bash
-make test
-```
-
-Si trabajás en una rama que NO es `main` ni `dev`, `make test` es suficiente.
-
-### Antes de hacer `push` a `main` o `dev`
-
-Además de `make test`:
-
-```bash
-bun run tests/validate_config.verify.ts
-git diff --check
-```
-
-**Qué verifican:**
-- `make test` — suite local completa
-- `bun run tests/validate_config.verify.ts` — `opencode.json`, agentes, prompts, MCP válidos
-- `git diff --check` — sin espacios, líneas sin newline, etc
-
-### ¿Qué es un PR crítico?
-
-Un PR es **crítico** si toca CUALQUIERA de estos:
-
-- **Kernel** — lógica de máquina de estados, gates, enforcement
-- **MCP servers** — cambios en contrato JSON-RPC
-- **Configuración** — `opencode.json`, prompts, agentes
-- **Infraestructura** — Docker, scripts de setup, dependencias
-- **Testing** — cambios en tests, Makefile, discovery conventions
-
-### Antes de hacer PR crítico
-
-```bash
-make test-all
-make health
-```
-
-**Por qué:**
-- `make test-all` = `make test` + tests específicos de Kernel + SDD E2E
-- `make health` = verifica infraestructura (Ollama, Qdrant, MCP servers)
-
-**Si `make health` falla pero `make test-all` pasó:** problema de infraestructura, no de código. Documentá en el PR.
 
 ### Cambios específicos: qué ejecutar adicional
 
@@ -632,14 +587,11 @@ make test
 **Cambios de Kernel/MCP/Config:**
 ```bash
 make test-all
-make health
 ```
 
-**Antes de push a main/dev:**
+**Antes de commit, push a main/dev:**
 ```bash
 make test
-bun run tests/validate_config.verify.ts
-git diff --check
 ```
 
 ## Documentación
