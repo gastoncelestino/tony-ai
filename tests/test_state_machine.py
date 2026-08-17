@@ -46,8 +46,8 @@ class TestStateMachine(unittest.TestCase):
         controller = self.controller()
         allowed, reason, missing = controller.can_transition(Phase.PROPOSE)
         self.assertFalse(allowed)
-        self.assertIn("not completed", reason)
-        self.assertEqual(missing, ())
+        self.assertEqual(missing, ("explore",))
+        self.assertIn("Missing required artifacts", reason)
 
     def test_missing_required_artifact_blocks_transition(self):
         controller = self.controller()
