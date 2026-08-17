@@ -40,9 +40,9 @@ Tony-AI no es un sistema de entrenamiento de modelos. Su objetivo es conservar, 
                       Phase / Agent
 ```
 
-- OpenCode proporciona el runtime del agente.   
-- Tony Orchestrator coordina el workflow y enruta el trabajo.  
-- Los servicios de contexto aportan información durante las distintas fases.  
+- OpenCode proporciona el runtime del agente.
+- Tony Orchestrator coordina el workflow y enruta el trabajo.
+- Los servicios de contexto aportan información durante las distintas fases.
 - Tony Kernel aplica las reglas deterministas que autorizan o bloquean las transiciones.
 
 ## Estructura del repositorio
@@ -75,7 +75,7 @@ tony-ai/
 |---|---|
 | **OpenCode** | Runtime y ejecución del agente, plugins y herramientas |
 | **Tony Orchestrator** | Routing, coordinación y contexto mínimo |
-| **Tony Kernel** | FSM, gates, scope, evidencias, checksums y enforcement |
+| **Tony Kernel** | FSM, gates, scope, dependencias de tareas, evidencias, checksums y enforcement |
 | **TonyMem** | Memoria persistente de decisiones, hallazgos y contexto |
 | **Code Index** | Búsqueda semántica sobre el código |
 | **Judgment Memory** | Persistencia y recuperación de juicios anteriores |
@@ -85,7 +85,7 @@ tony-ai/
 
 ## Responsabilidades de los componentes
 ## OpenCode
-OpenCode aloja la ejecución del agente, los plugins y las herramientas utilizadas por el workflow. La configuración de agentes y MCP servers se encuentra en `opencode.json`.  
+OpenCode aloja la ejecución del agente, los plugins y las herramientas utilizadas por el workflow. La configuración de agentes y MCP servers se encuentra en `opencode.json`.
 OpenCode puede ejecutar acciones, pero la autorización de una transición de fase controlada pertenece al Tony Kernel.
 
 ## Tony Orchestrator
@@ -104,11 +104,12 @@ Controla:
 - artifacts requeridos;
 - integridad mediante checksums;
 - allowed scope;
+- dependencias entre tareas;
 - evidencia;
 - retry budget;
 - estado de finalización de las fases.
 
-El agente puede proponer una acción, pero la autorización para avanzar pertenece al Kernel.  
+El agente puede proponer una acción, pero la autorización para avanzar pertenece al Kernel.
 El Kernel utiliza una política **fail-closed**: cuando falta una condición obligatoria, la transición se bloquea en lugar de continuar bajo una suposición implícita.
 
 ## TonyMem
@@ -184,9 +185,11 @@ SDD Phase
    ▼
 Tony Kernel
    │
+   ├── State Machine
    ├── Phase Gate
    ├── Artifact Gate
    ├── Scope Guard
+   ├── Task dependencies
    ├── Evidence
    ├── Checksums
    └── Retry Budget
@@ -203,6 +206,7 @@ Tony Kernel
    ├── valida artifacts
    ├── valida evidencia
    ├── valida scope
+   ├── valida dependencias de tareas
    └── registra completion
    │
    ▼
@@ -241,7 +245,7 @@ Cada fase tiene un prompt específico en `prompts/sdd/`.
 `kernel/state_machine.py` define las fases válidas y las transiciones permitidas.
 
 ## Fases del FSM vs agentes auxiliares
-No todo agente que participa del workflow representa una transición del FSM.  
+No todo agente que participa del workflow representa una transición del FSM.
 **Fases controladas por el Kernel:**
 ```text
 explore
@@ -340,8 +344,8 @@ Los agentes de review y Judgment Day no forman parte del contexto común de ejec
 
 
 ## Documentación
-[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.   
-[INSTALL.md](INSTALL.md) — instalación y configuración del entorno.  
-[ARCHITECTURE.md](ARCHITECTURE.md) — componentes, responsabilidades, flujos, contratos y persistencia.  
-[AGENTS.md](AGENTS.md) — reglas operativas para agentes y desarrollo.  
-[TESTING.md](TESTING.md) — estrategia, comandos y cobertura de pruebas.  
+[README.md](README.md) — qué es Tony-AI, propuesta de valor, quickstart y visión general.
+[INSTALL.md](INSTALL.md) — instalación y configuración del entorno.
+[ARCHITECTURE.md](ARCHITECTURE.md) — componentes, responsabilidades, flujos, contratos y persistencia.
+[AGENTS.md](AGENTS.md) — reglas operativas para agentes y desarrollo.
+[TESTING.md](TESTING.md) — estrategia, comandos y cobertura de pruebas.
