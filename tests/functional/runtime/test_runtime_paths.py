@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_kernel_runtime_dir_is_external(monkeypatch, tmp_path):
