@@ -1,4 +1,4 @@
-"""Tests for the standalone Python test runner.
+"""Tests for tests/python_verify.py.
 
 These tests intentionally use only the Python standard library so they can
 validate the fallback runner even when pytest is unavailable.
@@ -12,8 +12,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-RUNNER = ROOT / "tests" / "verification" / "python_verify.py"
+ROOT = Path(__file__).resolve().parent.parent
+RUNNER = ROOT / "tests" / "python_verify.py"
 
 
 class PythonTestRunnerTests(unittest.TestCase):
