@@ -51,14 +51,14 @@ Ver `config/tony-memory.yaml` para la referencia completa documentada.
 | Script | Cubre | Necesita Ollama/Qdrant reales? |
 |---|---|---|
 | `test_ledger.py` | Pipeline completo (HTTP mockeado): record, recall, upsert-no-duplica, stats, validación, degradación gracefully | No — mock en-proceso |
-| `scripts/verify-qdrant.ts` | Cliente HTTP TS/Bun (`plugins/qdrant.ts`) end-to-end: embed, ensureCollection, upsert, search, semanticSearch, degradación | **Sí** — este es el que cierra el gap de "nunca corrió contra algo real". Correr una vez después de instalar, antes de confiar en `plugins/judgment-memory.ts` en una sesión real. |
+| `tests/judgment_qdrant.test.ts` | Cliente HTTP TS/Bun (`plugins/qdrant.ts`) end-to-end: embed, ensureCollection, upsert, search, semanticSearch, degradación | **Sí** — este es el que cierra el gap de "nunca corrió contra algo real". Correr una vez después de instalar, antes de confiar en `plugins/judgment-memory.ts` en una sesión real. |
 
 ```bash
 python3 test_ledger.py                          # no necesita servicios
-bun run scripts/verify-qdrant.ts                 # necesita ollama serve + qdrant arriba
+bun run tests/judgment_qdrant.test.ts           # necesita ollama serve + qdrant arriba
 ```
 
-`verify-qdrant.ts` usa un proyecto descartable (`__verify_qdrant_ts__`) y borra su colección de Qdrant cuando termina, pase o falle — seguro correrlo contra tu Ollama/Qdrant local real, nunca toca datos de juicios reales.
+`judgment_qdrant.test.ts` usa un proyecto descartable (`__judgment_qdrant.test__`) y borra su colección de Qdrant cuando termina, pase o falle — seguro correrlo contra tu Ollama/Qdrant local real, nunca toca datos de juicios reales.
 
 ## CLI (sin cliente MCP)
 

@@ -2,7 +2,7 @@
 
 Esta carpeta solo containeriza los dos servicios de soporte que `code-index/` y `judgment-memory/` usan por HTTP: **Ollama** (embeddings) y **Qdrant** (vectores).
 
-**Desde dónde correrlo**: `docker-compose.yml` no tiene dependencias relativas del resto del repo — solo bindea puertos en localhost, así que da igual correr `docker compose up` desde dentro de este checkout o después de copiar `docker/` a cualquier otro lado. Los comandos de verificación de más abajo sí asumen rutas relativas (`../judgment-memory/...`) — si ya copiaste `judgment-memory/` a `~/tools/tonymem/` según `INSTALL.md`, corralos desde ahí (`~/tools/tonymem/judgment-memory/scripts/verify-qdrant.ts`), apuntando al mismo `localhost:11434`/`localhost:6333` que exponen estos containers de todas formas.
+**Desde dónde correrlo**: `docker-compose.yml` no tiene dependencias relativas del resto del repo — solo bindea puertos en localhost, así que da igual correr `docker compose up` desde dentro de este checkout o después de copiar `docker/` a cualquier otro lado. Los comandos de verificación de más abajo sí asumen rutas relativas (`../judgment-memory/...`) — si ya copiaste `judgment-memory/` a `~/tools/tonymem/` según `INSTALL.md`, corralos desde ahí (`~/tests/judgment_qdrant.test.ts`), apuntando al mismo `localhost:11434`/`localhost:6333` que exponen estos containers de todas formas.
 
 ## Por qué los MCP servers no están containerizados
 
@@ -81,14 +81,14 @@ python3 ../tests/test_judgment_memory_ledger.py   # mock-based, no necesita
                                                     # estos containers,
                                                     # pero es bueno correrlo
                                                     # igual
-bun run ../judgment-memory/scripts/verify-qdrant.ts   # ESTE sí necesita
+bun run ../tests/judgment_qdrant.test.ts   			# ESTE sí necesita
                                                         # los containers
                                                         # arriba — llamadas
                                                         # embed/upsert/search
                                                         # reales
 ```
 
-`verify-qdrant.ts` debería imprimir `ALL CHECKS PASSED`. Si no lo hace:
+`judgment_qdrant.test.ts` debería imprimir `ALL CHECKS PASSED`. Si no lo hace:
 
 ```bash
 curl http://localhost:6333/readyz     # Qdrant

@@ -55,7 +55,7 @@ coverage-ts: check-test-deps check-test-discovery
 
 # Smoke test de conexión/configuración de Qdrant.
 verify-qdrant:
-	@cd judgment-memory && bun run scripts/verify-qdrant.ts
+	@bun run tests/judgment_qdrant.test.ts
 
 # Smoke test end-to-end del flujo SDD.
 verify-sdd-flow:
