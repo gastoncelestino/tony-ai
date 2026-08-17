@@ -25,7 +25,7 @@ El **FSM principal contiene exactamente ocho fases**:
 
 **Tony Kernel** actúa como capa de control del flujo. Intercepta las transiciones entre fases y valida que cada etapa haya producido los artifacts y la evidencia necesarios antes de permitir avanzar.  
 
-Entre sus controles se incluyen la validación de artifacts, verificación de checksums, scope guard y comprobaciones de evidencia.   
+Entre sus controles se incluyen la validación de artifacts, verificación de checksums, scope guard, dependencias entre tareas y comprobaciones de evidencia.
 Si una condición obligatoria falla, la transición se bloquea y se informa el motivo exacto.
 
 ## Flujo de agentes
@@ -124,7 +124,7 @@ flowchart TB
     K -.->|"gobierna transiciones"| WF
 ```
 El Kernel comprueba que el cambio esté en condiciones de avanzar antes de permitir la siguiente fase.   
-Entre otras cosas, controla: artifacts requeridos; checksums; alcance permitido de los cambios; evidencias; estado de la fase; transiciones válidas.   
+Entre otras cosas, controla: artifacts requeridos; checksums; alcance permitido de los cambios; evidencias; dependencias entre tareas; estado de la fase; transiciones válidas.
 Esto permite que el workflow no dependa únicamente de que un agente "recuerde" qué debe hacer: las condiciones críticas del proceso son verificadas por una capa de control.
 	
 # Requisitos
