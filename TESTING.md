@@ -62,7 +62,7 @@ make --version
 
 ### Nota sobre pytest
 
-Pytest es recomendado pero NO obligatorio. Si no está disponible, el Makefile usa automáticamente `tools/run-python-tests.py` (runner standalone basado en stdlib).
+Pytest es recomendado pero NO obligatorio. Si no está disponible, el Makefile usa automáticamente `tests/python_verify.py` (runner standalone basado en stdlib).
 
 ```bash
 # Ver si pytest está disponible
@@ -128,7 +128,7 @@ python3 -m pytest tests -v
 ```
 ```bash
 # Python con runner standalone (sin pytest)
-python3 tools/run-python-tests.py tests
+python3 tests/python_verify.py tests
 ```
 El runner standalone usa solo stdlib. Si pytest pasó pero standalone no, significa el test depende de algo no instalable sin pip. Usar pytest en ese caso.
 ```bash
@@ -482,7 +482,7 @@ Runner standalone usa solo stdlib. Si pytest pasó pero standalone no:
 
 ```bash
 # El test probablemente depende de external packages
-python3 tools/run-python-tests.py tests
+python3 tests/python_verify.py tests
 
 # Si falla, es porque usa algo no en stdlib (como pytest)
 # Usar pytest en ese caso

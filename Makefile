@@ -23,11 +23,11 @@ check-test-discovery:
 
 # Python usa pytest cuando está disponible y conserva el runner standalone como fallback.
 test-python: check-test-deps check-test-discovery
-	@python3 -m pytest tests -q 2>/dev/null || python3 tools/run-python-tests.py tests
+	@python3 -m pytest tests -q 2>/dev/null || python3 tests/python_verify.py tests
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tools/run-python-tests.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
+	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
 	@bun test tests/tony_kernel_*.test.ts
 
 # TypeScript se ejecuta con Bun.
@@ -42,7 +42,7 @@ coverage: check-coverage-deps coverage-python coverage-ts
 
 # Coverage Python mide branches y conserva contexto por test para auditorías de redundancia.
 coverage-python: check-coverage-deps
-	@python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing --cov-report=xml:coverage.xml || (rm -f .coverage && coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tools/run-python-tests.py tests)
+	@python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing --cov-report=xml:coverage.xml || (rm -f .coverage && coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests)
 	@coverage report -m --fail-under=40
 	@coverage xml -o coverage.xml
 	@coverage json --show-contexts -o coverage-contexts.json
