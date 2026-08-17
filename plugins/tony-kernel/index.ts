@@ -1,9 +1,9 @@
 /**
  * Tony Kernel Plugin — OpenCode Plugin
- * 
+ *
  * Deterministic hook that intercepts task delegations and validates them
  * against the Tony Kernel state machine before allowing execution.
- * 
+ *
  * Fail-closed: any Kernel communication failure BLOCKS the delegation/completion.
  */
 
@@ -14,6 +14,7 @@ import { fileURLToPath } from "url"
 import { dirname } from "path"
 import { observeToolExecution } from "./tool-observation"
 import { observationToEvidence } from "./tool-evidence"
+import { extractToolAuthorizationRequest } from "./tool-authorization"
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
 const KERNEL_DIR = join(PLUGIN_DIR, "..", "..", "kernel")
@@ -42,7 +43,13 @@ interface DelegationOutput {
   result?: unknown
 }
 
+interface RuntimeAuthorizationResult {
+  allowed: boolean
+  reason: string
+}
+
 export interface KernelClientLike {
+  authorizeTool(tool: string): Promise<RuntimeAuthorizationResult>
   canStartPhase(phase: string): Promise<CanStartPhaseResult>
   recordDelegation(
     phase: string,
@@ -137,6 +144,14 @@ class KernelClient implements KernelClientLike {
         reject(new Error(`Kernel spawn error: ${err.message}`))
       })
     })
+  }
+
+  async authorizeTool(tool: string): Promise<RuntimeAuthorizationResult> {
+    const result = await this.runKernelCommand(["authorize_tool", tool])
+    return {
+      allowed: result.allowed === true,
+      reason: typeof result.reason === "string" ? result.reason : "",
+    }
   }
 
   async canStartPhase(phase: string): Promise<CanStartPhaseResult> {
@@ -302,6 +317,25 @@ export async function taskExecuteBeforeHook(
   input: DelegationInput,
   output: DelegationOutput
 ): Promise<void> {
+  const authorization = extractToolAuthorizationRequest(input.tool, input.arguments)
+
+  try {
+    const client = await getKernelClient()
+    const toolResult = await client.authorizeTool(authorization.tool)
+
+    if (!toolResult.allowed) {
+      throw new KernelBlockedError(
+        `[Tony Kernel] Tool authorization blocked "${authorization.tool}": ${toolResult.reason}`
+      )
+    }
+  } catch (error) {
+    if (error instanceof KernelBlockedError) throw error
+    if (error instanceof KernelUnavailableError) throw error
+    throw new KernelUnavailableError(
+      kernelErrorMessage("Tool authorization", error)
+    )
+  }
+
   if (input.tool !== "Task") return
 
   const args = input.arguments as Record<string, unknown>
