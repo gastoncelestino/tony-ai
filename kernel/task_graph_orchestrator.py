@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import Callable, Mapping, Sequence
 
 from .evidence_state import EvidenceAssessment
+from .judgment_routing import JudgmentRouting, route_to_judgment
 from .orchestrator_integration import KernelOrchestrator, OrchestrationDecision, OrchestrationResult
 from .quality_gates import QualityGateEvaluation, QualityGatePolicy
 from .retrieval_decision import RetrievalAction, RetrievalArbitration, arbitrate_retrieval
@@ -75,8 +76,11 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
         return assessment
 
     def arbitrate_retrieval(self, assessment: EvidenceAssessment) -> RetrievalArbitration:
-        """Return the Kernel's deterministic next action for an assessment."""
         return arbitrate_retrieval(assessment)
+
+    def route_judgment(self, assessment: EvidenceAssessment) -> JudgmentRouting:
+        """Return the explicit judgment route without mutating task state."""
+        return route_to_judgment(assessment)
 
     def execute_task(self, task_id: str, command: Sequence[str], *,
                      executor: RuntimeExecutor, claim: str | None = None,
@@ -125,7 +129,7 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
             self.task_ledger = self.task_ledger.__class__(tasks={**self.task_ledger.tasks,
                 task_id: replace(existing, evidence=tuple(collected))})
             self._project_ledger()
-        return replace(decision, assessment=arbitration.assessment)
+        return decision
 
     def complete_task(self, task_id: str, evidence: list = None) -> OrchestrationResult:
         node = self.task_graph.get(task_id)
@@ -147,7 +151,13 @@ class TaskGraphKernelOrchestrator(KernelOrchestrator):
                 reason=f"No valid evidence provided for task {task_id}", current_phase=self.change_state.current_phase.value)
         refs = tuple(_evidence_ref(e) for e in validated_evidence)
         self.task_graph, assessment = self.task_graph.assess_completion_evidence(task_id, validated_evidence, refs)
-        if not assessment.can_progress:
+        arbitration = arbitrate_retrieval(assessment)
+        if arbitration.action is RetrievalAction.JUDGMENT:
+            return OrchestrationResult(decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
+                reason=f"Judgment required for task {task_id}: {assessment.state.value} — {assessment.reason}",
+                current_phase=self.change_state.current_phase.value,
+                metadata={"evidence_state": assessment.state.value, "judgment_required": True})
+        if arbitration.action is not RetrievalAction.TRANSITION:
             return OrchestrationResult(decision=OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED,
                 reason=f"Evidence assessment for task {task_id}: {assessment.state.value} — {assessment.reason}",
                 current_phase=self.change_state.current_phase.value,
