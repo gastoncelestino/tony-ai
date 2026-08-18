@@ -7,9 +7,9 @@ SOURCES_PATH = ROOT / "config" / "knowledge_sources.json"
 OPENCODE_PATH = ROOT / "opencode.json"
 EXPECTED_LIBRARY_IDS = {
     "python": "/websites/python_3_14",
-    "fastapi": "/fastapi/fastapi",
+    "fastapi": "/websites/fastapi_tiangolo",
     "react": "/reactjs/react.dev",
-    "postgresql": "/postgres/postgres",
+    "postgresql": "/supabase/postgres",
 }
 
 
