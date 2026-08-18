@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { resolve } from "node:path"
 
-import { Context7Allowlist, isAllowedLibraryId } from "../.opencode/plugins/context7-allowlist"
+import { Context7Allowlist, isAllowedLibraryId } from "../plugins/context7-allowlist"
 
 const ROOT = resolve(import.meta.dir, "..")
 const ALLOWED = new Set([
