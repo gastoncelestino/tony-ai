@@ -1,0 +1,8 @@
+{
+  "sources": [
+    {"name": "python", "library_id": "/python/cpython", "enabled": true},
+    {"name": "fastapi", "library_id": "/fastapi/fastapi", "enabled": true},
+    {"name": "react", "library_id": "/facebook/react", "enabled": true},
+    {"name": "postgresql", "library_id": "/postgres/postgres", "enabled": true}
+  ]
+}
