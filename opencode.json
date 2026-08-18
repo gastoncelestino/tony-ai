@@ -22,7 +22,7 @@
     "gga-reviewer": {"description": "GGA code reviewer — responde directo al prompt de gga, no delega", "hidden": true, "mode": "subagent", "model": "ollama/qwen3-coder:30b", "prompt": "You are a code reviewer invoked by gga (Gentleman Guardian Angel).\n\nYou receive staged code changes and the project coding standards (AGENTS.md).\nReview the diff directly and respond with findings. Do NOT delegate or spawn sub-agents.\n\nFor each issue found, report:\n- File and line\n- What the problem is\n- Why it violates the standards\n- Suggested fix\n\nIf the code is clean, say so explicitly. Be concise and technical.", "tools": {"bash": false, "edit": false, "read": true, "task": false, "write": false}}
   },
   "default_agent": "tony-orchestrator",
-  "plugin": ["plugins/tony-kernel.ts", ".opencode/plugins/context7-allowlist.ts"],
+  "plugin": ["plugins/tony-kernel.ts", "plugins/context7-allowlist.ts"],
   "mcp": {
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
     "tonymem": {"command": ["python3", "{env:TONY_REPO_ROOT}/local-memory/server.py"], "type": "local", "environment": {"LOCAL_MEMORY_DB": "{env:PWD}/.tonymem/memory.db", "TONY_REPO_ROOT": "{env:TONY_REPO_ROOT}", "TONY_RUNTIME_DIR": "{env:HOME}/.tony-ai/tony-ai", "PYTHONPYCACHEPREFIX": "{env:HOME}/.tony-ai/tony-ai/pycache"}},
