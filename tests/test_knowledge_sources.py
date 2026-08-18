@@ -9,6 +9,7 @@ SOURCES_PATH = ROOT / "config" / "knowledge_sources.json"
 OPENCODE_PATH = ROOT / "opencode.json"
 CONTEXT7_PLUGIN_PATH = ROOT / "plugins" / "context7-allowlist.ts"
 PROJECT_CODE_PLUGIN_PATH = ROOT / "plugins" / "project-code-context.ts"
+CONTEXT_ASSEMBLY_PLUGIN_PATH = ROOT / "plugins" / "context-assembly.ts"
 EXPECTED_LIBRARY_IDS = {
     "python": "/websites/python_3_14",
     "fastapi": "/websites/fastapi_tiangolo",
@@ -58,6 +59,13 @@ def test_project_code_context_plugin_is_loaded():
         config = json.load(handle)
     assert "plugins/project-code-context.ts" in config["plugin"]
     assert PROJECT_CODE_PLUGIN_PATH.is_file()
+
+
+def test_context_assembly_plugin_is_loaded():
+    with OPENCODE_PATH.open(encoding="utf-8") as handle:
+        config = json.load(handle)
+    assert "plugins/context-assembly.ts" in config["plugin"]
+    assert CONTEXT_ASSEMBLY_PLUGIN_PATH.is_file()
 
 
 def test_approved_sources_are_explicitly_enabled():
