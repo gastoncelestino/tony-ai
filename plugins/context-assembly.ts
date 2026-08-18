@@ -79,13 +79,13 @@ function formatContext(context: PendingContext): string {
   const codeContext = dedupeCode(context.code)
   if (documentation.length) {
     const docs = documentation.map((d) =>
-      `### ${d.title}\n${d.url}\n\n${d.text}`,
+      `### ${d.title}\nsource: ${d.source_id}\n${d.url}\n\n${d.text}`,
     )
     sections.push("## Authorized documentation\n\n" + fitContext(docs, MAX_CONTEXT_CHARS))
   }
   if (codeContext.length) {
     const code = codeContext.map((c) =>
-      `### ${c.path}:${c.start_line}-${c.end_line}\n\n${c.text}`,
+      `### ${c.path}:${c.start_line}-${c.end_line}\nsource: code-index\n\n${c.text}`,
     )
     sections.push("## Existing project code\n\n" + fitContext(code, MAX_CONTEXT_CHARS))
   }
