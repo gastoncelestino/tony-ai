@@ -118,7 +118,7 @@ test("duplicate documentation results are included only once", async () => {
 })
 
 test("mixed sources share the context budget", async () => {
-  const large = "z".repeat(13_000)
+  const large = "z".repeat(10_000)
   const hooks = ContextAssembly({ worktree: ROOT })
   await hooks["tool.execute.after"]({ tool: "context7_query_docs", sessionID: "mixed-budget" }, { output: "", metadata: { reference: { ...DOC, text: `${large}-doc` } } })
   await hooks["tool.execute.after"]({ tool: "code-index_code_search", sessionID: "mixed-budget" }, { output: "", metadata: { project_code: [{ ...CODE, text: `${large}-code` }] } })
