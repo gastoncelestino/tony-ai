@@ -7,6 +7,7 @@ from knowledge.sources import get_enabled_sources
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES_PATH = ROOT / "config" / "knowledge_sources.json"
 OPENCODE_PATH = ROOT / "opencode.json"
+CONTEXT7_PLUGIN_PATH = ROOT / ".opencode" / "plugins" / "context7-allowlist.ts"
 EXPECTED_LIBRARY_IDS = {
     "python": "/websites/python_3_14",
     "fastapi": "/websites/fastapi_tiangolo",
@@ -44,6 +45,13 @@ def test_opencode_allows_context7_tools():
     assert config["permission"]["context7_*"] == "allow"
 
 
+def test_context7_allowlist_plugin_is_loaded():
+    with OPENCODE_PATH.open(encoding="utf-8") as handle:
+        config = json.load(handle)
+    assert ".opencode/plugins/context7-allowlist.ts" in config["plugin"]
+    assert CONTEXT7_PLUGIN_PATH.is_file()
+
+
 def test_approved_sources_are_explicitly_enabled():
     sources = load_sources()["sources"]
     assert {source["id"] for source in sources if source["enabled"]} == set(EXPECTED_LIBRARY_IDS)
@@ -51,5 +59,5 @@ def test_approved_sources_are_explicitly_enabled():
 
 def test_get_enabled_sources_returns_the_closed_allowlist():
     sources = get_enabled_sources()
-    assert [source["id"] for source in sources] == list(EXPECTED_LIBRARY_IDS)
+    assert {source["id"] for source in sources} == set(EXPECTED_LIBRARY_IDS)
     assert all(source["enabled"] is True for source in sources)
