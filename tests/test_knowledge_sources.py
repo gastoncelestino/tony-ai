@@ -7,7 +7,7 @@ from knowledge.sources import get_enabled_sources
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES_PATH = ROOT / "config" / "knowledge_sources.json"
 OPENCODE_PATH = ROOT / "opencode.json"
-CONTEXT7_PLUGIN_PATH = ROOT / ".opencode" / "plugins" / "context7-allowlist.ts"
+CONTEXT7_PLUGIN_PATH = ROOT / "plugins" / "context7-allowlist.ts"
 EXPECTED_LIBRARY_IDS = {
     "python": "/websites/python_3_14",
     "fastapi": "/websites/fastapi_tiangolo",
@@ -48,7 +48,7 @@ def test_opencode_allows_context7_tools():
 def test_context7_allowlist_plugin_is_loaded():
     with OPENCODE_PATH.open(encoding="utf-8") as handle:
         config = json.load(handle)
-    assert ".opencode/plugins/context7-allowlist.ts" in config["plugin"]
+    assert "plugins/context7-allowlist.ts" in config["plugin"]
     assert CONTEXT7_PLUGIN_PATH.is_file()
 
 
