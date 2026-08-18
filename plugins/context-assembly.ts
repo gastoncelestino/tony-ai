@@ -16,6 +16,7 @@ type PendingContext = { documentation: Documentation[]; code: CodeContext[] }
 
 const CONTEXT7_TOOLS = new Set(["context7_query_docs", "context7_get_library_docs"])
 const CODE_INDEX_TOOL = "code-index_code_search"
+export const MAX_CONTEXT_CHARS = 24_000
 
 async function loadAllowedSources(worktree: string): Promise<Map<string, Documentation>> {
   const path = join(worktree, "config", "knowledge_sources.json")
@@ -40,19 +41,33 @@ function validCode(value: unknown): value is CodeContext {
     typeof code.text === "string" && typeof code.lang === "string"
 }
 
+function fitContext(parts: string[], maxChars: number): string {
+  const selected: string[] = []
+  let size = 0
+  for (const part of parts) {
+    const separator = selected.length ? 2 : 0
+    if (size + separator + part.length > maxChars) break
+    selected.push(part)
+    size += separator + part.length
+  }
+  return selected.join("\n\n")
+}
+
 function formatContext(context: PendingContext): string {
   const sections: string[] = []
   if (context.documentation.length) {
-    sections.push("## Authorized documentation\n\n" + context.documentation.map((d) =>
+    const docs = context.documentation.map((d) =>
       `### ${d.title}\n${d.url}\n\n${d.text}`,
-    ).join("\n\n"))
+    )
+    sections.push("## Authorized documentation\n\n" + fitContext(docs, MAX_CONTEXT_CHARS))
   }
   if (context.code.length) {
-    sections.push("## Existing project code\n\n" + context.code.map((c) =>
+    const code = context.code.map((c) =>
       `### ${c.path}:${c.start_line}-${c.end_line}\n\n${c.text}`,
-    ).join("\n\n"))
+    )
+    sections.push("## Existing project code\n\n" + fitContext(code, MAX_CONTEXT_CHARS))
   }
-  return sections.join("\n\n")
+  return fitContext(sections, MAX_CONTEXT_CHARS)
 }
 
 export const ContextAssembly = ({ worktree }: { worktree: string }) => {
