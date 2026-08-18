@@ -45,6 +45,10 @@ flowchart LR
 
     U --> P --> I --> R --> V --> A
 
+    C["Context Assembly<br/>Context7 + Code Index"]
+    C -.-> P
+    C -.-> I
+
     I -.-> JD["Judgment Day<br/>DeepSeek-R1 + Qwen3-Coder"]
     JD --> V
 
@@ -56,19 +60,26 @@ flowchart LR
 Tony-AI separa la orquestación del workflow de los sistemas que aportan contexto y memoria.
 
 ```text
-                         OpenCode
+                        OpenCode
                             │
                    Tony Orchestrator
                     │       │       │
                     │       │       └── Judgment Memory
-                    │       └────────── Code Index
-                    └────────────────── TonyMem
-                            │
-                           DCP
-                            │
-                         SDD phase
-                            │
-                       Tony Kernel
+                    │       └────────── TonyMem
+                    │
+               Context sources
+                │          │
+                │          ├── Context7
+                │          └── Code Index
+                │
+                ▼
+             Context Assembly
+                    │
+                   DCP
+                    │
+                 SDD phase
+                    │
+               Tony Kernel
 ```
 
 - **TonyMem** aporta decisiones, descubrimientos y contexto persistente.
@@ -86,9 +97,13 @@ El objetivo no es entrenar los modelos, sino conservar, indexar y recuperar cono
 Nueva tarea
     │
     ├── TonyMem ──────────────► decisiones y contexto previo
+    ├── Context7 ─────────────► documentación autorizada
     ├── Code Index ───────────► código relacionado
     ├── Judgment Memory ──────► revisiones y lecciones previas
     └── DCP ──────────────────► contexto relevante
+                                      │
+                                      ▼
+                              Context Assembly
                                       │
                                       ▼
                                Agente / Orchestrator
