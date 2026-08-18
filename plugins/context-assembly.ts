@@ -74,20 +74,23 @@ function fitContext(parts: string[], maxChars: number): string {
 }
 
 function formatContext(context: PendingContext): string {
-  const sections: string[] = []
   const documentation = dedupeDocumentation(context.documentation)
   const codeContext = dedupeCode(context.code)
+  const sourceCount = Number(documentation.length > 0) + Number(codeContext.length > 0)
+  const sourceBudget = sourceCount > 1 ? Math.floor(MAX_CONTEXT_CHARS / 2) : MAX_CONTEXT_CHARS
+  const sections: string[] = []
+
   if (documentation.length) {
     const docs = documentation.map((d) =>
       `### ${d.title}\nsource: ${d.source_id}\n${d.url}\n\n${d.text}`,
     )
-    sections.push("## Authorized documentation\n\n" + fitContext(docs, MAX_CONTEXT_CHARS))
+    sections.push("## Authorized documentation\n\n" + fitContext(docs, sourceBudget))
   }
   if (codeContext.length) {
     const code = codeContext.map((c) =>
       `### ${c.path}:${c.start_line}-${c.end_line}\nsource: code-index\n\n${c.text}`,
     )
-    sections.push("## Existing project code\n\n" + fitContext(code, MAX_CONTEXT_CHARS))
+    sections.push("## Existing project code\n\n" + fitContext(code, sourceBudget))
   }
   return fitContext(sections, MAX_CONTEXT_CHARS)
 }
