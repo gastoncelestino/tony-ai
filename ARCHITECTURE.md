@@ -26,18 +26,22 @@ Tony-AI no es un sistema de entrenamiento de modelos. Su objetivo es conservar, 
           ┌─────────────────┼─────────────────┐
           │                 │                 │
           ▼                 ▼                 ▼
-      TonyMem          Code Index       Judgment Memory
-          │                 │                 │
-          └─────────────────┼─────────────────┘
+      TonyMem          Context sources   Judgment Memory
+                            │
+                     ┌──────┴──────┐
+                     ▼             ▼
+                 Context7      Code Index
+                 allowlist
+                     │             │
+                     └──────┬──────┘
+                            ▼
+                     Context Assembly
                             │
                             ▼
                        SDD Workflow
                             │
                             ▼
                        Tony Kernel
-                            │
-                            ▼
-                      Phase / Agent
 ```
 
 - OpenCode proporciona el runtime del agente.
@@ -84,7 +88,6 @@ tony-ai/
 ---
 
 ## Responsabilidades de los componentes
-## OpenCode
 OpenCode aloja la ejecución del agente, los plugins y las herramientas utilizadas por el workflow. La configuración de agentes y MCP servers se encuentra en `opencode.json`.
 OpenCode puede ejecutar acciones, pero la autorización de una transición de fase controlada pertenece al Tony Kernel.
 
@@ -151,6 +154,19 @@ Proporciona búsqueda semántica sobre el código mediante embeddings locales y 
 
 Qdrant proporciona almacenamiento y recuperación vectorial para Code Index y Judgment Memory. Las colecciones de Judgment Memory están separadas de las utilizadas por Code Index.
 
+## Context7 y Context Assembly
+**Context7** aporta documentación externa únicamente desde las fuentes autorizadas en `config/knowledge_sources.json`. No se permite resolución abierta de bibliotecas ni acceso a fuentes no configuradas.
+
+**Context Assembly** compone el contexto autorizado de documentación y código para la sesión actual.
+- Context7 aporta documentación autorizada.
+- Code Index es la única fuente de búsqueda semántica del código.
+- La composición se realiza por `sessionID`.
+- El contexto ensamblado se consume una sola vez.
+- No se persiste como una nueva memoria.
+- Se preserva el system prompt existente.
+
+La arquitectura separa así **adquisición**, **autorización** y **ensamblado de contexto** antes de entregarlo al agente.
+
 ## Judgment Memory
 Conserva juicios y resultados de Judgment Day para permitir recuperación semántica en tareas posteriores.
 - ledger SQLite propio: `judgment-memory/ledger.py`;
@@ -175,42 +191,46 @@ OpenCode
 Tony Orchestrator
    │
    ├──────────────► TonyMem
-   ├──────────────► Code Index
+   ├──────────────► Context7 ──► documentación autorizada
+   ├──────────────► Code Index ─► código relacionado
    ├──────────────► Judgment Memory
    └──────────────► DCP
-   │
-   ▼
-SDD Phase
-   │
-   ▼
-Tony Kernel
-   │
-   ├── State Machine
-   ├── Phase Gate
-   ├── Artifact Gate
-   ├── Scope Guard
-   ├── Task dependencies
-   ├── Evidence
-   ├── Checksums
-   └── Retry Budget
-   │
-   ▼
-Sub-agent
-   │
-   ▼
-Phase Result
-   │
-   ▼
-Tony Kernel
-   │
-   ├── valida artifacts
-   ├── valida evidencia
-   ├── valida scope
-   ├── valida dependencias de tareas
-   └── registra completion
-   │
-   ▼
-Siguiente fase
+                  │
+                  ▼
+          Context Assembly
+                  │
+                  ▼
+              SDD Phase
+                  │
+                  ▼
+            Tony Kernel
+                  │
+                  ├── State Machine
+                  ├── Phase Gate
+                  ├── Artifact Gate
+                  ├── Scope Guard
+                  ├── Task dependencies
+                  ├── Evidence
+                  ├── Checksums
+                  └── Retry Budget
+                  │
+                  ▼
+              Sub-agent
+                  │
+                  ▼
+             Phase Result
+                  │
+                  ▼
+            Tony Kernel
+                  │
+                  ├── valida artifacts
+                  ├── valida evidencia
+                  ├── valida scope
+                  ├── valida dependencias de tareas
+                  └── registra completion
+                  │
+                  ▼
+             Siguiente fase
 ```
 
 La arquitectura mantiene una frontera clara:
@@ -276,9 +296,13 @@ Los servicios de contexto participan transversalmente en el workflow. No existe 
 Nueva tarea
     │
     ├── TonyMem ──────────────► decisiones y contexto previo
+    ├── Context7 ─────────────► documentación autorizada
     ├── Code Index ───────────► código relacionado
     ├── Judgment Memory ──────► revisiones y juicios previos
     └── DCP ──────────────────► contexto relevante
+                                      │
+                                      ▼
+                              Context Assembly
                                       │
                                       ▼
                                Agente / Orchestrator
