@@ -92,5 +92,5 @@ test("context budget keeps complete code results", async () => {
   expect(text).toContain("src/first.py:42-58")
   expect(text).toContain("src/second.py:42-58")
   expect(text).not.toContain("src/third.py:42-58")
-  expect(text).not.toContain("y".repeat(10_000))
+  expect(text).not.toContain("-third")
 })
