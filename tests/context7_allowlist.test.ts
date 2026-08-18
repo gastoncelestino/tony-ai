@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test"
 import { resolve } from "node:path"
 
-import { Context7Allowlist, isAllowedLibraryId } from "../plugins/context7-allowlist"
+import {
+  addDocumentationProvenance,
+  Context7Allowlist,
+  isAllowedLibraryId,
+} from "../plugins/context7-allowlist"
 
 const ROOT = resolve(import.meta.dir, "..")
 const ALLOWED = new Set([
@@ -56,6 +60,33 @@ test("Context7 hook blocks open-ended library resolution", async () => {
       { args: { libraryName: "stackoverflow", query: "anything" } },
     ),
   ).rejects.toThrow("Library resolution is disabled")
+})
+
+test("Context7 documentation results preserve provenance", () => {
+  const sources = new Map([
+    [
+      "/websites/python_3_14",
+      {
+        id: "python",
+        name: "Python 3.14",
+        library_id: "/websites/python_3_14",
+        url: "https://docs.python.org/3.14/",
+        enabled: true,
+      },
+    ],
+  ])
+  const output: { output: string; metadata?: Record<string, unknown> } = {
+    output: "asyncio documentation fragment",
+  }
+
+  addDocumentationProvenance("/websites/python_3_14", output, sources)
+
+  expect(output.metadata?.reference).toEqual({
+    source_id: "python",
+    url: "https://docs.python.org/3.14/",
+    title: "Python 3.14",
+    text: "asyncio documentation fragment",
+  })
 })
 
 test("Context7 hook does not affect code-index", async () => {
