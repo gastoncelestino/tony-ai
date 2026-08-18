@@ -94,3 +94,13 @@ test("context budget keeps complete code results", async () => {
   expect(text).not.toContain("src/third.py:42-58")
   expect(text).not.toContain("-third")
 })
+
+test("duplicate code results are included only once", async () => {
+  const text = await assemble("dedupe-code", { project_code: [CODE, CODE] })
+  expect(text.match(/src\/foo\.py:42-58/g)?.length).toBe(1)
+})
+
+test("duplicate documentation results are included only once", async () => {
+  const text = await assemble("dedupe-doc", { reference: DOC })
+  expect(text.match(/### Python 3\.14/g)?.length).toBe(1)
+})
