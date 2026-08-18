@@ -10,7 +10,7 @@
     {
       "id": "fastapi",
       "name": "FastAPI",
-      "library_id": "/fastapi/fastapi",
+      "library_id": "/websites/fastapi_tiangolo",
       "url": "https://fastapi.tiangolo.com/",
       "enabled": true
     },
@@ -23,8 +23,8 @@
     },
     {
       "id": "postgresql",
-      "name": "PostgreSQL",
-      "library_id": "/postgres/postgres",
+      "name": "Postgres",
+      "library_id": "/supabase/postgres",
       "url": "https://www.postgresql.org/docs/",
       "enabled": true
     }
