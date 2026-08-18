@@ -8,6 +8,7 @@ type Source = {
 
 type ToolArgs = Record<string, unknown>
 
+const CONTEXT7_RESOLVE_TOOL = "context7_resolve_library_id"
 const CONTEXT7_DOC_TOOLS = new Set([
   "context7_query_docs",
   "context7_get_library_docs",
@@ -32,6 +33,12 @@ export const Context7Allowlist = async ({ worktree }: { worktree: string }) => (
     input: { tool: string },
     output: { args: ToolArgs },
   ) => {
+    if (input.tool === CONTEXT7_RESOLVE_TOOL) {
+      throw new Error(
+        "[Context7] Library resolution is disabled; use an explicitly authorized library_id from config/knowledge_sources.json",
+      )
+    }
+
     if (!CONTEXT7_DOC_TOOLS.has(input.tool)) return
 
     const libraryId =
