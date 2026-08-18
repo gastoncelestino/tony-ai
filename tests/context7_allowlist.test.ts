@@ -47,6 +47,17 @@ test("Context7 hook fails closed for unauthorized documentation", async () => {
   ).rejects.toThrow("Documentation source is not authorized")
 })
 
+test("Context7 hook blocks open-ended library resolution", async () => {
+  const hooks = await Context7Allowlist({ worktree: ROOT })
+
+  await expect(
+    hooks["tool.execute.before"](
+      { tool: "context7_resolve_library_id" },
+      { args: { libraryName: "stackoverflow", query: "anything" } },
+    ),
+  ).rejects.toThrow("Library resolution is disabled")
+})
+
 test("Context7 hook does not affect code-index", async () => {
   const hooks = await Context7Allowlist({ worktree: ROOT })
 
