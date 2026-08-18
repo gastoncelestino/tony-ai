@@ -42,7 +42,7 @@
 python3 --version        		# 3.10+
 bun --version            		# 1.3.14+
 python3 -m pytest --version		# pytest x.x.x
-make --version					# GNU Make x.x.x
+make --version				# GNU Make x.x.x
 ```
 
 ### Verificar pytest

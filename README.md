@@ -81,6 +81,7 @@ La persistencia SQLite configurada para OpenCode se encuentra en `.tonymem/`; lo
 
 El objetivo no es entrenar los modelos, sino conservar, indexar y recuperar conocimiento operativo para reutilizarlo en tareas posteriores.
 
+
 ```text
 Nueva tarea
     │
@@ -97,7 +98,15 @@ Nueva tarea
                                       │
                                       ▼
                                  Tony Kernel
-```							   
+```		
+## Contexto controlado
+El contexto de documentación y código se incorpora mediante fuentes explícitamente autorizadas.
+- **Context7** usa una allowlist cerrada y conserva provenance de sus resultados.
+- **Code Index** es la única fuente de búsqueda semántica del código del proyecto.
+- **Context Assembly** combina documentación y código por sesión, preserva el contexto existente y consume el contexto agregado una sola vez.
+
+Esto mantiene el contexto trazable, aislado por sesión y limitado a las fuentes aprobadas.
+					   
 ## Kernel
 Si algo falla, el Kernel te dice exactamente por qué:
 
