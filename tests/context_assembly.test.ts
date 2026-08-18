@@ -36,6 +36,18 @@ test("code alone is included", async () => {
   expect(text).toContain("def foo()")
 })
 
+test("assembled context preserves documentation provenance", async () => {
+  const text = await assemble("doc-provenance", { reference: DOC })
+  expect(text).toContain("source: python")
+  expect(text).toContain("https://docs.python.org/3.14/")
+})
+
+test("assembled context preserves code provenance", async () => {
+  const text = await assemble("code-provenance", { project_code: [CODE] })
+  expect(text).toContain("source: code-index")
+  expect(text).toContain("src/foo.py:42-58")
+})
+
 test("unauthorized documentation is rejected", async () => {
   const text = await assemble("bad-doc", { reference: { ...DOC, source_id: "stackoverflow", url: "https://stackoverflow.com/" } })
   expect(text).not.toContain("stackoverflow")
