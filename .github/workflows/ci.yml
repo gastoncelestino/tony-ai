@@ -33,8 +33,25 @@ jobs:
 
       - name: Install system deps
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq make sqlite3
+          if command -v make >/dev/null 2>&1 && command -v sqlite3 >/dev/null 2>&1; then
+            echo "make and sqlite3 already available"
+            exit 0
+          fi
+
+          for attempt in 1 2 3; do
+            echo "apt-get update attempt ${attempt}/3"
+            if timeout 120s sudo apt-get update -qq; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "ERROR: apt-get update failed or timed out after 3 attempts"
+              exit 1
+            fi
+            sleep 5
+          done
+
+          timeout 120s sudo apt-get install -y -qq make sqlite3
+        shell: bash
 
       - name: Install Python dev/test dependencies
         run: python3 -m pip install -r requirements-dev.txt
