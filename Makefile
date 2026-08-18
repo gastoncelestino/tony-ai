@@ -24,7 +24,7 @@ check-test-discovery:
 
 # Python usa pytest cuando está disponible y conserva el runner standalone como fallback.
 test-python: check-test-deps check-test-discovery
-	@python3 -m pytest tests -q 2>/dev/null || python3 tests/python_verify.py tests
+	@python3 -m pytest tests -v 2>/dev/null || python3 tests/python_verify.py tests
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
