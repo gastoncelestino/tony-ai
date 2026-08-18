@@ -316,6 +316,29 @@ Nueva tarea
 
 Los agentes pueden consultar y actualizar estos componentes durante diferentes fases según las necesidades de contexto, búsqueda semántica y persistencia.
 
+### Context Assembly
+
+El contexto autorizado se compone por sesión antes de llegar al agente.
+
+```text
+Context7 ──────┐
+               ├──► Validation ─► Deduplication ─► Context Budget
+Code Index ────┘                                 │
+                                                 ▼
+                                            Provenance
+                                                 │
+                                                 ▼
+                                         Context Assembly
+                                                 │
+                                                 ▼
+                                               Tony
+```
+- Validation acepta únicamente documentación autorizada y resultados válidos de Code Index.
+- Deduplication evita incorporar dos veces la misma evidencia.
+- Context Budget limita el contexto adicional a 24.000 caracteres y reparte el presupuesto entre documentación y código cuando ambas fuentes están presentes.
+- Provenance conserva el origen de cada fragmento incorporado.
+- El contexto sigue aislado por sessionID, preserva el system prompt existente y se consume una sola vez.
+
 ## Arquitectura de Review y Judgment Day
 ## Review 4R
 Después de la implementación, el workflow puede ejecutar la revisión 4R ordinaria. Los agentes `review-*` inspeccionan dimensiones específicas de la implementación y son read-only.
