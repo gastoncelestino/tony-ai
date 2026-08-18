@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+from knowledge.sources import get_enabled_sources
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES_PATH = ROOT / "config" / "knowledge_sources.json"
@@ -45,3 +47,9 @@ def test_opencode_allows_context7_tools():
 def test_approved_sources_are_explicitly_enabled():
     sources = load_sources()["sources"]
     assert {source["id"] for source in sources if source["enabled"]} == set(EXPECTED_LIBRARY_IDS)
+
+
+def test_get_enabled_sources_returns_the_closed_allowlist():
+    sources = get_enabled_sources()
+    assert [source["id"] for source in sources] == list(EXPECTED_LIBRARY_IDS)
+    assert all(source["enabled"] is True for source in sources)
