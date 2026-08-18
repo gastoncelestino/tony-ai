@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { resolve } from "node:path"
 
-import { ContextAssembly } from "../plugins/context-assembly"
+import { ContextAssembly, MAX_CONTEXT_CHARS } from "../plugins/context-assembly"
 
 const ROOT = resolve(import.meta.dir, "..")
 const CODE = { type: "project_code", path: "src/foo.py", start_line: 42, end_line: 58, text: "def foo():\n    return 42", lang: "python" }
@@ -67,4 +67,30 @@ test("one session does not contaminate another", async () => {
   const outputA = { system: ["A"] }
   await hooks["experimental.chat.system.transform"]({ sessionID: "A" }, outputA)
   expect(outputA.system[0]).toContain("src/foo.py:42-58")
+})
+
+test("assembled context respects the maximum size", async () => {
+  const large = "x".repeat(10_000)
+  const projectCode = [0, 1, 2].map((index) => ({
+    ...CODE,
+    path: `src/large_${index}.py`,
+    text: `${large}-${index}`,
+  }))
+  const text = await assemble("budget", { project_code: projectCode })
+  const addedContext = text.slice("Existing system prompt".length)
+  expect(addedContext.length).toBeLessThanOrEqual(MAX_CONTEXT_CHARS + 2)
+})
+
+test("context budget keeps complete code results", async () => {
+  const large = "y".repeat(10_000)
+  const projectCode = [
+    { ...CODE, path: "src/first.py", text: `${large}-first` },
+    { ...CODE, path: "src/second.py", text: `${large}-second` },
+    { ...CODE, path: "src/third.py", text: `${large}-third` },
+  ]
+  const text = await assemble("complete-results", { project_code: projectCode })
+  expect(text).toContain("src/first.py:42-58")
+  expect(text).toContain("src/second.py:42-58")
+  expect(text).not.toContain("src/third.py:42-58")
+  expect(text).not.toContain("y".repeat(10_000))
 })
