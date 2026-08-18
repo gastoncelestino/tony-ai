@@ -41,6 +41,26 @@ function validCode(value: unknown): value is CodeContext {
     typeof code.text === "string" && typeof code.lang === "string"
 }
 
+function dedupeDocumentation(items: Documentation[]): Documentation[] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    const key = `${item.source_id}|${item.url}|${item.title}|${item.text}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function dedupeCode(items: CodeContext[]): CodeContext[] {
+  const seen = new Set<string>()
+  return items.filter((item) => {
+    const key = `${item.path}|${item.start_line}|${item.end_line}|${item.text}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function fitContext(parts: string[], maxChars: number): string {
   const selected: string[] = []
   let size = 0
@@ -55,14 +75,16 @@ function fitContext(parts: string[], maxChars: number): string {
 
 function formatContext(context: PendingContext): string {
   const sections: string[] = []
-  if (context.documentation.length) {
-    const docs = context.documentation.map((d) =>
+  const documentation = dedupeDocumentation(context.documentation)
+  const codeContext = dedupeCode(context.code)
+  if (documentation.length) {
+    const docs = documentation.map((d) =>
       `### ${d.title}\n${d.url}\n\n${d.text}`,
     )
     sections.push("## Authorized documentation\n\n" + fitContext(docs, MAX_CONTEXT_CHARS))
   }
-  if (context.code.length) {
-    const code = context.code.map((c) =>
+  if (codeContext.length) {
+    const code = codeContext.map((c) =>
       `### ${c.path}:${c.start_line}-${c.end_line}\n\n${c.text}`,
     )
     sections.push("## Existing project code\n\n" + fitContext(code, MAX_CONTEXT_CHARS))
