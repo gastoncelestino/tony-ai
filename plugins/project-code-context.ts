@@ -4,6 +4,7 @@ type CodeIndexResult = {
   end_line?: unknown
   text?: unknown
   lang?: unknown
+  score?: unknown
 }
 
 type ToolOutput = {
@@ -20,6 +21,7 @@ export type ProjectCodeContext = {
   end_line: number
   text: string
   lang: string
+  score: number
 }
 
 function isCodeIndexResult(value: unknown): value is CodeIndexResult {
@@ -30,7 +32,8 @@ function isCodeIndexResult(value: unknown): value is CodeIndexResult {
     typeof result.start_line === "number" &&
     typeof result.end_line === "number" &&
     typeof result.text === "string" &&
-    typeof result.lang === "string"
+    typeof result.lang === "string" &&
+    typeof result.score === "number"
   )
 }
 
@@ -53,6 +56,7 @@ export function normalizeProjectCodeResults(output: string): ProjectCodeContext[
     end_line: result.end_line as number,
     text: result.text as string,
     lang: result.lang as string,
+    score: result.score as number,
   }))
 }
 
