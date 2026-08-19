@@ -78,7 +78,7 @@ tony-ai/
 | Componente | Responsabilidad |
 |---|---|
 | **OpenCode** | Runtime y ejecución del agente, plugins y herramientas |
-| **Tony Orchestrator** | Routing, coordinación y contexto mínimo |
+| **Tony Orchestrator** | Routing, coordinación y contexto mínimo por tarea |
 | **Tony Kernel** | FSM, gates, scope, dependencias de tareas, evidencias, checksums y enforcement |
 | **TonyMem** | Memoria persistente de decisiones, hallazgos y contexto |
 | **Code Index** | Búsqueda semántica sobre el código |
@@ -100,6 +100,8 @@ Mantiene el contexto necesario para enrutar el workflow:
 - Recibe el resultado estructurado y decide el siguiente paso.
 
 El orquestador no carga prompts completos de los ejecutores para decidir el routing, no ejecuta el trabajo de fase inline y no copia artifacts completos en la delegación.
+
+Durante `sdd-apply`, la unidad de delegación es una única task pendiente con dependencias satisfechas. Su descripción y archivos declarados delimitan el trabajo y orientan la recuperación de contexto específico para esa task.
 
 ## Tony Kernel
 Controla:
@@ -166,6 +168,7 @@ El contexto autorizado se compone por sesión antes de llegar al agente.
 - El contexto ensamblado se consume una sola vez.
 - No se persiste como una nueva memoria.
 - Se preserva el system prompt existente.
+- **Task-Scoped Context** usa la task seleccionada como unidad de recuperación: su descripción y archivos declarados orientan las búsquedas y limitan el contexto relevante para la delegación.
 
 La arquitectura separa así **adquisición**, **autorización** y **ensamblado de contexto** antes de entregarlo al agente.
 
@@ -198,7 +201,9 @@ La arquitectura separa así **adquisición**, **autorización** y **ensamblado d
                     ↓
              Context Assembly
                     ↓
-                  Tony
+              Task-Scoped Context
+                    ↓
+                  Agent
 ```
 
 - **Validation** acepta únicamente documentación autorizada y resultados válidos de Code Index.
@@ -243,7 +248,19 @@ Tony Orchestrator
           Context Assembly
                   │
                   ▼
-              SDD Phase
+             SDD Tasks
+                  │
+                  ▼
+           Task atómica
+                  │
+                  ▼
+          Task-Scoped Context
+                  │
+                  ▼
+             Sub-agent
+                  │
+                  ▼
+             Phase Result
                   │
                   ▼
             Tony Kernel
@@ -258,29 +275,18 @@ Tony Orchestrator
                   └── Retry Budget
                   │
                   ▼
-              Sub-agent
-                  │
-                  ▼
-             Phase Result
-                  │
-                  ▼
-            Tony Kernel
-                  │
-                  ├── valida artifacts
-                  ├── valida evidencia
-                  ├── valida scope
-                  ├── valida dependencias de tareas
-                  └── registra completion
-                  │
-                  ▼
-             Siguiente fase
+             Siguiente task
 ```
+
+Las tasks producidas por `sdd-tasks` son unidades atómicas: cada una representa un objetivo verificable y no combina objetivos independientes ni implementación, testing y documentación en una sola unidad. `sdd-apply` delega una única task por ejecución y el contexto se recupera alrededor de esa task.
 
 La arquitectura mantiene una frontera clara:
 
 - **Orquestador:** decide qué debe ejecutarse.
+- **Task:** define el objetivo verificable de la unidad de trabajo.
+- **Contexto:** aporta la evidencia relevante para esa task.
 - **Kernel:** decide si puede ejecutarse.
-- **Sub-agent:** ejecuta el trabajo de la fase.
+- **Sub-agent:** ejecuta el trabajo de la task.
 - **Servicios de contexto:** aportan información cuando es necesaria.
 
 ---
@@ -348,10 +354,16 @@ Tony Orchestrator
     ├── Judgment Memory     │
     └── DCP                 │
                             ▼
-                     Context Assembly
+                     SDD Tasks
                             │
                             ▼
-                        SDD Phase
+                      Task atómica
+                            │
+                            ▼
+                   Task-Scoped Context
+                            │
+                            ▼
+                      Expert Agent
                             │
                             ▼
                        Tony Kernel
