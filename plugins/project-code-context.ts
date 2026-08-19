@@ -14,6 +14,15 @@ type ToolOutput = {
 
 const CODE_INDEX_SEARCH_TOOL = "code-index_code_search"
 
+type CodeSearchHookInput = {
+  tool: string
+  sessionID?: string
+}
+
+type CodeSearchHookArgs = {
+  args?: Record<string, unknown>
+}
+
 export type ProjectCodeContext = {
   type: "project_code"
   path: string
@@ -22,6 +31,7 @@ export type ProjectCodeContext = {
   text: string
   lang: string
   score: number
+  query?: string
 }
 
 function isCodeIndexResult(value: unknown): value is CodeIndexResult {
@@ -37,7 +47,7 @@ function isCodeIndexResult(value: unknown): value is CodeIndexResult {
   )
 }
 
-export function normalizeProjectCodeResults(output: string): ProjectCodeContext[] {
+export function normalizeProjectCodeResults(output: string, query?: string): ProjectCodeContext[] {
   let parsed: unknown
   try {
     parsed = JSON.parse(output)
@@ -57,11 +67,12 @@ export function normalizeProjectCodeResults(output: string): ProjectCodeContext[
     text: result.text as string,
     lang: result.lang as string,
     score: result.score as number,
+    ...(query ? { query } : {}),
   }))
 }
 
-export function addProjectCodeContext(output: ToolOutput): void {
-  const projectCode = normalizeProjectCodeResults(output.output)
+export function addProjectCodeContext(output: ToolOutput, query?: string): void {
+  const projectCode = normalizeProjectCodeResults(output.output, query)
   if (projectCode.length === 0) return
 
   output.metadata = {
@@ -70,12 +81,33 @@ export function addProjectCodeContext(output: ToolOutput): void {
   }
 }
 
-export const ProjectCodeContext = () => ({
-  "tool.execute.after": async (
-    input: { tool: string },
-    output: ToolOutput,
-  ) => {
-    if (input.tool !== CODE_INDEX_SEARCH_TOOL) return
-    addProjectCodeContext(output)
-  },
-})
+export const ProjectCodeContext = () => {
+  const pendingQueries = new Map<string, string[]>()
+
+  return {
+    "tool.execute.before": async (
+      input: CodeSearchHookInput,
+      output: CodeSearchHookArgs,
+    ) => {
+      if (input.tool !== CODE_INDEX_SEARCH_TOOL || !input.sessionID) return
+      const query = output.args?.query
+      if (typeof query !== "string" || query.length === 0) return
+      const queries = pendingQueries.get(input.sessionID) ?? []
+      queries.push(query)
+      pendingQueries.set(input.sessionID, queries)
+    },
+
+    "tool.execute.after": async (
+      input: CodeSearchHookInput,
+      output: ToolOutput,
+    ) => {
+      if (input.tool !== CODE_INDEX_SEARCH_TOOL) return
+      const query = input.sessionID ? pendingQueries.get(input.sessionID)?.shift() : undefined
+      if (input.sessionID) {
+        const queries = pendingQueries.get(input.sessionID)
+        if (!queries?.length) pendingQueries.delete(input.sessionID)
+      }
+      addProjectCodeContext(output, query)
+    },
+  }
+}
