@@ -9,6 +9,7 @@ type CodeContext = {
   end_line: number
   text: string
   lang: string
+  score: number
 }
 type Documentation = { source_id: string; url: string; title: string; text: string }
 
@@ -38,7 +39,8 @@ function validCode(value: unknown): value is CodeContext {
   const code = value as Record<string, unknown>
   return code.type === "project_code" && typeof code.path === "string" &&
     typeof code.start_line === "number" && typeof code.end_line === "number" &&
-    typeof code.text === "string" && typeof code.lang === "string"
+    typeof code.text === "string" && typeof code.lang === "string" &&
+    typeof code.score === "number"
 }
 
 function dedupeDocumentation(items: Documentation[]): Documentation[] {
@@ -61,6 +63,13 @@ function dedupeCode(items: CodeContext[]): CodeContext[] {
   })
 }
 
+function prioritizeCode(items: CodeContext[]): CodeContext[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => b.item.score - a.item.score || a.index - b.index)
+    .map(({ item }) => item)
+}
+
 function fitContext(parts: string[], maxChars: number): string {
   const selected: string[] = []
   let size = 0
@@ -75,7 +84,7 @@ function fitContext(parts: string[], maxChars: number): string {
 
 function formatContext(context: PendingContext): string {
   const documentation = dedupeDocumentation(context.documentation)
-  const codeContext = dedupeCode(context.code)
+  const codeContext = dedupeCode(prioritizeCode(context.code))
   const sourceCount = Number(documentation.length > 0) + Number(codeContext.length > 0)
   const sourceBudget = sourceCount > 1 ? Math.floor(MAX_CONTEXT_CHARS / 2) : MAX_CONTEXT_CHARS
   const sections: string[] = []
