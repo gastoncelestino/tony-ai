@@ -18,12 +18,15 @@ Tony-AI no es un sistema de entrenamiento de modelos. Su objetivo es conservar, 
 ## Arquitectura
 
 ```text
-                    Tony Orchestrator
-                           │
-          ┌────────────────┼────────────────┐
-          │                │                │
-          ▼                ▼                ▼
-      TonyMem       Context sources    Judgment Memory
+                      OpenCode
+                         │
+                         ▼
+                  Tony Orchestrator
+                         │
+       ┌─────────────────┼─────────────────┐
+       │                 │                 │
+       ▼                 ▼                 ▼
+    TonyMem        Context sources    Judgment Memory
                          │
                   ┌──────┴──────┐
                   ▼             ▼
@@ -338,23 +341,20 @@ Nueva tarea
     ▼
 Tony Orchestrator
     │
-    ├── TonyMem ───────────────► contexto previo
-    ├── Context7 ──────────────► documentación autorizada
-    ├── Code Index ────────────► código relacionado
-    │                              │
-    │                         score + query
-    │                              │
-    ├── Judgment Memory ───────► juicios previos
-    └── DCP ───────────────────► contexto dinámico
-                                   │
-                                   ▼
-                           Context Assembly
-                                   │
-                                   ▼
-                              SDD Phase
-                                   │
-                                   ▼
-                              Tony Kernel
+    ├── TonyMem
+    ├── Context7 ───────────┐
+    ├── Code Index ─────────┤
+    │      score + query    │
+    ├── Judgment Memory     │
+    └── DCP                 │
+                            ▼
+                     Context Assembly
+                            │
+                            ▼
+                        SDD Phase
+                            │
+                            ▼
+                       Tony Kernel
 ```
 
 Los agentes pueden consultar y actualizar estos componentes durante diferentes fases según las necesidades de contexto, búsqueda semántica y persistencia.
