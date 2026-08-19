@@ -65,7 +65,53 @@ test("code-index scores are preserved", () => {
   expect(contexts[0].score).toBe(0.73)
 })
 
-test("invalid results without scores are ignored without inventing context", () => {
+test("code search query is attached to project context", () => {
+  const contexts = normalizeProjectCodeResults(
+    JSON.stringify({
+      results: [
+        { path: "a.py", start_line: 1, end_line: 3, text: "a", lang: "python", score: 0.73 },
+      ],
+    }),
+    "JWT middleware handling",
+  )
+
+  expect(contexts[0].query).toBe("JWT middleware handling")
+})
+
+test("code search query is captured from the tool arguments", async () => {
+  const hooks = ProjectCodeContext()
+  const output = {
+    output: JSON.stringify({
+      results: [
+        { path: "a.py", start_line: 1, end_line: 3, text: "a", lang: "python", score: 0.73 },
+      ],
+    }),
+  }
+
+  await hooks["tool.execute.before"](
+    { tool: "code-index_code_search", sessionID: "query-session" },
+    { args: { query: "JWT middleware handling" } },
+  )
+  await hooks["tool.execute.after"](
+    { tool: "code-index_code_search", sessionID: "query-session" },
+    output,
+  )
+
+  expect(output.metadata?.project_code).toEqual([
+    {
+      type: "project_code",
+      path: "a.py",
+      start_line: 1,
+      end_line: 3,
+      text: "a",
+      lang: "python",
+      score: 0.73,
+      query: "JWT middleware handling",
+    },
+  ])
+})
+
+test("invalid results without scores are ignored without inventing context", async () => {
   expect(
     normalizeProjectCodeResults(
       JSON.stringify({ results: [{ path: "a.py", start_line: 1, end_line: 3, text: "missing score", lang: "python" }] }),
