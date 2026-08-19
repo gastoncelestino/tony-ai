@@ -16,6 +16,7 @@ test("code-index results become project_code context", () => {
           end_line: 58,
           text: "def foo():\n    return 42",
           lang: "python",
+          score: 0.91,
         },
       ],
       count: 1,
@@ -32,6 +33,7 @@ test("code-index results become project_code context", () => {
       end_line: 58,
       text: "def foo():\n    return 42",
       lang: "python",
+      score: 0.91,
     },
   ])
 })
@@ -40,8 +42,8 @@ test("multiple code-index results are preserved", () => {
   const contexts = normalizeProjectCodeResults(
     JSON.stringify({
       results: [
-        { path: "a.py", start_line: 1, end_line: 3, text: "a", lang: "python" },
-        { path: "b.ts", start_line: 10, end_line: 15, text: "b", lang: "typescript" },
+        { path: "a.py", start_line: 1, end_line: 3, text: "a", lang: "python", score: 0.9 },
+        { path: "b.ts", start_line: 10, end_line: 15, text: "b", lang: "typescript", score: 0.8 },
       ],
     }),
   )
@@ -51,10 +53,22 @@ test("multiple code-index results are preserved", () => {
   expect(contexts[1].path).toBe("b.ts")
 })
 
-test("invalid results are ignored without inventing context", () => {
+test("code-index scores are preserved", () => {
+  const contexts = normalizeProjectCodeResults(
+    JSON.stringify({
+      results: [
+        { path: "a.py", start_line: 1, end_line: 3, text: "a", lang: "python", score: 0.73 },
+      ],
+    }),
+  )
+
+  expect(contexts[0].score).toBe(0.73)
+})
+
+test("invalid results without scores are ignored without inventing context", () => {
   expect(
     normalizeProjectCodeResults(
-      JSON.stringify({ results: [{ path: "a.py", text: "missing lines" }] }),
+      JSON.stringify({ results: [{ path: "a.py", start_line: 1, end_line: 3, text: "missing score", lang: "python" }] }),
     ),
   ).toEqual([])
   expect(normalizeProjectCodeResults("not json")).toEqual([])
