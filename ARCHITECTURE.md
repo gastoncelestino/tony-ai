@@ -322,22 +322,27 @@ El contexto autorizado se compone por sesión antes de llegar al agente.
 
 ```text
 Context7 ──────┐
-               ├──► Validation ─► Deduplication ─► Context Budget
-Code Index ────┘                                 │
-                                                 ▼
-                                            Provenance
-                                                 │
-                                                 ▼
-                                         Context Assembly
-                                                 │
-                                                 ▼
-                                               Tony
+               ├──► Validation ─► Deduplication ─► Relevance
+Code Index ────┘                                      │
+                                                     ▼
+                                               Context Budget
+                                                     │
+                                                     ▼
+                                                 Provenance
+                                                     │
+                                                     ▼
+                                            Context Assembly
+                                                     │
+                                                     ▼
+                                                   Tony
 ```
 - Validation acepta únicamente documentación autorizada y resultados válidos de Code Index.
+- Relevance conserva el score semántico real de Code Index y prioriza los resultados con mayor relevancia antes de aplicar el presupuesto.
 - Deduplication evita incorporar dos veces la misma evidencia.
 - Context Budget limita el contexto adicional a 24.000 caracteres y reparte el presupuesto entre documentación y código cuando ambas fuentes están presentes.
 - Provenance conserva el origen de cada fragmento incorporado.
 - El contexto sigue aislado por sessionID, preserva el system prompt existente y se consume una sola vez.
+- Observability permite registrar estadísticas de decisión por sesión —elementos recibidos, aceptados, deduplicados, rechazados por presupuesto y caracteres utilizados— sin almacenar el contenido del contexto.
 
 ## Arquitectura de Review y Judgment Day
 ## Review 4R
