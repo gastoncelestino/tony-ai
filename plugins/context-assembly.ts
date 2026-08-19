@@ -90,7 +90,7 @@ function dedupeDocumentation(items: Documentation[]): Documentation[] {
 function dedupeCode(items: CodeContext[]): CodeContext[] {
   const seen = new Set<string>()
   return items.filter((item) => {
-    const key = `${item.path}|${item.start_line}|${item.end_line}|${item.text}|${item.query ?? ""}`
+    const key = `${item.path}|${item.start_line}|${item.end_line}|${item.text}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -141,7 +141,7 @@ function formatContext(context: PendingContext, sessionID: string): { block: str
   }
   if (codeContext.length) {
     const code = codeContext.map((c) =>
-      `### ${c.path}:${c.start_line}-${c.end_line}\nsource: code-index\nsearch query: ${c.query ?? "unknown"}\n\n${c.text}`,
+      `### ${c.path}:${c.start_line}-${c.end_line}\nsource: code-index${c.query ? `\nsearch query: ${c.query}` : ""}\n\n${c.text}`,
     )
     const fitted = fitContextWithStats(code, sourceBudget)
     codeStats.used_chars = fitted.usedChars
