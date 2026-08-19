@@ -18,30 +18,27 @@ Tony-AI no es un sistema de entrenamiento de modelos. Su objetivo es conservar, 
 ## Arquitectura
 
 ```text
-                         OpenCode
-                            │
-                            ▼
                     Tony Orchestrator
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-          ▼                 ▼                 ▼
-      TonyMem          Context sources   Judgment Memory
-                            │
-                     ┌──────┴──────┐
-                     ▼             ▼
-                 Context7      Code Index
-                 allowlist
-                     │             │
-                     └──────┬──────┘
-                            ▼
-                     Context Assembly
-                            │
-                            ▼
-                       SDD Workflow
-                            │
-                            ▼
-                       Tony Kernel
+                           │
+          ┌────────────────┼────────────────┐
+          │                │                │
+          ▼                ▼                ▼
+      TonyMem       Context sources    Judgment Memory
+                         │
+                  ┌──────┴──────┐
+                  ▼             ▼
+              Context7      Code Index
+              allowlist     score + query
+                  │             │
+                  └──────┬──────┘
+                         ▼
+                  Context Assembly
+                         │
+                         ▼
+                    SDD Workflow
+                         │
+                         ▼
+                    Tony Kernel
 ```
 
 - OpenCode proporciona el runtime del agente.
@@ -170,20 +167,35 @@ El contexto autorizado se compone por sesión antes de llegar al agente.
 La arquitectura separa así **adquisición**, **autorización** y **ensamblado de contexto** antes de entregarlo al agente.
 
 ```text
-Context7 ──────┐
-               ├──► Validation ─► Deduplication ─► Relevance
-Code Index ────┘                                     │
-                                                     ▼
-                                               Context Budget
-                                                     │
-                                                     ▼
-                                                 Provenance
-                                                     │
-                                                     ▼
-                                            Context Assembly
-                                                     │
-                                                     ▼
-                                                   Tony
+                 Context7
+                    │
+                    ▼
+               Allowlist
+                    │
+                    ▼
+                Validation
+                    │
+                    ├──────────────┐
+                    │              │
+                    ▼              ▼
+              Documentation    Code Index
+                                   │
+                                   ▼
+                              Score + Query
+                                   │
+                                   ▼
+                               Relevance
+                    ┌──────────────┘
+                    ▼
+               Deduplication
+                    ↓
+              Context Budget
+                    ↓
+                Provenance
+                    ↓
+             Context Assembly
+                    ↓
+                  Tony
 ```
 
 - **Validation** acepta únicamente documentación autorizada y resultados válidos de Code Index.
@@ -323,23 +335,26 @@ Los servicios de contexto participan transversalmente en el workflow. No existe 
 ```text
 Nueva tarea
     │
-    ├── TonyMem ──────────────► decisiones y contexto previo
-    ├── Context7 ─────────────► documentación autorizada
-    ├── Code Index ───────────► código relacionado
-    ├── Judgment Memory ──────► revisiones y juicios previos
-    └── DCP ──────────────────► contexto relevante
-                                      │
-                                      ▼
-                              Context Assembly
-                                      │
-                                      ▼
-                               Agente / Orchestrator
-                                      │
-                                      ▼
-                                  SDD Phase
-                                      │
-                                      ▼
-                                 Tony Kernel
+    ▼
+Tony Orchestrator
+    │
+    ├── TonyMem ───────────────► contexto previo
+    ├── Context7 ──────────────► documentación autorizada
+    ├── Code Index ────────────► código relacionado
+    │                              │
+    │                         score + query
+    │                              │
+    ├── Judgment Memory ───────► juicios previos
+    └── DCP ───────────────────► contexto dinámico
+                                   │
+                                   ▼
+                           Context Assembly
+                                   │
+                                   ▼
+                              SDD Phase
+                                   │
+                                   ▼
+                              Tony Kernel
 ```
 
 Los agentes pueden consultar y actualizar estos componentes durante diferentes fases según las necesidades de contexto, búsqueda semántica y persistencia.
