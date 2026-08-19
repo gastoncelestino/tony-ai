@@ -153,3 +153,69 @@ test("mixed sources share the context budget", async () => {
   expect(output.system[0]).toContain("-code")
   expect(output.system[0].length).toBeLessThanOrEqual("task".length + 2 + MAX_CONTEXT_CHARS)
 })
+
+test("context assembly emits decision stats without content", async () => {
+  const events: unknown[] = []
+  const hooks = ContextAssembly({
+    worktree: ROOT,
+    onContextDecision: (stats) => events.push(stats),
+  })
+  await hooks["tool.execute.after"]({ tool: "context7_query_docs", sessionID: "observed" }, { output: "", metadata: { reference: DOC } })
+  await hooks["tool.execute.after"]({ tool: "code-index_code_search", sessionID: "observed" }, { output: "", metadata: { project_code: [CODE, CODE] } })
+  const output = { system: ["task"] }
+  await hooks["experimental.chat.system.transform"]({ sessionID: "observed" }, output)
+
+  expect(events).toHaveLength(1)
+  expect(events[0]).toEqual({
+    sessionID: "observed",
+    documentation: {
+      received: 1,
+      accepted: 1,
+      deduplicated: 0,
+      rejected_by_budget: 0,
+      used_chars: expect.any(Number),
+    },
+    code: {
+      received: 2,
+      accepted: 1,
+      deduplicated: 1,
+      rejected_by_budget: 0,
+      used_chars: expect.any(Number),
+    },
+    budget: {
+      total: MAX_CONTEXT_CHARS,
+      used_chars: expect.any(Number),
+    },
+  })
+  expect(JSON.stringify(events[0])).not.toContain("asyncio docs")
+  expect(JSON.stringify(events[0])).not.toContain("foo():")
+})
+
+test("context assembly reports budget rejections", async () => {
+  const events: unknown[] = []
+  const hooks = ContextAssembly({
+    worktree: ROOT,
+    onContextDecision: (stats) => events.push(stats),
+  })
+  const large = "q".repeat(10_000)
+  await hooks["tool.execute.after"]({ tool: "code-index_code_search", sessionID: "budget-observed" }, {
+    output: "",
+    metadata: {
+      project_code: [
+        { ...CODE, path: "src/first.py", text: `${large}-first` },
+        { ...CODE, path: "src/second.py", text: `${large}-second` },
+        { ...CODE, path: "src/third.py", text: `${large}-third` },
+      ],
+    },
+  })
+  const output = { system: ["task"] }
+  await hooks["experimental.chat.system.transform"]({ sessionID: "budget-observed" }, output)
+
+  expect(events).toHaveLength(1)
+  const stats = events[0] as { code: { received: number; accepted: number; rejected_by_budget: number }; budget: { total: number; used_chars: number } }
+  expect(stats.code.received).toBe(3)
+  expect(stats.code.accepted).toBe(3)
+  expect(stats.code.rejected_by_budget).toBe(1)
+  expect(stats.budget.total).toBe(MAX_CONTEXT_CHARS)
+  expect(stats.budget.used_chars).toBeGreaterThan(0)
+})
