@@ -48,6 +48,13 @@ test("assembled context preserves code provenance", async () => {
   expect(text).toContain("src/foo.py:42-58")
 })
 
+test("assembled context preserves code search intent", async () => {
+  const text = await assemble("code-query", {
+    project_code: [{ ...CODE, query: "JWT middleware handling" }],
+  })
+  expect(text).toContain("search query: JWT middleware handling")
+})
+
 test("unauthorized documentation is rejected", async () => {
   const text = await assemble("bad-doc", { reference: { ...DOC, source_id: "stackoverflow", url: "https://stackoverflow.com/" } })
   expect(text).not.toContain("stackoverflow")
