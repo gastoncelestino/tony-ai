@@ -25,12 +25,20 @@ DEPENDENCY CHECK:
 - If spec, design, or tasks are missing, do NOT implement.
 - Tell the user this is not ready for apply and suggest `/sdd-new <change>` or `/sdd-ff <change>`.
 
+TASK EXECUTION BOUNDARY:
+
+- Select exactly ONE pending task whose dependencies are already completed and execute only that task in this delegation.
+- Treat the selected task description and declared files as the execution boundary. Do not implement, refactor, test, or document unrelated tasks in the same delegation.
+- Build retrieval queries from the selected task description plus its declared files. Prefer task-scoped Code Index and Context7 results; do not load broad project context when task-scoped evidence is sufficient.
+- After the selected task reaches its required evidence/completion state, stop. The next task is a new delegation and gets its own task-scoped context.
+
 TASK:
 If all gates pass, launch the hidden `sdd-apply` sub-agent with:
 
+- The selected pending task only, including its description, dependencies, and declared files.
 - The resolved artifact store from session preflight; do not hardcode tonymem.
-- The structured status: schemaName, planningHome/changeRoot, artifactPaths/contextFiles, task progress, applyState, dependency states, and actionContext.
-- References to the spec, design, tasks, and any apply-progress artifacts.
+- The structured status needed to validate that task: schemaName, planningHome/changeRoot, artifactPaths/contextFiles, selected task progress, dependency states, applyState, actionContext.
+- References to the relevant spec/design sections and apply-progress artifacts needed by the selected task, not the entire change context by default.
 - The resolved delivery/chained PR strategy and review budget.
 - Strict TDD instructions if `sdd-init` detected strict TDD.
 
