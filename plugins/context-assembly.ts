@@ -13,7 +13,39 @@ type CodeContext = {
 }
 type Documentation = { source_id: string; url: string; title: string; text: string }
 
-type PendingContext = { documentation: Documentation[]; code: CodeContext[] }
+type PendingContext = {
+  documentation: Documentation[]
+  code: CodeContext[]
+  documentationReceived: number
+  codeReceived: number
+}
+
+export type ContextAssemblyStats = {
+  sessionID: string
+  documentation: {
+    received: number
+    accepted: number
+    deduplicated: number
+    rejected_by_budget: number
+    used_chars: number
+  }
+  code: {
+    received: number
+    accepted: number
+    deduplicated: number
+    rejected_by_budget: number
+    used_chars: number
+  }
+  budget: {
+    total: number
+    used_chars: number
+  }
+}
+
+type ContextAssemblyOptions = {
+  worktree: string
+  onContextDecision?: (stats: ContextAssemblyStats) => void
+}
 
 const CONTEXT7_TOOLS = new Set(["context7_query_docs", "context7_get_library_docs"])
 const CODE_INDEX_TOOL = "code-index_code_search"
@@ -70,7 +102,7 @@ function prioritizeCode(items: CodeContext[]): CodeContext[] {
     .map(({ item }) => item)
 }
 
-function fitContext(parts: string[], maxChars: number): string {
+function fitContextWithStats(parts: string[], maxChars: number): { text: string; usedChars: number; rejected: number } {
   const selected: string[] = []
   let size = 0
   for (const part of parts) {
@@ -79,32 +111,70 @@ function fitContext(parts: string[], maxChars: number): string {
     selected.push(part)
     size += separator + part.length
   }
-  return selected.join("\n\n")
+  return { text: selected.join("\n\n"), usedChars: size, rejected: parts.length - selected.length }
 }
 
-function formatContext(context: PendingContext): string {
+function fitContext(parts: string[], maxChars: number): string {
+  return fitContextWithStats(parts, maxChars).text
+}
+
+function formatContext(context: PendingContext, sessionID: string): { block: string; stats: ContextAssemblyStats } {
   const documentation = dedupeDocumentation(context.documentation)
   const codeContext = dedupeCode(prioritizeCode(context.code))
   const sourceCount = Number(documentation.length > 0) + Number(codeContext.length > 0)
   const sourceBudget = sourceCount > 1 ? Math.floor(MAX_CONTEXT_CHARS / 2) : MAX_CONTEXT_CHARS
   const sections: string[] = []
 
+  const documentationStats = { used_chars: 0, rejected_by_budget: 0 }
+  const codeStats = { used_chars: 0, rejected_by_budget: 0 }
+
   if (documentation.length) {
     const docs = documentation.map((d) =>
       `### ${d.title}\nsource: ${d.source_id}\n${d.url}\n\n${d.text}`,
     )
-    sections.push("## Authorized documentation\n\n" + fitContext(docs, sourceBudget))
+    const fitted = fitContextWithStats(docs, sourceBudget)
+    documentationStats.used_chars = fitted.usedChars
+    documentationStats.rejected_by_budget = fitted.rejected
+    sections.push("## Authorized documentation\n\n" + fitted.text)
   }
   if (codeContext.length) {
     const code = codeContext.map((c) =>
       `### ${c.path}:${c.start_line}-${c.end_line}\nsource: code-index\n\n${c.text}`,
     )
-    sections.push("## Existing project code\n\n" + fitContext(code, sourceBudget))
+    const fitted = fitContextWithStats(code, sourceBudget)
+    codeStats.used_chars = fitted.usedChars
+    codeStats.rejected_by_budget = fitted.rejected
+    sections.push("## Existing project code\n\n" + fitted.text)
   }
-  return fitContext(sections, MAX_CONTEXT_CHARS)
+
+  const block = fitContext(sections, MAX_CONTEXT_CHARS)
+  return {
+    block,
+    stats: {
+      sessionID,
+      documentation: {
+        received: context.documentationReceived,
+        accepted: documentation.length,
+        deduplicated: context.documentation.length - documentation.length,
+        rejected_by_budget: documentationStats.rejected_by_budget,
+        used_chars: documentationStats.used_chars,
+      },
+      code: {
+        received: context.codeReceived,
+        accepted: codeContext.length,
+        deduplicated: context.code.length - codeContext.length,
+        rejected_by_budget: codeStats.rejected_by_budget,
+        used_chars: codeStats.used_chars,
+      },
+      budget: {
+        total: MAX_CONTEXT_CHARS,
+        used_chars: documentationStats.used_chars + codeStats.used_chars,
+      },
+    },
+  }
 }
 
-export const ContextAssembly = ({ worktree }: { worktree: string }) => {
+export const ContextAssembly = ({ worktree, onContextDecision }: ContextAssemblyOptions) => {
   const pending = new Map<string, PendingContext>()
 
   return {
@@ -112,8 +182,9 @@ export const ContextAssembly = ({ worktree }: { worktree: string }) => {
       const sessionID = input.sessionID
       if (!sessionID || !output?.metadata) return
 
-      const current = pending.get(sessionID) ?? { documentation: [], code: [] }
+      const current = pending.get(sessionID) ?? { documentation: [], code: [], documentationReceived: 0, codeReceived: 0 }
       if (CONTEXT7_TOOLS.has(input.tool)) {
+        current.documentationReceived += 1
         const reference = output.metadata.reference
         const sources = await loadAllowedSources(worktree)
         if (reference && typeof reference === "object") {
@@ -126,7 +197,10 @@ export const ContextAssembly = ({ worktree }: { worktree: string }) => {
       }
       if (input.tool === CODE_INDEX_TOOL) {
         const code = output.metadata.project_code
-        if (Array.isArray(code)) current.code.push(...code.filter(validCode))
+        if (Array.isArray(code)) {
+          current.codeReceived += code.length
+          current.code.push(...code.filter(validCode))
+        }
       }
       if (current.documentation.length || current.code.length) pending.set(sessionID, current)
     },
@@ -136,11 +210,12 @@ export const ContextAssembly = ({ worktree }: { worktree: string }) => {
       if (!sessionID) return
       const context = pending.get(sessionID)
       if (!context) return
-      const block = formatContext(context)
+      const { block, stats } = formatContext(context, sessionID)
       if (!block) return
       if (output.system.length) output.system[output.system.length - 1] += "\n\n" + block
       else output.system.push(block)
       pending.delete(sessionID)
+      onContextDecision?.(stats)
     },
   }
 }
