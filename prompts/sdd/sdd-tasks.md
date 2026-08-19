@@ -38,7 +38,9 @@ Break the spec and design into granular, implementable tasks. Each task must inc
 | Tests | Required test scenarios |
 
 Rules:
-- Each task represents one logical commit.
+- Each task represents one logical commit and one verifiable objective.
+- Keep each task atomic: do not combine independent objectives or implementation, testing, and documentation into one task; split those into dependent tasks when needed.
+- A task should be completable by one expert agent in one focused execution with task-scoped context.
 - If a task needs more than 2 files or more than 200 lines, split it.
 - Acceptance criteria must be testable.
 - Dependencies must form a DAG; no cycles.
