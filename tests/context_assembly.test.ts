@@ -4,7 +4,7 @@ import { resolve } from "node:path"
 import { ContextAssembly, MAX_CONTEXT_CHARS } from "../plugins/context-assembly"
 
 const ROOT = resolve(import.meta.dir, "..")
-const CODE = { type: "project_code", path: "src/foo.py", start_line: 42, end_line: 58, text: "def foo():\n    return 42", lang: "python" }
+const CODE = { type: "project_code", path: "src/foo.py", start_line: 42, end_line: 58, text: "def foo():\n    return 42", lang: "python", score: 0.9 }
 const DOC = { source_id: "python", url: "https://docs.python.org/3.14/", title: "Python 3.14", text: "asyncio docs" }
 
 async function assemble(sessionID: string, metadata: Record<string, unknown>, system = ["Existing system prompt"]) {
@@ -105,6 +105,31 @@ test("context budget keeps complete code results", async () => {
   expect(text).toContain("src/second.py:42-58")
   expect(text).not.toContain("src/third.py:42-58")
   expect(text).not.toContain("-third")
+})
+
+test("higher-scored code results get the budget first", async () => {
+  const large = "z".repeat(10_000)
+  const projectCode = [
+    { ...CODE, path: "src/low.py", text: `${large}-low`, score: 0.1 },
+    { ...CODE, path: "src/high.py", text: `${large}-high`, score: 0.9 },
+    { ...CODE, path: "src/mid.py", text: `${large}-mid`, score: 0.5 },
+  ]
+  const text = await assemble("score-priority", { project_code: projectCode })
+  expect(text).toContain("src/high.py:42-58")
+  expect(text).toContain("src/mid.py:42-58")
+  expect(text).not.toContain("src/low.py:42-58")
+})
+
+test("equal-scored code results preserve their original order", async () => {
+  const hooks = ContextAssembly({ worktree: ROOT })
+  const projectCode = [
+    { ...CODE, path: "src/first.py", score: 0.7 },
+    { ...CODE, path: "src/second.py", score: 0.7 },
+  ]
+  await hooks["tool.execute.after"]({ tool: "code-index_code_search", sessionID: "stable-order" }, { output: "", metadata: { project_code: projectCode } })
+  const output = { system: ["task"] }
+  await hooks["experimental.chat.system.transform"]({ sessionID: "stable-order" }, output)
+  expect(output.system[0].indexOf("src/first.py")).toBeLessThan(output.system[0].indexOf("src/second.py"))
 })
 
 test("duplicate code results are included only once", async () => {
