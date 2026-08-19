@@ -10,6 +10,7 @@ type CodeContext = {
   text: string
   lang: string
   score: number
+  query?: string
 }
 type Documentation = { source_id: string; url: string; title: string; text: string }
 
@@ -72,7 +73,8 @@ function validCode(value: unknown): value is CodeContext {
   return code.type === "project_code" && typeof code.path === "string" &&
     typeof code.start_line === "number" && typeof code.end_line === "number" &&
     typeof code.text === "string" && typeof code.lang === "string" &&
-    typeof code.score === "number"
+    typeof code.score === "number" &&
+    (code.query === undefined || typeof code.query === "string")
 }
 
 function dedupeDocumentation(items: Documentation[]): Documentation[] {
@@ -88,7 +90,7 @@ function dedupeDocumentation(items: Documentation[]): Documentation[] {
 function dedupeCode(items: CodeContext[]): CodeContext[] {
   const seen = new Set<string>()
   return items.filter((item) => {
-    const key = `${item.path}|${item.start_line}|${item.end_line}|${item.text}`
+    const key = `${item.path}|${item.start_line}|${item.end_line}|${item.text}|${item.query ?? ""}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -139,7 +141,7 @@ function formatContext(context: PendingContext, sessionID: string): { block: str
   }
   if (codeContext.length) {
     const code = codeContext.map((c) =>
-      `### ${c.path}:${c.start_line}-${c.end_line}\nsource: code-index\n\n${c.text}`,
+      `### ${c.path}:${c.start_line}-${c.end_line}\nsource: code-index\nsearch query: ${c.query ?? "unknown"}\n\n${c.text}`,
     )
     const fitted = fitContextWithStats(code, sourceBudget)
     codeStats.used_chars = fitted.usedChars
