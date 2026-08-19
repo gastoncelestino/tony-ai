@@ -42,6 +42,9 @@ Tony-AI no es un sistema de entrenamiento de modelos. Su objetivo es conservar, 
                          │
                          ▼
                     Tony Kernel
+                         │
+                         ▼
+                   Phase / Agent
 ```
 
 - OpenCode proporciona el runtime del agente.
@@ -88,6 +91,7 @@ tony-ai/
 ---
 
 ## Responsabilidades de los componentes
+## OpenCode
 OpenCode aloja la ejecución del agente, los plugins y las herramientas utilizadas por el workflow. La configuración de agentes y MCP servers se encuentra en `opencode.json`.
 OpenCode puede ejecutar acciones, pero la autorización de una transición de fase controlada pertenece al Tony Kernel.
 
@@ -156,9 +160,70 @@ Proporciona búsqueda semántica sobre el código mediante embeddings locales y 
 
 Qdrant proporciona almacenamiento y recuperación vectorial para Code Index y Judgment Memory. Las colecciones de Judgment Memory están separadas de las utilizadas por Code Index.
 
+```text
+Context7
+    │
+    └── documentación autorizada
+
+Code Index
+    │
+    └── código semántico
+
+ProjectCodeContext
+    │
+    └── normalización
+
+ContextAssembly
+    │
+    ├── validation
+    ├── dedupe
+    ├── relevance
+    ├── budget
+    ├── provenance
+    └── session lifecycle
+```
+
 ## Context7
 **Context7** aporta documentación externa únicamente desde las fuentes autorizadas en `config/knowledge_sources.json`. No se permite resolución abierta de bibliotecas ni acceso a fuentes no configuradas.
 
+```text
+                ┌──────────────┐
+                │   Context7   │
+                └──────┬───────┘
+                       │
+                   Allowlist
+                       │
+                   Validation
+                       │
+                       ▼
+                 Documentation
+                       │
+                       │
+Code Index ───► score + query
+                       │
+                   Validation
+                       │
+                       ▼
+                  Code Context
+                       │
+                       ▼
+                  Deduplication
+                       │
+                       ▼
+                    Relevance
+                       │
+                       ▼
+                 Context Budget
+                       │
+                       ▼
+                   Provenance
+                       │
+                       ▼
+               Context Assembly
+                       │
+                       ▼
+                     Tony
+```
 ## Context Assembly
 El contexto autorizado se compone por sesión antes de llegar al agente.
 
