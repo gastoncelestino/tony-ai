@@ -154,10 +154,12 @@ Proporciona búsqueda semántica sobre el código mediante embeddings locales y 
 
 Qdrant proporciona almacenamiento y recuperación vectorial para Code Index y Judgment Memory. Las colecciones de Judgment Memory están separadas de las utilizadas por Code Index.
 
-## Context7 y Context Assembly
+## Context7
 **Context7** aporta documentación externa únicamente desde las fuentes autorizadas en `config/knowledge_sources.json`. No se permite resolución abierta de bibliotecas ni acceso a fuentes no configuradas.
 
-**Context Assembly** compone el contexto autorizado de documentación y código para la sesión actual.
+## Context Assembly
+El contexto autorizado se compone por sesión antes de llegar al agente.
+
 - Context7 aporta documentación autorizada.
 - Code Index es la única fuente de búsqueda semántica del código.
 - La composición se realiza por `sessionID`.
@@ -166,6 +168,32 @@ Qdrant proporciona almacenamiento y recuperación vectorial para Code Index y Ju
 - Se preserva el system prompt existente.
 
 La arquitectura separa así **adquisición**, **autorización** y **ensamblado de contexto** antes de entregarlo al agente.
+
+```text
+Context7 ──────┐
+               ├──► Validation ─► Deduplication ─► Relevance
+Code Index ────┘                                     │
+                                                     ▼
+                                               Context Budget
+                                                     │
+                                                     ▼
+                                                 Provenance
+                                                     │
+                                                     ▼
+                                            Context Assembly
+                                                     │
+                                                     ▼
+                                                   Tony
+```
+
+- **Validation** acepta únicamente documentación autorizada y resultados válidos de Code Index.
+- **Relevance** conserva el `score` semántico real de Code Index y prioriza los resultados con mayor relevancia antes de aplicar el presupuesto.
+- Cada resultado de código conserva la **query de búsqueda que lo originó**, de modo que el contexto mantiene la intención de recuperación junto con la evidencia y su score.
+- **Deduplication** evita incorporar dos veces la misma evidencia.
+- **Context Budget** limita el contexto adicional a 24.000 caracteres y reparte el presupuesto entre documentación y código cuando ambas fuentes están presentes.
+- **Provenance** conserva el origen de cada fragmento incorporado.
+- El contexto sigue aislado por `sessionID`, preserva el system prompt existente y se consume una sola vez.
+- **Observability** permite registrar estadísticas de decisión por sesión —elementos recibidos, aceptados, deduplicados, rechazados por presupuesto y caracteres utilizados— sin almacenar el contenido del contexto.
 
 ## Judgment Memory
 Conserva juicios y resultados de Judgment Day para permitir recuperación semántica en tareas posteriores.
@@ -315,34 +343,6 @@ Nueva tarea
 ```
 
 Los agentes pueden consultar y actualizar estos componentes durante diferentes fases según las necesidades de contexto, búsqueda semántica y persistencia.
-
-### Context Assembly
-
-El contexto autorizado se compone por sesión antes de llegar al agente.
-
-```text
-Context7 ──────┐
-               ├──► Validation ─► Deduplication ─► Relevance
-Code Index ────┘                                      │
-                                                     ▼
-                                               Context Budget
-                                                     │
-                                                     ▼
-                                                 Provenance
-                                                     │
-                                                     ▼
-                                            Context Assembly
-                                                     │
-                                                     ▼
-                                                   Tony
-```
-- Validation acepta únicamente documentación autorizada y resultados válidos de Code Index.
-- Relevance conserva el score semántico real de Code Index y prioriza los resultados con mayor relevancia antes de aplicar el presupuesto.
-- Deduplication evita incorporar dos veces la misma evidencia.
-- Context Budget limita el contexto adicional a 24.000 caracteres y reparte el presupuesto entre documentación y código cuando ambas fuentes están presentes.
-- Provenance conserva el origen de cada fragmento incorporado.
-- El contexto sigue aislado por sessionID, preserva el system prompt existente y se consume una sola vez.
-- Observability permite registrar estadísticas de decisión por sesión —elementos recibidos, aceptados, deduplicados, rechazados por presupuesto y caracteres utilizados— sin almacenar el contenido del contexto.
 
 ## Arquitectura de Review y Judgment Day
 ## Review 4R
