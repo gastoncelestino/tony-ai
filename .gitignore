@@ -36,8 +36,11 @@ bun-debug.log*
 .tonymem/
 local-memory/memory.db
 local-memory/memory.db-*
+judgment-memory/memory.db
+judgment-memory/memory.db-*
 judgment-memory/judgment-memory.db
 judgment-memory/judgment-memory.db-*
+judgment-memory/__pycache__/
 
 # Índice local de Code Indexer.
 code-index/.codeindex/
