@@ -46,7 +46,6 @@ code-index/.codeindex/
 .test-e2e-tmp/
 
 ### Environment / secrets
-.env
 .env.local
 .env.*.local
 docker/.env
