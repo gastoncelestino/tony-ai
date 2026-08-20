@@ -1,5 +1,9 @@
 # Makefile para Tony-AI
-# Wrappers de conveniencia sobre tests locales y smoke tests externos.
+# Wrappers de conveniencia sobre docker/ + los tests
+#
+# Todos los tests viven en tests/. Los de Python se corren con pytest
+# (unifica los que ya eran unittest.TestCase con los que eran asserts
+# sueltos, sin tocarles la lógica). Los de TypeScript se corren con bun.
 
 ENV_FILE := .env
 TONY_RUNTIME_DIR ?= $(shell set -a; . ./$(ENV_FILE); printf '%s' "$$TONY_RUNTIME_DIR")
@@ -31,10 +35,12 @@ check-test-discovery:
 # La suite Python trata warnings como errores para mantener el contrato de 0 warnings.
 test-python: check-test-deps check-test-discovery
 	@PYTHONWARNINGS=error python3 -m pytest --cache-dir="$(PYTEST_CACHE_DIR)" tests -v || PYTHONWARNINGS=error python3 -m pytest tests -v || python3 tests/python_verify.py tests
+	@rm -rf .pytest_cache
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
 	@PYTHONWARNINGS=error python3 -m pytest --cache-dir="$(PYTEST_CACHE_DIR)" tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v || PYTHONWARNINGS=error python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
+	@rm -rf .pytest_cache
 	@bun test tests/tony_kernel_*.test.ts
 
 # Verifica que pytest no haya creado estado dentro del checkout.
@@ -54,6 +60,7 @@ coverage: check-coverage-deps coverage-python coverage-ts
 # Coverage Python también usa PYTHON_CACHE_DIR como ubicación de estado.
 coverage-python: check-coverage-deps
 	@mkdir -p "$(PYTHON_CACHE_DIR)/coverage"; export COVERAGE_FILE="$(PYTHON_CACHE_DIR)/coverage/.coverage"; PYTHONWARNINGS=error python3 -m pytest --cache-dir="$(PYTEST_CACHE_DIR)" tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || PYTHONWARNINGS=error python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
+	@rm -rf .pytest_cache
 
 # Coverage TypeScript muestra el reporte en pantalla y no conserva artefactos de Bun.
 coverage-ts: check-test-deps check-test-discovery
@@ -61,11 +68,15 @@ coverage-ts: check-test-deps check-test-discovery
 
 # Smoke test de conexión/configuración de Qdrant.
 verify-qdrant:
-	@bun run tests/judgment_qdrant.verify.ts
+	@echo "▶ Running Qdrant smoke test (requires Ollama + Qdrant running)..."
+	@cd judgment-memory && bun run scripts/verify-qdrant.ts
+	@echo "✓ Qdrant smoke test passed"
 
 # Smoke test end-to-end del flujo SDD.
 verify-sdd-flow:
+	@echo "▶ Running full SDD flow (explore→archive) adversarial verification..."
 	@python3 tests/test_sdd_flow_e2e.py
+	@echo "✓ SDD flow verification passed"
 
 # Bootstrap inicial del entorno local.
 bootstrap:
@@ -88,4 +99,6 @@ clean:
 
 # Valida la configuración de OpenCode/proyecto.
 validate-config:
-	@bun run tests/validate_config.verify.ts
+	@echo "▶ Validating configuration..."
+	@bun run tools/validate-config.ts
+	@echo "✓ Configuration valid"
