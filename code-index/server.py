@@ -68,10 +68,9 @@ DEFAULT_PROJECT = _extract_project_name(PROJECT_ROOT)
 def _runtime_manifest_path(_root: str) -> str:
     """Keep the incremental code-index SQLite manifest out of the checkout."""
     runtime_root = os.environ.get("TONY_RUNTIME_DIR")
-    if runtime_root:
-        runtime_root = os.path.abspath(os.path.expanduser(runtime_root))
-    else:
-        runtime_root = os.path.join(os.path.expanduser("~"), ".tony-ai", DEFAULT_PROJECT)
+    if not runtime_root:
+        raise RuntimeError("TONY_RUNTIME_DIR must be configured")
+    runtime_root = os.path.abspath(os.path.expanduser(runtime_root))
     directory = os.path.join(runtime_root, "code-index", ".codeindex")
     os.makedirs(directory, exist_ok=True)
     return os.path.join(directory, "manifest.db")
