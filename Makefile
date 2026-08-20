@@ -23,19 +23,20 @@ test-all: test test-kernel health
 check-test-deps:
 	@mkdir -p "$(PYTHON_CACHE_DIR)" "$(PYTEST_CACHE_DIR)"
 	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible (PYTHON_CACHE_DIR=$(PYTHON_CACHE_DIR))"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
+	@if python3 -c 'import pytest_env' 2>/dev/null; then echo "✓ pytest-env disponible (env_files habilitado)"; else echo "⚠ pytest-env no disponible; los tests Python usarán el runner standalone para evitar PytestConfigWarning"; fi
 	@command -v bun >/dev/null 2>&1 || (echo "ERROR: falta Bun."; exit 1)
 
 # Mantiene las convenciones de descubrimiento: TypeScript *.test.ts, verificaciones *.verify.ts y Python test_*.py/*_test.py.
 check-test-discovery:
 	@set -eu; invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' ! -name '*.verify.ts' -print); invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' ! -name 'python_verify.py' -print); if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; echo "✓ Test naming/discovery conventions valid"
 
-# Python usa pytest cuando está disponible y conserva el runner standalone como fallback.
+# Python usa pytest cuando pytest-env está disponible para soportar env_files; si falta, usa el runner standalone sin generar warnings.
 test-python: check-test-deps check-test-discovery
-	@python3 -m pytest tests -v 2>/dev/null || python3 tests/python_verify.py tests
+	@if python3 -c 'import pytest, pytest_env' 2>/dev/null; then python3 -m pytest tests -v; else python3 tests/python_verify.py tests; fi
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v 2>/dev/null || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
+	@if python3 -c 'import pytest, pytest_env' 2>/dev/null; then python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v; else python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py; fi
 	@bun test tests/tony_kernel_*.test.ts
 
 # TypeScript se ejecuta con Bun.
