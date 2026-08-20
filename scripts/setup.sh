@@ -14,6 +14,9 @@ IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-carstenuhlig/omnicoder-2-9b:q
 OLLAMA_URL="${TONY_OLLAMA_URL:-http://localhost:11434}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
 TONY_INDEX_CHUNKER=tree-sitter
+TONY_RUNTIME_DIR="${TONY_RUNTIME_DIR:-${HOME}/.tony-ai/tony-ai}"
+export TONY_RUNTIME_DIR
+export PYTHONPYCACHEPREFIX="${TONY_RUNTIME_DIR}/pycache"
 PASS=0; FAIL=0
 ok() { printf "  \033[32mok\033[0m   %s\n" "$1"; PASS=$((PASS+1)); }
 bad() { printf "  \033[31mFAIL\033[0m %s\n" "$1"; FAIL=$((FAIL+1)); }
@@ -51,7 +54,7 @@ if command -v docker >/dev/null 2>&1; then
 else bad "docker no esta instalado"; fi
 
 hdr "Ollama CLI"
-if command -v ollama >/dev/null 2>&1; then ok "ollama $(ollama --version 2>/dev/null | head -1 || echo instalado)"; else bad "ollama CLI no esta en PATH (https://ollama.com/download)"; fi
+if command -v ollama >/dev/null 2>&1; then ok "ollama $(ollama --version 2>/dev/null | head -1 || echo instalado)"; else bad "ollama CLI no esta instalado"; fi
 
 hdr "GGA"
 if command -v gga >/dev/null 2>&1; then
