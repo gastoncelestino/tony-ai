@@ -148,11 +148,10 @@ for name, sp in {"tonymem":"local-memory/server.py", "code-index":"code-index/se
     if not entry or entry.get("type") != "local": continue
     entry["command"] = ["python3", "{env:PWD}/" + sp]
     env = entry.setdefault("environment", {})
-    env.pop("TONY_REPO_ROOT", None)
     if name == "code-index": env["TONY_INDEX_CHUNKER"] = "tree-sitter"
 with open(path, "w", encoding="utf-8") as f: json.dump(data, f, indent=2, ensure_ascii=False); f.write("\n")
 PY
-  if python3 -c "import json; json.load(open('${OPENCODE_JSON}'))" && ! grep -q "TONY_REPO_ROOT" "${OPENCODE_JSON}"; then ok "opencode.json regenerado sin TONY_REPO_ROOT"; else bad "opencode.json invalido o contiene TONY_REPO_ROOT"; fi
+  if python3 -c "import json; json.load(open('${OPENCODE_JSON}'))"; then ok "opencode.json regenerado y valido"; else bad "opencode.json invalido"; fi
 else bad "no se encontro ${OPENCODE_JSON}"; fi
 
 hdr ".env"
