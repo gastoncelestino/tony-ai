@@ -30,18 +30,17 @@ check-test-discovery:
 
 # La suite Python trata warnings como errores para mantener el contrato de 0 warnings.
 test-python: check-test-deps check-test-discovery
-	@PYTHONWARNINGS=error python3 -m pytest tests -v || python3 tests/python_verify.py tests
+	@PYTHONWARNINGS=error python3 -m pytest --cache-dir="$(PYTEST_CACHE_DIR)" tests -v || python3 tests/python_verify.py tests
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@PYTHONWARNINGS=error python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
+	@PYTHONWARNINGS=error python3 -m pytest --cache-dir="$(PYTEST_CACHE_DIR)" tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
 	@bun test tests/tony_kernel_*.test.ts
 
 # Verifica que pytest no haya creado estado dentro del checkout.
-# Si PYTEST_CACHE_DIR está definida, pytest la respeta automáticamente.
 check-test-cache:
-	@if [ -d .pytest_cache ]; then echo "ERROR: .pytest_cache fue creado dentro del checkout; usa make test o define PYTEST_CACHE_DIR"; exit 1; fi
-	@if [ -n "$(PYTEST_CACHE_DIR)" ]; then echo "✓ pytest cache fuera del checkout (PYTEST_CACHE_DIR=$(PYTEST_CACHE_DIR))"; else echo "⚠ PYTEST_CACHE_DIR no definida; pytest usará .pytest_cache local"; fi
+	@if [ -d .pytest_cache ]; then echo "ERROR: .pytest_cache fue creado dentro del checkout; usa make test"; exit 1; fi
+	@echo "✓ pytest cache fuera del checkout (PYTEST_CACHE_DIR=$(PYTEST_CACHE_DIR))"
 
 test-ts: check-test-deps check-test-discovery
 	@bun test tests
@@ -54,7 +53,7 @@ coverage: check-coverage-deps coverage-python coverage-ts
 
 # Coverage Python también usa PYTHON_CACHE_DIR como ubicación de estado.
 coverage-python: check-coverage-deps
-	@mkdir -p "$(PYTHON_CACHE_DIR)/coverage"; export COVERAGE_FILE="$(PYTHON_CACHE_DIR)/coverage/.coverage"; PYTHONWARNINGS=error python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
+	@mkdir -p "$(PYTHON_CACHE_DIR)/coverage"; export COVERAGE_FILE="$(PYTHON_CACHE_DIR)/coverage/.coverage"; PYTHONWARNINGS=error python3 -m pytest --cache-dir="$(PYTEST_CACHE_DIR)" tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
 
 # Coverage TypeScript muestra el reporte en pantalla y no conserva artefactos de Bun.
 coverage-ts: check-test-deps check-test-discovery
