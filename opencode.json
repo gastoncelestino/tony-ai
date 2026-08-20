@@ -23,13 +23,13 @@
   },
   "default_agent": "tony-orchestrator",
   "plugin": ["plugins/tony-kernel.ts", "plugins/context7-allowlist.ts", "plugins/project-code-context.ts", "plugins/context-assembly.ts"],
-  "env": {"PYTHONPYCACHEPREFIX": "{env:HOME}/.tony-ai/pycache"},
+  "env": {"PYTHONPYCACHEPREFIX": "{env:TONY_RUNTIME_DIR}/pycache"},
   "mcp": {
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
-    "tonymem": {"command": ["python3", "{env:PWD}/local-memory/server.py"], "type": "local", "environment": {"LOCAL_MEMORY_DB": "{env:PWD}/.tonymem/memory.db", "TONY_RUNTIME_DIR": "{env:HOME}/.tony-ai", "PYTHONPYCACHEPREFIX": "{env:HOME}/.tony-ai/pycache"}},
-    "code-index": {"command": ["python3", "{env:PWD}/code-index/server.py"], "type": "local", "environment": {"TONY_INDEX_ROOT": "{env:PWD}", "TONY_RUNTIME_DIR": "{env:HOME}/.tony-ai", "PYTHONPYCACHEPREFIX": "{env:HOME}/.tony-ai/pycache", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "bge-m3", "TONY_INDEX_CHUNKER": "tree-sitter"}},
-    "judgment-memory": {"command": ["python3", "{env:PWD}/judgment-memory/server.py"], "type": "local", "environment": {"JUDGMENT_MEMORY_DB": "{env:PWD}/.tonymem/judgment-memory.db", "TONY_RUNTIME_DIR": "{env:HOME}/.tony-ai", "PYTHONPYCACHEPREFIX": "{env:HOME}/.tony-ai/pycache", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5"}},
-    "tony-kernel": {"command": ["python3", "{env:PWD}/kernel/mcp_server.py"], "type": "local", "environment": {"TONY_RUNTIME_DIR": "{env:HOME}/.tony-ai", "PYTHONPYCACHEPREFIX": "{env:HOME}/.tony-ai/pycache"}}
+    "tonymem": {"command": ["python3", "{env:PWD}/local-memory/server.py"], "type": "local", "environment": {"LOCAL_MEMORY_DB": "{env:PWD}/.tonymem/memory.db", "TONY_RUNTIME_DIR": "{env:TONY_RUNTIME_DIR}", "PYTHONPYCACHEPREFIX": "{env:TONY_RUNTIME_DIR}/pycache"}},
+    "code-index": {"command": ["python3", "{env:PWD}/code-index/server.py"], "type": "local", "environment": {"TONY_INDEX_ROOT": "{env:PWD}", "TONY_RUNTIME_DIR": "{env:TONY_RUNTIME_DIR}", "PYTHONPYCACHEPREFIX": "{env:TONY_RUNTIME_DIR}/pycache", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "bge-m3", "TONY_INDEX_CHUNKER": "tree-sitter"}},
+    "judgment-memory": {"command": ["python3", "{env:PWD}/judgment-memory/server.py"], "type": "local", "environment": {"JUDGMENT_MEMORY_DB": "{env:PWD}/.tonymem/judgment-memory.db", "TONY_RUNTIME_DIR": "{env:TONY_RUNTIME_DIR}", "PYTHONPYCACHEPREFIX": "{env:TONY_RUNTIME_DIR}/pycache", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5"}},
+    "tony-kernel": {"command": ["python3", "{env:PWD}/kernel/mcp_server.py"], "type": "local", "environment": {"TONY_RUNTIME_DIR": "{env:TONY_RUNTIME_DIR}", "PYTHONPYCACHEPREFIX": "{env:TONY_RUNTIME_DIR}/pycache"}}
   },
   "permission": {"bash": {"*": "allow", "git commit *": "ask", "git push": "ask", "git push --force *": "ask", "git rebase *": "ask", "git reset --hard *": "ask"}, "read": {"*": "allow", "**/*.key": "deny", "**/*.pem": "deny", "**/.aws/credentials": "deny", "**/.config/gh/hosts.yml": "deny", "**/.credentials/**": "deny", "**/.env/**": "deny", "**/.env.*": "deny", "**/.ssh/**": "deny", "**/credentials.json": "deny", "**/secrets/**": "deny"}, "context7_*": "allow", "code-index_*": "allow", "judgment-memory_*": "allow", "tony-kernel_*": "allow"},
   "share": "disabled",
