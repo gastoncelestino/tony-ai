@@ -135,54 +135,17 @@ if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --break-system-
   if python3 -c 'import tree_sitter, tree_sitter_language_pack' >/dev/null 2>&1; then ok "pytest + tree-sitter + language pack instalados"; else bad "requirements-dev.txt termino pero tree-sitter no puede importarse"; fi
 else bad "pip install -r requirements-dev.txt fallo"; fi
 
-hdr "opencode.json (workspace-relative MCP paths)"
-OPENCODE_JSON="${REPO_ROOT}/opencode.json"
-if [[ -f "${OPENCODE_JSON}" ]]; then
-  [[ -f "${OPENCODE_JSON}.bak" ]] || cp "${OPENCODE_JSON}" "${OPENCODE_JSON}.bak"
-  python3 - "${OPENCODE_JSON}" <<'PY'
-import json, sys
-path = sys.argv[1]
-with open(path, encoding="utf-8") as f: data = json.load(f)
-for name, sp in {"tonymem":"local-memory/server.py", "code-index":"code-index/server.py", "judgment-memory":"judgment-memory/server.py"}.items():
-    entry = data.get("mcp", {}).get(name)
-    if not entry or entry.get("type") != "local": continue
-    entry["command"] = ["python3", "{env:PWD}/" + sp]
-    env = entry.setdefault("environment", {})
-    if name == "code-index": env["TONY_INDEX_CHUNKER"] = "tree-sitter"
-with open(path, "w", encoding="utf-8") as f: json.dump(data, f, indent=2, ensure_ascii=False); f.write("\n")
-PY
-  if python3 -c "import json; json.load(open('${OPENCODE_JSON}'))"; then ok "opencode.json regenerado y valido"; else bad "opencode.json invalido"; fi
-else bad "no se encontro ${OPENCODE_JSON}"; fi
-
 hdr ".env"
-if [[ ! -f "${REPO_ROOT}/.env.example" ]]; then
-  bad ".env.example no existe en ${REPO_ROOT}"
+ENV_FILE="${REPO_ROOT}/.env"
+if [[ ! -f "${ENV_FILE}" ]]; then
+  bad ".env no existe en ${ENV_FILE}"
 else
-  ok ".env.example encontrado (no modificado)"
-  
-  if [[ -f "${REPO_ROOT}/.env" ]]; then
-    ok ".env ya existe (no sobrescrito)"
-  else
-    # Copiar .env.example a .env, reemplazando placeholders con valores reales
-    if sed "s|/path/to/tony-ai|${REPO_ROOT}|g" "${REPO_ROOT}/.env.example" > "${REPO_ROOT}/.env"; then
-      ok ".env creado desde .env.example (con rutas absolutas)"
-    else
-      bad "no se pudo crear .env desde .env.example"
-    fi
-  fi
-fi
-
-hdr ".env (validación)"
-if [[ ! -f "${REPO_ROOT}/.env" ]]; then
-  bad ".env no existe en ${REPO_ROOT}"
-else
-  # Cargar .env en un subshell para validar sin contaminar scope global
-  set +u  # Permitir undefined vars temporalmente
+  ok ".env encontrado (no modificado)"
+  set +u
   ENV_VALID=0
   REQUIRED_VARS=("TONY_OLLAMA_URL" "TONY_QDRANT_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
-  
-  # Source .env en subshell
-  if ENV_CHECK=$(bash -c "set -a; source '${REPO_ROOT}/.env'; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
+
+  if ENV_CHECK=$(bash -c "set -a; source '${ENV_FILE}'; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
     mapfile -t ENV_VALUES < <(echo "$ENV_CHECK")
     MISSING=0
     for i in "${!REQUIRED_VARS[@]}"; do
@@ -191,12 +154,11 @@ else
         MISSING=$((MISSING+1))
       fi
     done
-    
+
     if [[ "${MISSING}" -eq 0 ]]; then
-      # Validar valores
-      TONY_OLLAMA_URL="$(grep '^TONY_OLLAMA_URL=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
-      TONY_QDRANT_URL="$(grep '^TONY_QDRANT_URL=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
-      
+      TONY_OLLAMA_URL="$(grep '^TONY_OLLAMA_URL=' "${ENV_FILE}" | cut -d'=' -f2)"
+      TONY_QDRANT_URL="$(grep '^TONY_QDRANT_URL=' "${ENV_FILE}" | cut -d'=' -f2)"
+
       if [[ ! "${TONY_OLLAMA_URL}" =~ ^https?:// ]]; then
         bad "TONY_OLLAMA_URL debe ser http(s)://"
       elif curl -sf -m 5 "${TONY_OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
@@ -204,7 +166,7 @@ else
       else
         bad "TONY_OLLAMA_URL=${TONY_OLLAMA_URL} no es accesible"
       fi
-      
+
       if [[ ! "${TONY_QDRANT_URL}" =~ ^https?:// ]]; then
         bad "TONY_QDRANT_URL debe ser http(s)://"
       elif curl -sf -m 5 "${TONY_QDRANT_URL}/readyz" >/dev/null 2>&1; then
@@ -218,7 +180,7 @@ else
   else
     bad "no se pudo parsear .env"
   fi
-  set -u  # Re-enable undefined var check
+  set -u
 fi
 
 hdr "Resumen"
