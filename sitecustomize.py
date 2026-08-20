@@ -6,6 +6,6 @@ import os
 import sys
 from pathlib import Path
 
-runtime_dir = Path(os.environ.get("TONY_RUNTIME_DIR", "~/.tony-ai/tony-ai")).expanduser()
+runtime_dir = Path(os.environ.get("TONY_RUNTIME_DIR", "~/.tony-ai")).expanduser()
 runtime_dir.mkdir(parents=True, exist_ok=True)
 sys.pycache_prefix = str(runtime_dir / "pycache")
