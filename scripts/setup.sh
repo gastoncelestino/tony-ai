@@ -137,7 +137,7 @@ if curl -sf -m 5 "${QDRANT_URL}/readyz" >/dev/null 2>&1; then
 else bad "Qdrant no responde en ${QDRANT_URL}"; fi
 
 hdr "Python dev/test dependencies"
-printf "  . pip install -r requirements-dev.txt ...\n"
+printf "  . pip install -r requirements-dev.txt ...\n\n"
 if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --break-system-packages; then
   if python3 -c 'import tree_sitter, tree_sitter_language_pack' >/dev/null 2>&1; then ok "pytest + tree-sitter + language pack instalados"; else bad "requirements-dev.txt termino pero tree-sitter no puede importarse"; fi
 else bad "pip install -r requirements-dev.txt fallo"; fi
