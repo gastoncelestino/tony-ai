@@ -135,7 +135,7 @@ if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --break-system-
   if python3 -c 'import tree_sitter, tree_sitter_language_pack' >/dev/null 2>&1; then ok "pytest + tree-sitter + language pack instalados"; else bad "requirements-dev.txt termino pero tree-sitter no puede importarse"; fi
 else bad "pip install -r requirements-dev.txt fallo"; fi
 
-hdr "opencode.json (TONY_REPO_ROOT)"
+hdr "opencode.json (workspace-relative MCP paths)"
 OPENCODE_JSON="${REPO_ROOT}/opencode.json"
 if [[ -f "${OPENCODE_JSON}" ]]; then
   [[ -f "${OPENCODE_JSON}.bak" ]] || cp "${OPENCODE_JSON}" "${OPENCODE_JSON}.bak"
@@ -146,13 +146,13 @@ with open(path, encoding="utf-8") as f: data = json.load(f)
 for name, sp in {"tonymem":"local-memory/server.py", "code-index":"code-index/server.py", "judgment-memory":"judgment-memory/server.py"}.items():
     entry = data.get("mcp", {}).get(name)
     if not entry or entry.get("type") != "local": continue
-    entry["command"] = ["python3", "{env:TONY_REPO_ROOT}/" + sp]
+    entry["command"] = ["python3", "{env:PWD}/" + sp]
     env = entry.setdefault("environment", {})
-    env.setdefault("TONY_REPO_ROOT", "{env:TONY_REPO_ROOT}")
+    env.pop("TONY_REPO_ROOT", None)
     if name == "code-index": env["TONY_INDEX_CHUNKER"] = "tree-sitter"
 with open(path, "w", encoding="utf-8") as f: json.dump(data, f, indent=2, ensure_ascii=False); f.write("\n")
 PY
-  if python3 -c "import json; json.load(open('${OPENCODE_JSON}'))" && ! grep -qE '/home/[a-zA-Z0-9_]+/.+/server\.py' "${OPENCODE_JSON}"; then ok "opencode.json regenerado y portable"; else bad "opencode.json invalido o con rutas absolutas"; fi
+  if python3 -c "import json; json.load(open('${OPENCODE_JSON}'))" && ! grep -q "TONY_REPO_ROOT" "${OPENCODE_JSON}"; then ok "opencode.json regenerado sin TONY_REPO_ROOT"; else bad "opencode.json invalido o contiene TONY_REPO_ROOT"; fi
 else bad "no se encontro ${OPENCODE_JSON}"; fi
 
 hdr ".env"
@@ -180,7 +180,7 @@ else
   # Cargar .env en un subshell para validar sin contaminar scope global
   set +u  # Permitir undefined vars temporalmente
   ENV_VALID=0
-  REQUIRED_VARS=("TONY_REPO_ROOT" "TONY_OLLAMA_URL" "TONY_QDRANT_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
+  REQUIRED_VARS=("TONY_OLLAMA_URL" "TONY_QDRANT_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
   
   # Source .env en subshell
   if ENV_CHECK=$(bash -c "set -a; source '${REPO_ROOT}/.env'; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
@@ -195,15 +195,8 @@ else
     
     if [[ "${MISSING}" -eq 0 ]]; then
       # Validar valores
-      TONY_REPO_ROOT="$(grep '^TONY_REPO_ROOT=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
       TONY_OLLAMA_URL="$(grep '^TONY_OLLAMA_URL=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
       TONY_QDRANT_URL="$(grep '^TONY_QDRANT_URL=' "${REPO_ROOT}/.env" | cut -d'=' -f2)"
-      
-      if [[ ! -d "${TONY_REPO_ROOT}" ]]; then
-        bad "TONY_REPO_ROOT=${TONY_REPO_ROOT} no es un directorio válido"
-      else
-        ok "TONY_REPO_ROOT=${TONY_REPO_ROOT} válido"
-      fi
       
       if [[ ! "${TONY_OLLAMA_URL}" =~ ^https?:// ]]; then
         bad "TONY_OLLAMA_URL debe ser http(s)://"
