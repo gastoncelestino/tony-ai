@@ -2,8 +2,8 @@
 # Incluye tree-sitter porque el code-index lo usa como chunker obligatorio.
 # Instalar con: python3 -m pip install -r requirements-dev.txt
 
-pytest==8.3.4
-pytest-env==1.1.5
+pytest==8.4.2
+pytest-env==1.2.0
 coverage==7.6.10
 pytest-cov==6.0.0
 tree-sitter>=0.26,<0.27
