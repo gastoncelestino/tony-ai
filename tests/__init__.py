@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import atexit
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -23,6 +25,18 @@ def _load_project_env() -> None:
 
 
 _load_project_env()
+_CACHE_ROOT = Path(os.path.expanduser(os.environ.get("PYTHON_CACHE_DIR", "~/.tony-ai")))
+_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+os.environ["PYTHON_CACHE_DIR"] = str(_CACHE_ROOT)
+os.environ["PYTHONPYCACHEPREFIX"] = str(_CACHE_ROOT)
+if hasattr(sys, "pycache_prefix"):
+    sys.pycache_prefix = str(_CACHE_ROOT)
 
-if os.environ.get("PYTHONPYCACHEPREFIX"):
-    sys.pycache_prefix = os.path.expandvars(os.path.expanduser(os.environ["PYTHONPYCACHEPREFIX"]))
+
+def _cleanup_local_bytecode() -> None:
+    """Remove pytest's bootstrap cache if its importer created one locally."""
+    shutil.rmtree(_ROOT / "tests" / "__pycache__", ignore_errors=True)
+    shutil.rmtree(_ROOT / "__pycache__", ignore_errors=True)
+
+
+atexit.register(_cleanup_local_bytecode)
