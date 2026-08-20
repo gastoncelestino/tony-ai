@@ -3,9 +3,13 @@
 
 ENV_FILE := .env
 TONY_RUNTIME_DIR ?= $(shell set -a; . ./$(ENV_FILE); printf '%s' "$$TONY_RUNTIME_DIR")
-PYTHONPYCACHEPREFIX ?= $(shell set -a; . ./$(ENV_FILE); printf '%s' "$$PYTHONPYCACHEPREFIX")
+PYTHON_CACHE_DIR ?= $(shell set -a; . ./$(ENV_FILE); printf '%s' "$$PYTHON_CACHE_DIR")
+PYTHONPYCACHEPREFIX ?= $(PYTHON_CACHE_DIR)
+PYTEST_CACHE_DIR ?= $(PYTHON_CACHE_DIR)/pytest
 export TONY_RUNTIME_DIR
+export PYTHON_CACHE_DIR
 export PYTHONPYCACHEPREFIX
+export PYTEST_CACHE_DIR
 
 .PHONY: test test-all check-test-deps check-test-discovery test-python test-ts test-kernel check-coverage-deps coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
@@ -17,7 +21,8 @@ test: check-test-deps check-test-discovery test-python test-ts validate-config
 test-all: test test-kernel health
 
 check-test-deps:
-	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
+	@mkdir -p "$(PYTHON_CACHE_DIR)" "$(PYTEST_CACHE_DIR)"
+	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible (PYTHON_CACHE_DIR=$(PYTHON_CACHE_DIR))"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
 	@command -v bun >/dev/null 2>&1 || (echo "ERROR: falta Bun."; exit 1)
 
 # Mantiene las convenciones de descubrimiento: TypeScript *.test.ts, verificaciones *.verify.ts y Python test_*.py/*_test.py.
@@ -43,9 +48,9 @@ check-coverage-deps: check-test-deps
 
 coverage: check-coverage-deps coverage-python coverage-ts
 
-# Coverage Python mide branches y muestra el reporte en pantalla; todo el estado de coverage vive en /tmp.
+# Coverage Python también usa PYTHON_CACHE_DIR como ubicación de estado.
 coverage-python: check-coverage-deps
-	@tmpdir=$$(mktemp -d); trap 'rm -rf "$$tmpdir"' EXIT; export COVERAGE_FILE="$$tmpdir/.coverage"; python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
+	@mkdir -p "$(PYTHON_CACHE_DIR)/coverage"; export COVERAGE_FILE="$(PYTHON_CACHE_DIR)/coverage/.coverage"; python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
 
 # Coverage TypeScript muestra el reporte en pantalla y no conserva artefactos de Bun.
 coverage-ts: check-test-deps check-test-discovery
