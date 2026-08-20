@@ -1,9 +1,11 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre tests locales y smoke tests externos.
 
-TONY_RUNTIME_DIR ?= $(HOME)/.tony-ai
+ENV_FILE := .env
+TONY_RUNTIME_DIR ?= $(shell set -a; . ./$(ENV_FILE); printf '%s' "$$TONY_RUNTIME_DIR")
+PYTHONPYCACHEPREFIX ?= $(shell set -a; . ./$(ENV_FILE); printf '%s' "$$PYTHONPYCACHEPREFIX")
 export TONY_RUNTIME_DIR
-export PYTHONPYCACHEPREFIX := $(TONY_RUNTIME_DIR)/pycache
+export PYTHONPYCACHEPREFIX
 
 .PHONY: test test-all check-test-deps check-test-discovery test-python test-ts test-kernel check-coverage-deps coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
