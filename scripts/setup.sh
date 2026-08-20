@@ -7,15 +7,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
-if [[ ! -f "${ENV_FILE}" ]]; then
-  printf 'ERROR: .env no existe en %s\n' "${ENV_FILE}" >&2
-  exit 1
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
 fi
-set -a
-# shellcheck disable=SC1090
-source "${ENV_FILE}"
-set +a
-
 PYTHON_MIN_MAJOR=3
 PYTHON_MIN_MINOR=10
 JUDGMENT_EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
@@ -23,7 +20,7 @@ CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-carstenuhlig/omnicoder-2-9b:q4_k_m}"
 OLLAMA_URL="${TONY_OLLAMA_URL:-http://localhost:11434}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
-TONY_INDEX_CHUNKER="${TONY_INDEX_CHUNKER:-tree-sitter}"
+TONY_INDEX_CHUNKER=tree-sitter
 PASS=0; FAIL=0
 ok() { printf "  \033[32mok\033[0m   %s\n" "$1"; PASS=$((PASS+1)); }
 bad() { printf "  \033[31mFAIL\033[0m %s\n" "$1"; FAIL=$((FAIL+1)); }
@@ -61,7 +58,7 @@ if command -v docker >/dev/null 2>&1; then
 else bad "docker no esta instalado"; fi
 
 hdr "Ollama CLI"
-if command -v ollama >/dev/null 2>&1; then ok "ollama $(ollama --version 2>/dev/null | head -1 || echo instalado)"; else bad "ollama no esta instalado"; fi
+if command -v ollama >/dev/null 2>&1; then ok "ollama $(ollama --version 2>/dev/null | head -1 || echo instalado)"; else bad "ollama CLI no esta instalado"; fi
 
 hdr "GGA"
 if command -v gga >/dev/null 2>&1; then
@@ -146,10 +143,51 @@ if python3 -m pip install -r "${REPO_ROOT}/requirements-dev.txt" --break-system-
 else bad "pip install -r requirements-dev.txt fallo"; fi
 
 hdr ".env"
-ok ".env cargado y no modificado"
-if [[ -z "${TONY_RUNTIME_DIR:-}" ]]; then bad "TONY_RUNTIME_DIR falta o esta vacio en .env"; fi
-if [[ -z "${PYTHONPYCACHEPREFIX:-}" ]]; then bad "PYTHONPYCACHEPREFIX falta o esta vacio en .env"; fi
-if [[ "${PYTHONPYCACHEPREFIX:-}" == *"${REPO_ROOT}"* ]]; then bad "PYTHONPYCACHEPREFIX no puede apuntar al checkout"; fi
+if [[ ! -f "${ENV_FILE}" ]]; then
+  bad ".env no existe en ${ENV_FILE}"
+else
+  ok ".env encontrado (no modificado)"
+  set +u
+  ENV_VALID=0
+  REQUIRED_VARS=("TONY_RUNTIME_DIR" "PYTHONPYCACHEPREFIX" "TONY_OLLAMA_URL" "TONY_QDRANT_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
+
+  if ENV_CHECK=$(bash -c "set -a; source '${ENV_FILE}'; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
+    mapfile -t ENV_VALUES < <(echo "$ENV_CHECK")
+    MISSING=0
+    for i in "${!REQUIRED_VARS[@]}"; do
+      if [[ -z "${ENV_VALUES[$i]}" ]]; then
+        bad "variable requerida ${REQUIRED_VARS[$i]} falta o vacía en .env"
+        MISSING=$((MISSING+1))
+      fi
+    done
+
+    if [[ "${MISSING}" -eq 0 ]]; then
+      TONY_OLLAMA_URL="$(grep '^TONY_OLLAMA_URL=' "${ENV_FILE}" | cut -d'=' -f2)"
+      TONY_QDRANT_URL="$(grep '^TONY_QDRANT_URL=' "${ENV_FILE}" | cut -d'=' -f2)"
+
+      if [[ ! "${TONY_OLLAMA_URL}" =~ ^https?:// ]]; then
+        bad "TONY_OLLAMA_URL debe ser http(s)://"
+      elif curl -sf -m 5 "${TONY_OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
+        ok "TONY_OLLAMA_URL=${TONY_OLLAMA_URL} accesible"
+      else
+        bad "TONY_OLLAMA_URL=${TONY_OLLAMA_URL} no es accesible"
+      fi
+
+      if [[ ! "${TONY_QDRANT_URL}" =~ ^https?:// ]]; then
+        bad "TONY_QDRANT_URL debe ser http(s)://"
+      elif curl -sf -m 5 "${TONY_QDRANT_URL}/readyz" >/dev/null 2>&1; then
+        ok "TONY_QDRANT_URL=${TONY_QDRANT_URL} accesible"
+      else
+        bad "TONY_QDRANT_URL=${TONY_QDRANT_URL} no es accesible"
+      fi
+    else
+      bad ".env tiene ${MISSING} variable(s) faltante(s) o vacía(s)"
+    fi
+  else
+    bad "no se pudo parsear .env"
+  fi
+  set -u
+fi
 
 hdr "Resumen"
 echo "  Pasados: ${PASS}"
