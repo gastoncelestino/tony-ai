@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 
@@ -17,9 +18,12 @@ def _load_project_env() -> None:
             continue
         key, value = line.split("=", 1)
         key = key.strip()
-        value = value.strip()
+        value = os.path.expandvars(value.strip())
         if key and value:
             os.environ.setdefault(key, value)
 
 
 _load_project_env()
+
+if os.environ.get("PYTHONPYCACHEPREFIX"):
+    sys.pycache_prefix = os.path.abspath(os.path.expanduser(os.environ["PYTHONPYCACHEPREFIX"]))
