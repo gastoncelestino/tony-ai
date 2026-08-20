@@ -39,7 +39,7 @@ def test_opencode_keeps_sqlite_and_moves_runtime():
 
     for name in ("tonymem", "code-index", "judgment-memory", "tony-kernel"):
         env = mcp[name]["environment"]
-        assert env["TONY_RUNTIME_DIR"] == "{env:HOME}/.tony-ai/tony-ai"
-        assert env["PYTHONPYCACHEPREFIX"] == "{env:HOME}/.tony-ai/tony-ai/pycache"
+        assert env["TONY_RUNTIME_DIR"] == "{env:HOME}/.tony-ai"
+        assert env["PYTHONPYCACHEPREFIX"] == "{env:HOME}/.tony-ai/pycache"
 
     assert "TONY_KERNEL_STATE_DIR" not in mcp["tony-kernel"]["environment"]

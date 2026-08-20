@@ -1,7 +1,7 @@
 # Makefile para Tony-AI
 # Wrappers de conveniencia sobre tests locales y smoke tests externos.
 
-TONY_RUNTIME_DIR ?= $(HOME)/.tony-ai/tony-ai
+TONY_RUNTIME_DIR ?= $(HOME)/.tony-ai
 export TONY_RUNTIME_DIR
 export PYTHONPYCACHEPREFIX := $(TONY_RUNTIME_DIR)/pycache
 
