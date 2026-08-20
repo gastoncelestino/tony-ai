@@ -5,31 +5,50 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_kernel_runtime_dir_is_external(monkeypatch, tmp_path):
-    monkeypatch.setenv("TONY_RUNTIME_DIR", str(tmp_path / "runtime"))
-    sys.path.insert(0, str(ROOT))
-    import kernel.cli as cli
+def test_kernel_runtime_dir_is_external():
+    with tempfile.TemporaryDirectory(prefix="tony-runtime-test-") as tmp:
+        runtime_dir = Path(tmp) / "runtime"
+        env = os.environ.copy()
+        env["TONY_RUNTIME_DIR"] = str(runtime_dir)
+        result = subprocess.run(
+            [sys.executable, "-c", "from kernel.cli import _runtime_dir; print(_runtime_dir())"],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == str(runtime_dir)
 
-    runtime = Path(cli._runtime_dir())
-    assert runtime == tmp_path / "runtime"
 
+def test_code_index_manifest_is_external():
+    with tempfile.TemporaryDirectory(prefix="tony-runtime-test-") as tmp:
+        runtime_dir = Path(tmp) / "runtime"
+        env = os.environ.copy()
+        env["TONY_RUNTIME_DIR"] = str(runtime_dir)
+        code_index_server = ROOT / "code-index" / "server.py"
+        spec = importlib.util.spec_from_file_location("tony_code_index_server_runtime_test", code_index_server)
+        assert spec is not None and spec.loader is not None
+        server = importlib.util.module_from_spec(spec)
+        previous = os.environ.get("TONY_RUNTIME_DIR")
+        os.environ["TONY_RUNTIME_DIR"] = str(runtime_dir)
+        try:
+            spec.loader.exec_module(server)
+            manifest = Path(server._runtime_manifest_path(str(ROOT)))
+        finally:
+            if previous is None:
+                os.environ.pop("TONY_RUNTIME_DIR", None)
+            else:
+                os.environ["TONY_RUNTIME_DIR"] = previous
 
-def test_code_index_manifest_is_external(monkeypatch, tmp_path):
-    monkeypatch.setenv("TONY_RUNTIME_DIR", str(tmp_path / "runtime"))
-    code_index_server = ROOT / "code-index" / "server.py"
-    spec = importlib.util.spec_from_file_location("tony_code_index_server_runtime_test", code_index_server)
-    assert spec is not None and spec.loader is not None
-    server = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(server)
-
-    manifest = Path(server._runtime_manifest_path(str(ROOT)))
-    assert manifest == tmp_path / "runtime" / "code-index" / ".codeindex" / "manifest.db"
-    assert not str(manifest).startswith(str(ROOT))
+        assert manifest == runtime_dir / "code-index" / ".codeindex" / "manifest.db"
+        assert not str(manifest).startswith(str(ROOT))
 
 
 def test_opencode_uses_project_env_for_runtime():
@@ -59,17 +78,19 @@ def test_opencode_uses_project_env_for_runtime():
     assert "PYTHONPYCACHEPREFIX" not in json.dumps(config)
 
 
-def test_python_cache_prefix_stays_outside_checkout(tmp_path):
-    env = os.environ.copy()
-    env["TONY_RUNTIME_DIR"] = str(tmp_path / "runtime")
-    env["PYTHONPYCACHEPREFIX"] = str(tmp_path / "runtime" / "pycache")
-    result = subprocess.run(
-        ["python3", "-c", "import pathlib, sys; print(sys.pycache_prefix)"],
-        cwd=ROOT,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert result.stdout.strip() == str(tmp_path / "runtime" / "pycache")
-    assert not (ROOT / "__pycache__").exists()
+def test_python_cache_prefix_stays_outside_checkout():
+    with tempfile.TemporaryDirectory(prefix="tony-runtime-test-") as tmp:
+        runtime_dir = Path(tmp) / "runtime"
+        env = os.environ.copy()
+        env["TONY_RUNTIME_DIR"] = str(runtime_dir)
+        env["PYTHONPYCACHEPREFIX"] = str(runtime_dir / "pycache")
+        result = subprocess.run(
+            ["python3", "-c", "import pathlib, sys; print(sys.pycache_prefix)"],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == str(runtime_dir / "pycache")
+        assert not (ROOT / "__pycache__").exists()
