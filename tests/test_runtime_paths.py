@@ -32,24 +32,31 @@ def test_code_index_manifest_is_external(monkeypatch, tmp_path):
     assert not str(manifest).startswith(str(ROOT))
 
 
-def test_opencode_keeps_sqlite_and_moves_runtime():
+def test_opencode_uses_project_env_for_runtime():
     config = json.loads((ROOT / "opencode.json").read_text(encoding="utf-8"))
     mcp = config["mcp"]
 
     assert mcp["tonymem"]["environment"]["LOCAL_MEMORY_DB"] == "{env:PWD}/.tonymem/memory.db"
     assert mcp["judgment-memory"]["environment"]["JUDGMENT_MEMORY_DB"] == "{env:PWD}/.tonymem/judgment-memory.db"
 
-    for name in ("tonymem", "code-index", "judgment-memory", "tony-kernel"):
-        env = mcp[name]["environment"]
-        assert env["TONY_RUNTIME_DIR"] == "{env:HOME}/.tony-ai"
-        assert env["PYTHONPYCACHEPREFIX"] == "{env:HOME}/.tony-ai/pycache"
+    for name, script in (
+        ("tonymem", "local-memory/server.py"),
+        ("code-index", "code-index/server.py"),
+        ("judgment-memory", "judgment-memory/server.py"),
+        ("tony-kernel", "kernel/mcp_server.py"),
+    ):
+        command = mcp[name]["command"]
+        assert command == ["sh", "-lc", f'. .env && exec python3 "$PWD/{script}"']
+        assert ".tony-ai" not in json.dumps(mcp[name])
 
-    assert "TONY_KERNEL_STATE_DIR" not in mcp["tony-kernel"]["environment"]
+    assert "TONY_RUNTIME_DIR" not in json.dumps(config)
+    assert "PYTHONPYCACHEPREFIX" not in json.dumps(config)
 
 
 def test_python_cache_prefix_stays_outside_checkout(tmp_path):
     env = os.environ.copy()
     env["TONY_RUNTIME_DIR"] = str(tmp_path / "runtime")
+    env["PYTHONPYCACHEPREFIX"] = str(tmp_path / "runtime" / "pycache")
     result = subprocess.run(
         ["python3", "-c", "import pathlib, sys; print(sys.pycache_prefix)"],
         cwd=ROOT,
