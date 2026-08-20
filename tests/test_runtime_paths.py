@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -43,3 +45,18 @@ def test_opencode_keeps_sqlite_and_moves_runtime():
         assert env["PYTHONPYCACHEPREFIX"] == "{env:HOME}/.tony-ai/pycache"
 
     assert "TONY_KERNEL_STATE_DIR" not in mcp["tony-kernel"]["environment"]
+
+
+def test_python_cache_prefix_stays_outside_checkout(tmp_path):
+    env = os.environ.copy()
+    env["TONY_RUNTIME_DIR"] = str(tmp_path / "runtime")
+    result = subprocess.run(
+        ["python3", "-c", "import pathlib, sys; print(sys.pycache_prefix)"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == str(tmp_path / "runtime" / "pycache")
+    assert not (ROOT / "__pycache__").exists()
