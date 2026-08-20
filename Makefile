@@ -13,10 +13,8 @@ export PYTEST_CACHE_DIR
 
 .PHONY: test test-all check-test-deps check-test-discovery check-test-cache test-python test-ts test-kernel check-coverage-deps coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
-# Ejecuta la suite normal: tests Python + TypeScript + validación de configuración.
 test: check-test-deps check-test-discovery test-python test-ts validate-config
 
-# Prueba total: suite normal + tests específicos de Kernel/SDD + health e2e con infraestructura real.
 test-all: test test-kernel health check-test-cache
 
 check-test-deps:
@@ -31,18 +29,17 @@ check-test-discovery:
 test-python: check-test-deps check-test-discovery
 	@PYTHONWARNINGS=error python3 -m pytest tests -v || python3 tests/python_verify.py tests
 
-# Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
 	@PYTHONWARNINGS=error python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
 	@bun test tests/tony_kernel_*.test.ts
 
-# Verifica explícitamente que pytest no haya creado estado dentro del checkout.
+# Verifica explícitamente que pytest no haya creado estado dentro del checkout y
+# que su configuración efectiva use exactamente PYTEST_CACHE_DIR.
 check-test-cache:
 	@if [ -d .pytest_cache ]; then echo "ERROR: .pytest_cache fue creado dentro del checkout; PYTEST_CACHE_DIR=$(PYTEST_CACHE_DIR)"; exit 1; fi
-	@actual="$$(PYTEST_CACHE_DIR="$(PYTEST_CACHE_DIR)" python3 -m pytest --showconfig 2>/dev/null | awk -F': ' '/^[[:space:]]*cache_dir[[:space:]]*:/{print $$2; exit}')"; if [ "$$actual" != "$(PYTEST_CACHE_DIR)" ]; then echo "ERROR: pytest cache_dir=$$actual; esperado $(PYTEST_CACHE_DIR)"; exit 1; fi
+	@actual="$$(PYTEST_CACHE_DIR="$(PYTEST_CACHE_DIR)" python3 -c 'from _pytest.config import get_config; c=get_config(); c.parse(["-c", "pytest.ini"]); print(c.getini("cache_dir"))')"; if [ "$$actual" != "$(PYTEST_CACHE_DIR)" ]; then echo "ERROR: pytest cache_dir=$$actual; esperado $(PYTEST_CACHE_DIR)"; exit 1; fi
 	@echo "✓ pytest cache fuera del checkout (cache_dir=$(PYTEST_CACHE_DIR))"
 
-# TypeScript se ejecuta con Bun.
 test-ts: check-test-deps check-test-discovery
 	@bun test tests
 
@@ -52,27 +49,21 @@ check-coverage-deps: check-test-deps
 
 coverage: check-coverage-deps coverage-python coverage-ts
 
-# Coverage Python también usa PYTHON_CACHE_DIR como ubicación de estado.
 coverage-python: check-coverage-deps
 	@mkdir -p "$(PYTHON_CACHE_DIR)/coverage"; export COVERAGE_FILE="$(PYTHON_CACHE_DIR)/coverage/.coverage"; PYTHONWARNINGS=error python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
 
-# Coverage TypeScript muestra el reporte en pantalla y no conserva artefactos de Bun.
 coverage-ts: check-test-deps check-test-discovery
 	@tmpdir=$$(mktemp -d); trap 'rm -rf "$$tmpdir"' EXIT; bun test --coverage --coverage-reporter=text --coverage-dir="$$tmpdir" tests
 
-# Smoke test de conexión/configuración de Qdrant.
 verify-qdrant:
 	@bun run tests/judgment_qdrant.verify.ts
 
-# Smoke test end-to-end del flujo SDD.
 verify-sdd-flow:
 	@python3 tests/test_sdd_flow_e2e.py
 
-# Bootstrap inicial del entorno local.
 bootstrap:
 	@bash scripts/setup.sh
 
-# Health check del proyecto.
 health:
 	@bash scripts/health.sh
 
@@ -82,11 +73,9 @@ docker-up:
 docker-down:
 	@cd docker && docker compose down
 
-# Limpieza de bases locales y artefactos de coverage.
 clean:
 	@rm -f local-memory/memory.db code-index/.codeindex/manifest.db judgment-memory/judgment-memory.db coverage.xml coverage-contexts.json
 	@rm -rf coverage-bun
 
-# Valida la configuración de OpenCode/proyecto.
 validate-config:
 	@bun run tests/validate_config.verify.ts
