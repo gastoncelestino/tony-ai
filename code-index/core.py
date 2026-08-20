@@ -9,9 +9,12 @@ _impl = importlib.import_module("core_impl")
 
 
 def _runtime_manifest_path(_root: str) -> str:
-    runtime_root = os.environ.get("TONY_RUNTIME_DIR")
-    if not runtime_root:
-        raise RuntimeError("TONY_RUNTIME_DIR must be configured")
+    runtime_root = os.environ.get("TONY_RUNTIME_DIR") or os.environ.get("PYTHON_CACHE_DIR", "~/.tony-ai/pycache")
+    if runtime_root.endswith("/pycache"):
+        runtime_root = runtime_root.rsplit("/", 1)[0]
+    elif runtime_root.endswith("\\pycache"):
+        runtime_root = runtime_root.rsplit("\\", 1)[0]
+    os.environ.setdefault("TONY_RUNTIME_DIR", runtime_root)
     runtime_root = os.path.abspath(os.path.expanduser(runtime_root))
     directory = os.path.join(runtime_root, "code-index", ".codeindex")
     os.makedirs(directory, exist_ok=True)
