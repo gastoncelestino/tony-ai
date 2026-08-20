@@ -9,11 +9,11 @@ Uso:
     python3 tests/test_sdd_flow_e2e.py       # standalone, con --keep-tmp disponible
     make verify-sdd-flow                     # atajo (ver Makefile)
 
-Aislamiento: corre con TONY_KERNEL_STATE_DIR y TONY_REPO_ROOT apuntando a
-un directorio temporal descartable (tempfile.mkdtemp()), así que NO toca
-.tony-kernel/kernel-state.json del proyecto real ni escribe nada dentro
-del working tree. El directorio temporal se borra al final, pase lo que
-pase (try/finally), salvo que se pase --keep-tmp para inspeccionarlo.
+Aislamiento: corre con TONY_RUNTIME_DIR, TONY_KERNEL_STATE_DIR y
+TONY_REPO_ROOT apuntando a directorios temporales descartables
+(tempfile.mkdtemp()), así que NO toca el runtime ni el working tree real.
+El directorio temporal se borra al final, pase lo que pase (try/finally),
+salvo que se pase --keep-tmp para inspeccionarlo.
 
 Casos cubiertos, intercalados en la corrida legítima:
   1. Saltar fases (explore -> apply directo, y explore -> archive directo)
@@ -47,6 +47,7 @@ class FlowRunner:
         self.repo_root = repo_root
         self.keep_tmp = keep_tmp
         self.tmp_dir = Path(tempfile.mkdtemp(prefix="tony-sdd-flow-"))
+        self.runtime_dir = self.tmp_dir / "runtime"
         self.change_dir = self.tmp_dir / "sdd" / "demo-change"
         self.change_dir.mkdir(parents=True, exist_ok=True)
         self.failures: list[str] = []
@@ -61,9 +62,10 @@ class FlowRunner:
 
     def run_cli(self, *args: str) -> tuple[int, dict | str]:
         """Invoca kernel.cli exactamente como lo hace plugins/tony-kernel.ts,
-        pero con estado y artifacts redirigidos al tmp_dir aislado."""
+        pero con runtime, estado y artifacts redirigidos al tmp_dir aislado."""
         env = {
             **os.environ,
+            "TONY_RUNTIME_DIR": str(self.runtime_dir),
             "TONY_KERNEL_STATE_DIR": str(self.tmp_dir / ".tony-kernel"),
             "TONY_REPO_ROOT": str(self.tmp_dir),
         }
