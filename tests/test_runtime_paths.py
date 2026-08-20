@@ -47,8 +47,12 @@ def test_opencode_uses_project_env_for_runtime():
     assert local_mcps
     for entry in local_mcps:
         command = entry["command"]
-        assert command[:3] == ["sh", "-lc", ". .env && exec python3"]
-        assert command[3:] if False else True
+        assert command[:2] == ["sh", "-lc"]
+        assert command[2].startswith(". .env && exec python3 ")
+        assert command[2].endswith("\"")
+        script_path = command[2].split('python3 "', 1)[1][:-1]
+        assert script_path.startswith("$PWD/")
+        assert (ROOT / script_path.removeprefix("$PWD/")).is_file()
         assert ".tony-ai" not in json.dumps(entry)
 
     assert "TONY_RUNTIME_DIR" not in json.dumps(config)
