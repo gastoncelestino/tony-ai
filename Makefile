@@ -11,31 +11,36 @@ export PYTHON_CACHE_DIR
 export PYTHONPYCACHEPREFIX
 export PYTEST_CACHE_DIR
 
-.PHONY: test test-all check-test-deps check-test-discovery test-python test-ts test-kernel check-coverage-deps coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
+.PHONY: test test-all check-test-deps check-test-discovery check-test-cache test-python test-ts test-kernel check-coverage-deps coverage coverage-python coverage-ts verify-qdrant verify-sdd-flow docker-up docker-down clean bootstrap health validate-config
 
 # Ejecuta la suite normal: tests Python + TypeScript + validación de configuración.
 test: check-test-deps check-test-discovery test-python test-ts validate-config
 
 # Prueba total: suite normal + tests específicos de Kernel/SDD + health e2e con infraestructura real.
-test-all: test test-kernel health
+test-all: test test-kernel health check-test-cache
 
 check-test-deps:
 	@mkdir -p "$(PYTHON_CACHE_DIR)" "$(PYTEST_CACHE_DIR)"
 	@if python3 -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null; then echo "✓ pytest disponible (PYTEST_CACHE_DIR=$(PYTEST_CACHE_DIR))"; else echo "⚠ pytest no disponible; usando test runners standalone"; fi
 	@command -v bun >/dev/null 2>&1 || (echo "ERROR: falta Bun."; exit 1)
 
-# Mantiene las convenciones de descubrimiento: TypeScript *.test.ts, verificaciones *.verify.ts y Python test_*.py/*_test.py.
 check-test-discovery:
 	@set -eu; invalid_ts=$$(find tests -maxdepth 1 -type f -name '*.ts' ! -name '*.test.ts' ! -name '*.verify.ts' -print); invalid_py=$$(find tests -maxdepth 1 -type f -name '*.py' ! -name 'test_*.py' ! -name '*_test.py' ! -name '__init__.py' ! -name 'python_verify.py' -print); if [ -n "$$invalid_ts" ]; then echo "ERROR: TypeScript tests no descubribles:"; echo "$$invalid_ts"; exit 1; fi; if [ -n "$$invalid_py" ]; then echo "ERROR: Python tests no descubribles:"; echo "$$invalid_py"; exit 1; fi; test -n "$$(find tests -maxdepth 1 -type f -name '*.test.ts' -print -quit)" || { echo "ERROR: no hay tests TypeScript descubribles"; exit 1; }; echo "✓ Test naming/discovery conventions valid"
 
-# Python usa pytest directamente; pytest.ini no depende de plugins opcionales.
+# La suite Python trata warnings como errores para mantener el contrato de 0 warnings.
 test-python: check-test-deps check-test-discovery
-	@python3 -m pytest tests -v || python3 tests/python_verify.py tests
+	@PYTHONWARNINGS=error python3 -m pytest tests -v || python3 tests/python_verify.py tests
 
 # Kernel y SDD flow se mantienen separados para poder diagnosticar fallos específicos.
 test-kernel: check-test-deps check-test-discovery
-	@python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
+	@PYTHONWARNINGS=error python3 -m pytest tests/test_kernel_*.py tests/test_sdd_flow_e2e.py -v || python3 tests/python_verify.py tests/test_kernel_cli.py tests/test_kernel_enforcement.py tests/test_sdd_flow_e2e.py
 	@bun test tests/tony_kernel_*.test.ts
+
+# Verifica explícitamente que pytest no haya creado estado dentro del checkout.
+check-test-cache:
+	@if [ -d .pytest_cache ]; then echo "ERROR: .pytest_cache fue creado dentro del checkout; PYTEST_CACHE_DIR=$(PYTEST_CACHE_DIR)"; exit 1; fi
+	@actual="$$(PYTEST_CACHE_DIR="$(PYTEST_CACHE_DIR)" python3 -m pytest --showconfig 2>/dev/null | awk -F': ' '/^[[:space:]]*cache_dir[[:space:]]*:/{print $$2; exit}')"; if [ "$$actual" != "$(PYTEST_CACHE_DIR)" ]; then echo "ERROR: pytest cache_dir=$$actual; esperado $(PYTEST_CACHE_DIR)"; exit 1; fi
+	@echo "✓ pytest cache fuera del checkout (cache_dir=$(PYTEST_CACHE_DIR))"
 
 # TypeScript se ejecuta con Bun.
 test-ts: check-test-deps check-test-discovery
@@ -49,7 +54,7 @@ coverage: check-coverage-deps coverage-python coverage-ts
 
 # Coverage Python también usa PYTHON_CACHE_DIR como ubicación de estado.
 coverage-python: check-coverage-deps
-	@mkdir -p "$(PYTHON_CACHE_DIR)/coverage"; export COVERAGE_FILE="$(PYTHON_CACHE_DIR)/coverage/.coverage"; python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
+	@mkdir -p "$(PYTHON_CACHE_DIR)/coverage"; export COVERAGE_FILE="$(PYTHON_CACHE_DIR)/coverage/.coverage"; PYTHONWARNINGS=error python3 -m pytest tests -q --cov=kernel --cov=code-index --cov=judgment-memory --cov=local-memory --cov-branch --cov-context=test --cov-report=term-missing || (rm -f "$$COVERAGE_FILE"; coverage run --branch --source=kernel,code-index,judgment-memory,local-memory tests/python_verify.py tests); coverage report -m --fail-under=40
 
 # Coverage TypeScript muestra el reporte en pantalla y no conserva artefactos de Bun.
 coverage-ts: check-test-deps check-test-discovery
