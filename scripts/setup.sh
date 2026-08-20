@@ -20,6 +20,10 @@ CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-carstenuhlig/omnicoder-2-9b:q4_k_m}"
 OLLAMA_URL="${TONY_OLLAMA_URL:-http://localhost:11434}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
+PYTHON_CACHE_DIR="${PYTHON_CACHE_DIR:-${HOME}/.tony-ai/pycache}"
+PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-${PYTHON_CACHE_DIR}}"
+PYTEST_CACHE_DIR="${PYTEST_CACHE_DIR:-${PYTHON_CACHE_DIR}/pytest}"
+export PYTHON_CACHE_DIR PYTHONPYCACHEPREFIX PYTEST_CACHE_DIR
 TONY_INDEX_CHUNKER=tree-sitter
 PASS=0; FAIL=0
 ok() { printf "  \033[32mok\033[0m   %s\n" "$1"; PASS=$((PASS+1)); }
@@ -29,9 +33,8 @@ hdr() { printf "\n\033[1m-- %s --\033[0m\n" "$1"; }
 # User-local executables installed by pip and GGA live here.
 export PATH="${HOME}/.local/bin:${PATH}"
 
-# Pytest cache lives outside /mnt/c checkouts to avoid WSL/DrvFS permission
-# errors when pytest creates its temporary cache directories.
-PYTEST_CACHE_DIR="/tmp/tony-ai-pytest"
+# Pytest cache follows the canonical environment configuration from .env.
+# Do not hardcode a checkout-local cache or a second cache location here.
 hdr "Pytest cache"
 if mkdir -p "${PYTEST_CACHE_DIR}" && [[ -w "${PYTEST_CACHE_DIR}" ]]; then
   ok "cache de pytest en ${PYTEST_CACHE_DIR}"
