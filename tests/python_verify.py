@@ -11,7 +11,6 @@ import argparse
 import ast
 import importlib.util
 import inspect
-import os
 import sys
 import traceback
 import types
@@ -20,32 +19,6 @@ from pathlib import Path
 from typing import Iterable
 
 TEST_FILE_PATTERN = "test_*.py"
-
-
-def _load_project_env() -> None:
-    env_file = Path(__file__).resolve().parent.parent / ".env"
-    if not env_file.is_file():
-        return
-    for raw in env_file.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = os.path.expandvars(value.strip())
-        if key and value:
-            os.environ.setdefault(key, value)
-
-
-_load_project_env()
-_CACHE_ROOT = Path(os.path.expanduser(os.environ.get("PYTHON_CACHE_DIR", "~/.tony-ai/pycache")))
-_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-os.environ.setdefault("PYTHON_CACHE_DIR", str(_CACHE_ROOT))
-os.environ.setdefault("TONY_RUNTIME_DIR", str(_CACHE_ROOT.parent))
-os.environ["PYTHONPYCACHEPREFIX"] = str(_CACHE_ROOT)
-if hasattr(sys, "pycache_prefix"):
-    sys.pycache_prefix = str(_CACHE_ROOT)
-sys.dont_write_bytecode = True
 
 
 class RunnerError(RuntimeError):

@@ -18,12 +18,9 @@ from typing import Any, Optional
 
 
 def _runtime_dir() -> str:
-    configured = os.environ.get("TONY_RUNTIME_DIR") or os.environ.get("PYTHON_CACHE_DIR", "~/.tony-ai/pycache")
-    if configured.endswith("/pycache"):
-        configured = configured.rsplit("/", 1)[0]
-    elif configured.endswith("\\pycache"):
-        configured = configured.rsplit("\\", 1)[0]
-    os.environ.setdefault("TONY_RUNTIME_DIR", configured)
+    configured = os.environ.get("TONY_RUNTIME_DIR")
+    if not configured:
+        raise RuntimeError("TONY_RUNTIME_DIR must be configured")
     return os.path.abspath(os.path.expanduser(configured))
 
 
