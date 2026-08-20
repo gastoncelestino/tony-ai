@@ -33,12 +33,12 @@ from .schemas import ArtifactRef, Evidence, EvidenceType
 
 
 def _build_store():
-    base = os.getcwd()
+    base = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
     return disk_artifact_store(base)
 
 
 def _build_hasher():
-    base = os.getcwd()
+    base = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
     return disk_artifact_hasher(base)
 
 
