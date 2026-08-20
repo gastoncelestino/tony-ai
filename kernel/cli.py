@@ -24,8 +24,11 @@ def _runtime_dir() -> str:
     return os.path.abspath(os.path.expanduser(configured))
 
 
-_RUNTIME_DIR = _runtime_dir()
-os.environ.setdefault("TONY_KERNEL_STATE_DIR", os.path.join(_RUNTIME_DIR, "kernel"))
+def _ensure_runtime() -> str:
+    runtime_dir = _runtime_dir()
+    os.environ.setdefault("TONY_KERNEL_STATE_DIR", os.path.join(runtime_dir, "kernel"))
+    return runtime_dir
+
 
 from .persistence import load_orchestrator, update_orchestrator, reset_state
 from .artifact_store import disk_artifact_store, disk_artifact_hasher
@@ -33,16 +36,19 @@ from .schemas import ArtifactRef, Evidence, EvidenceType
 
 
 def _build_store():
+    _ensure_runtime()
     base = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
     return disk_artifact_store(base)
 
 
 def _build_hasher():
+    _ensure_runtime()
     base = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
     return disk_artifact_hasher(base)
 
 
 def _load():
+    _ensure_runtime()
     return load_orchestrator(artifact_store=_build_store(), artifact_hasher=_build_hasher())
 
 
@@ -112,6 +118,8 @@ def _main(argv: list) -> None:
 
     command = argv[0]
     args = argv[1:]
+
+    _ensure_runtime()
 
     if command in ("status", "get_status"):
         orch = _load()
