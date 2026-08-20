@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SETUP = ROOT / "scripts" / "setup.sh"
 OPENCODE = ROOT / "opencode.json"
-ENV_EXAMPLE = ROOT / ".env.example"
+ENV_FILE = ROOT / ".env"
 REQUIREMENTS = ROOT / "requirements-dev.txt"
 
 CANONICAL_OMNICODER = "carstenuhlig/omnicoder-2-9b:q4_k_m"
@@ -30,7 +30,7 @@ def test_setup_requires_all_tooling() -> None:
     assert 'bad "gga no esta en PATH' in text
     assert "import tree_sitter, tree_sitter_language_pack" in text
     assert "requirements-dev.txt fallo" in text
-    assert "2>/dev/null" not in text.split('python3 -m pip install', 1)[1].split('hdr "opencode.json"', 1)[0]
+    assert "2>/dev/null" not in text.split('python3 -m pip install', 1)[1].split('hdr ".env"', 1)[0]
 
 
 def test_setup_starts_only_missing_services() -> None:
@@ -50,14 +50,14 @@ def test_setup_uses_canonical_omnicoder_model() -> None:
 
 def test_tree_sitter_is_mandatory_and_default_chunker() -> None:
     setup = SETUP.read_text(encoding="utf-8")
-    env = ENV_EXAMPLE.read_text(encoding="utf-8")
+    env = ENV_FILE.read_text(encoding="utf-8")
     requirements = REQUIREMENTS.read_text(encoding="utf-8")
     config = json.loads(OPENCODE.read_text(encoding="utf-8"))
 
     assert "tree-sitter" in requirements
     assert "tree-sitter-language-pack" in requirements
     assert "tree-sitter-languages" not in requirements
-    assert 'TONY_INDEX_CHUNKER=tree-sitter' in env
+    assert "TONY_INDEX_CHUNKER=tree-sitter" in env
     assert 'TONY_INDEX_CHUNKER=tree-sitter' in setup
     assert config["mcp"]["code-index"]["environment"]["TONY_INDEX_CHUNKER"] == "tree-sitter"
 
@@ -70,8 +70,8 @@ def test_opencode_uses_canonical_omnicoder_model() -> None:
     assert PREVIOUS_OMNICODER not in models
 
 
-def test_env_example_uses_canonical_omnicoder_model() -> None:
-    text = ENV_EXAMPLE.read_text(encoding="utf-8")
+def test_env_uses_canonical_omnicoder_model() -> None:
+    text = ENV_FILE.read_text(encoding="utf-8")
     assert f"TONY_IMPLEMENTATION_MODEL={CANONICAL_OMNICODER}" in text
     assert LEGACY_OMNICODER not in text
     assert PREVIOUS_OMNICODER not in text
