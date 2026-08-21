@@ -28,17 +28,28 @@ PHASE_ALLOWED_PREFIXES = {
     "archive": ("read", "glob", "grep", "tonymem_", "bash"),
 }
 
-ALWAYS_ALLOWED_PREFIXES = ("tony-kernel_",)
-ALWAYS_DENIED_PREFIXES = ("task", "webfetch", "websearch")
+# Only read-only Kernel status/control queries are universally available.
+# State-mutating Kernel commands must not be callable by phase executors.
+ALWAYS_ALLOWED_PREFIXES = (
+    "tony-kernel_kernel_get_status",
+)
+ALWAYS_DENIED_PREFIXES = (
+    "task",
+    "webfetch",
+    "websearch",
+    "tony-kernel_kernel_reset",
+    "tony-kernel_kernel_transition",
+    "tony-kernel_kernel_record",
+)
 
 
 def check_tool_capability(phase: str, tool: str) -> ToolDecision:
     """Return the Kernel's authoritative decision for a phase/tool pair."""
-    if any(tool == prefix or tool.startswith(prefix) for prefix in ALWAYS_ALLOWED_PREFIXES):
-        return ToolDecision(True, "Tony Kernel control-plane tool")
-
     if any(tool == prefix or tool.startswith(prefix) for prefix in ALWAYS_DENIED_PREFIXES):
         return ToolDecision(False, f"tool '{tool}' is not allowed during phase '{phase}'")
+
+    if any(tool == prefix or tool.startswith(prefix) for prefix in ALWAYS_ALLOWED_PREFIXES):
+        return ToolDecision(True, "Tony Kernel read-only status tool")
 
     allowed = PHASE_ALLOWED_PREFIXES.get(phase)
     if allowed is None:
