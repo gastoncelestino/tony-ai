@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 from kernel import persistence
 from kernel.orchestrator_integration import KernelOrchestrator
 from kernel.persistence import load_orchestrator, save_orchestrator, update_orchestrator
@@ -30,6 +32,7 @@ def _concurrent_task_worker(state_path: str, task_id: str, ready: multiprocessin
         raise
 
 
+@pytest.mark.concurrency
 class TestKernelConcurrency(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
