@@ -3,7 +3,7 @@
  *
  * OpenCode remains the runtime, but the Kernel is authoritative for which
  * tools may execute while an SDD phase is active. This hook asks the Kernel
- * before every non-control-plane tool execution and fails closed on denial.
+ * before every tool execution and fails closed on denial.
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
@@ -29,6 +29,7 @@ function checkWithKernel(tool: string): Promise<ToolDecision> {
       env: {
         ...process.env,
         TONY_RUNTIME_DIR: process.env.TONY_RUNTIME_DIR || REPO_ROOT,
+        TONY_REPO_ROOT: REPO_ROOT,
       },
       stdio: ["ignore", "pipe", "pipe"],
     })
@@ -61,8 +62,10 @@ export async function kernelToolCapabilityBeforeHook(
   _output: unknown,
 ): Promise<void> {
   // Task delegation has its own transition gate in plugins/tony-kernel.ts.
-  // Kernel control-plane calls must always remain available.
-  if (input.tool === "Task" || input.tool.startsWith("tony-kernel_")) return
+  // All other tools, including Kernel control-plane tools, are checked by
+  // the authoritative Kernel policy. This prevents phase agents from using
+  // reset/transition operations to bypass the state machine.
+  if (input.tool === "Task") return
 
   const decision = await checkWithKernel(input.tool)
   if (!decision.allowed) {
@@ -74,7 +77,7 @@ export async function kernelToolCapabilityBeforeHook(
 
 const plugin: Plugin = {
   name: "tony-kernel-capabilities",
-  version: "1.0.0",
+  version: "1.1.0",
   description: "Tony Kernel phase capability enforcement",
   hooks: {
     "tool.execute.before": kernelToolCapabilityBeforeHook,
