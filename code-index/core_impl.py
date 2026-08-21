@@ -38,7 +38,10 @@ import uuid
 from typing import Optional
 from dataclasses import dataclass, field
 
-from tree_sitter_language_pack import get_parser
+try:
+    from tree_sitter_language_pack import get_parser
+except ImportError:  # pragma: no cover - optional dependency for tests without tree-sitter installed
+    get_parser = None
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -143,6 +146,11 @@ def _split_fixed(lines: list, ext: str) -> list:
 
 def _chunk_treesitter(lines: list, ext: str) -> list:
     """Chunk using the modern tree-sitter-language-pack parser API."""
+    if get_parser is None:
+        raise RuntimeError(
+            "tree-sitter chunking requires tree-sitter-language-pack. "
+            "Install it with: pip install tree-sitter-language-pack"
+        )
     lang_name = TS_LANGUAGE_BY_EXT.get(ext)
     if not lang_name:
         return _split_fixed(lines, ext)

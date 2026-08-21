@@ -9,6 +9,7 @@ Run with: pytest tests/test_code_index_core.py  (or: python3 tests/test_code_ind
 """
 
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -16,6 +17,7 @@ import sys
 import tempfile
 import threading
 import time
+import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -187,9 +189,9 @@ def test_code_index_core():
 
 def test_treesitter_chunking():
     """Tree-sitter chunking must produce structural, non-regex boundaries."""
-    import importlib.util
+    if importlib.util.find_spec("tree_sitter_language_pack") is None:
+        raise unittest.SkipTest("tree-sitter-language-pack is not installed")
     assert importlib.util.find_spec("tree_sitter") is not None
-    assert importlib.util.find_spec("tree_sitter_language_pack") is not None
 
     content = '''
 import os
