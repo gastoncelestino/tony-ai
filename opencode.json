@@ -9,16 +9,16 @@
     "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-explore": {"prompt": "{file:./prompts/sdd/sdd-explore.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
     "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow"}},
-    "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md}", "permission": {"tonymem_*": "allow"}},
-    "sdd-onboard": {"prompt": "{file:./prompts/sdd/sdd-onboard.md}", "permission": {"tonymem_*": "allow"}},
-    "review-readability": {"prompt": "{file:./prompts/agents/phase-prompts/review-readability.md}"},
-    "review-reliability": {"prompt": "{file:./prompts/agents/phase-prompts/review-reliability.md}"},
-    "review-resilience": {"prompt": "{file:./prompts/agents/phase-prompts/review-resilience.md}"},
-    "review-risk": {"prompt": "{file:./prompts/agents/phase-prompts/review-risk.md}"},
-    "review-refuter": {"prompt": "{file:./prompts/agents/phase-prompts/review-refuter.md}"},
-    "jd-fix-agent": {"prompt": "{file:./prompts/agents/phase-prompts/jd-fix-agent.md}"},
-    "jd-judge-a": {"prompt": "{file:./prompts/agents/phase-prompts/jd-judge-a.md}"},
-    "jd-judge-b": {"prompt": "{file:./prompts/agents/phase-prompts/jd-judge-b.md}"},
+    "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md", "permission": {"tonymem_*": "allow"}},
+    "sdd-onboard": {"prompt": "{file:./prompts/sdd/sdd-onboard.md", "permission": {"tonymem_*": "allow"}},
+    "review-readability": {"prompt": "{file:./prompts/agents/phase-prompts/review-readability.md"},
+    "review-reliability": {"prompt": "{file:./prompts/agents/phase-prompts/review-reliability.md"},
+    "review-resilience": {"prompt": "{file:./prompts/agents/phase-prompts/review-resilience.md"},
+    "review-risk": {"prompt": "{file:./prompts/agents/phase-prompts/review-risk.md"},
+    "review-refuter": {"prompt": "{file:./prompts/agents/phase-prompts/review-refuter.md"},
+    "jd-fix-agent": {"prompt": "{file:./prompts/agents/phase-prompts/jd-fix-agent.md"},
+    "jd-judge-a": {"prompt": "{file:./prompts/agents/phase-prompts/jd-judge-a.md"},
+    "jd-judge-b": {"prompt": "{file:./prompts/agents/phase-prompts/jd-judge-b.md"},
     "tony-orchestrator": {"description": "Tony AI SDD Orchestrator - routes sub-agents, never does phase work inline", "mode": "primary", "model": "ollama/qwen3-coder:30b", "permission": {"question": "allow", "task": {"*": "deny", "explore": "allow", "general": "allow", "jd-fix-agent": "allow", "jd-judge-a": "allow", "jd-judge-b": "allow", "review-readability": "allow", "review-refuter": "allow", "review-reliability": "allow", "review-resilience": "allow", "review-risk": "allow", "sdd-apply": "allow", "sdd-archive": "allow", "sdd-design": "allow", "sdd-explore": "allow", "sdd-init": "allow", "sdd-onboard": "allow", "sdd-propose": "allow", "sdd-spec": "allow", "sdd-tasks": "allow", "sdd-verify": "allow"}, "judgment-memory_*": "allow", "tony-kernel_*": "allow", "tonymem_*": "allow"}, "prompt": "{file:./prompts/agents/tony-orchestrator.md}", "tools": {"bash": true, "edit": true, "question": true, "read": true, "task": true, "write": true}},
     "gga-reviewer": {"description": "GGA code reviewer — responde directo al prompt de gga, no delega", "hidden": true, "mode": "subagent", "model": "ollama/qwen3-coder:30b", "prompt": "You are a code reviewer invoked by gga (Gentleman Guardian Angel).\n\nYou receive staged code changes and the project coding standards (AGENTS.md).\nReview the diff directly and respond with findings. Do NOT delegate or spawn sub-agents.\n\nFor each issue found, report:\n- File and line\n- What the problem is\n- Why it violates the standards\n- Suggested fix\n\nIf the code is clean, say so explicitly. Be concise and technical.", "tools": {"bash": false, "edit": false, "read": true, "task": false, "write": false}}
   },
@@ -27,11 +27,11 @@
   "env": {},
   "mcp": {
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
-    "tonymem": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/local-memory/server.py\""], "type": "local", "environment": {"LOCAL_MEMORY_DB": "{env:PWD}/local-memory/memory.db"}},
-    "code-index": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/code-index/server.py\""], "type": "local", "environment": {"TONY_INDEX_ROOT": "{env:PWD}", "TONY_INDEX_MANIFEST": "{env:PWD}/code-index/manifest.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "bge-m3", "TONY_INDEX_CHUNKER": "tree-sitter"}},
-    "judgment-memory": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/judgment-memory/server.py\""], "type": "local", "environment": {"JUDGMENT_MEMORY_DB": "{env:PWD}/judgment-memory/judgment-memory.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5"}},
-    "tony-kernel": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/kernel/mcp_server.py\""], "type": "local", "environment": {"TONY_KERNEL_STATE_DIR": "{env:PWD}/kernel"}}
+    "tonymem": {"type": "local", "command": ["python3", "local-memory/server.py"], "cwd": ".", "environment": {"LOCAL_MEMORY_DB": "local-memory/memory.db"}},
+    "code-index": {"type": "local", "command": ["python3", "code-index/server.py"], "cwd": ".", "environment": {"TONY_INDEX_ROOT": ".", "TONY_INDEX_MANIFEST": "code-index/manifest.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "bge-m3", "TONY_INDEX_CHUNKER": "tree-sitter"}},
+    "judgment-memory": {"type": "local", "command": ["python3", "judgment-memory/server.py"], "cwd": ".", "environment": {"JUDGMENT_MEMORY_DB": "judgment-memory/judgment-memory.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5"}},
+    "tony-kernel": {"type": "local", "command": ["python3", "kernel/mcp_server.py"], "cwd": ".", "environment": {"TONY_KERNEL_STATE_DIR": "kernel"}}
   },
   "permission": {"bash": {"*": "allow", "git commit *": "ask", "git push": "ask", "git push --force *": "ask", "git rebase *": "ask", "git reset --hard *": "ask"}, "read": {"*": "allow", "**/*.key": "deny", "**/*.pem": "deny", "**/.aws/credentials": "deny", "**/.config/gh/hosts.yml": "deny", "**/.credentials/**": "deny", "**/.env/**": "deny", "**/.env.*": "deny", "**/.ssh/**": "deny", "**/credentials.json": "deny", "**/secrets/**": "deny"}, "context7_*": "allow", "code-index_*": "allow", "judgment-memory_*": "allow", "tony-kernel_*": "allow"},
   "share": "disabled",
-  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}}
+  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}
