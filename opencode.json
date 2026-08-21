@@ -1,14 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "agent": {
-    "sdd-apply": {"prompt": "{file:./prompts/sdd/sdd-apply.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
-    "sdd-verify": {"prompt": "{file:./prompts/sdd/sdd-verify.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
-    "sdd-spec": {"prompt": "{file:./prompts/sdd/sdd-spec.md}", "permission": {"tonymem_*": "allow"}},
-    "sdd-design": {"prompt": "{file:./prompts/sdd/sdd-design.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
-    "sdd-tasks": {"prompt": "{file:./prompts/sdd/sdd-tasks.md}", "permission": {"tonymem_*": "allow"}},
-    "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow"}},
-    "sdd-explore": {"prompt": "{file:./prompts/sdd/sdd-explore.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
-    "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow"}},
+    "sdd-apply": {"prompt": "{file:./prompts/sdd/sdd-apply.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-verify": {"prompt": "{file:./prompts/sdd/sdd-verify.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-spec": {"prompt": "{file:./prompts/sdd/sdd-spec.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-design": {"prompt": "{file:./prompts/sdd/sdd-design.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-tasks": {"prompt": "{file:./prompts/sdd/sdd-tasks.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-explore": {"prompt": "{file:./prompts/sdd/sdd-explore.md}", "permission": {"code-index_*": "allow", "tonymem_*": "deny", "tonymem_mem_save": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-onboard": {"prompt": "{file:./prompts/sdd/sdd-onboard.md}", "permission": {"tonymem_*": "allow"}},
     "review-readability": {"prompt": "{file:./prompts/agents/phase-prompts/review-readability.md}"},
@@ -19,7 +19,7 @@
     "jd-fix-agent": {"prompt": "{file:./prompts/agents/phase-prompts/jd-fix-agent.md}"},
     "jd-judge-a": {"prompt": "{file:./prompts/agents/phase-prompts/jd-judge-a.md}"},
     "jd-judge-b": {"prompt": "{file:./prompts/agents/phase-prompts/jd-judge-b.md}"},
-    "tony-orchestrator": {"description": "Tony AI SDD Orchestrator - routes sub-agents, never does phase work inline", "mode": "primary", "model": "ollama/qwen3-coder:30b", "permission": {"question": "allow", "task": {"*": "deny", "explore": "allow", "general": "allow", "jd-fix-agent": "allow", "jd-judge-a": "allow", "jd-judge-b": "allow", "review-readability": "allow", "review-refuter": "allow", "review-reliability": "allow", "review-resilience": "allow", "review-risk": "allow", "sdd-apply": "allow", "sdd-archive": "allow", "sdd-design": "allow", "sdd-explore": "allow", "sdd-init": "allow", "sdd-onboard": "allow", "sdd-propose": "allow", "sdd-spec": "allow", "sdd-tasks": "allow", "sdd-verify": "allow"}, "judgment-memory_*": "allow", "tony-kernel_*": "allow", "tonymem_*": "allow"}, "prompt": "{file:./prompts/agents/tony-orchestrator.md}", "tools": {"bash": true, "edit": true, "question": true, "read": true, "task": true, "write": true}},
+    "tony-orchestrator": {"description": "Tony AI SDD Orchestrator - routes sub-agents, never does phase work inline", "mode": "primary", "model": "ollama/qwen3-coder:30b", "permission": {"question": "allow", "task": {"*": "deny", "explore": "allow", "general": "allow", "jd-fix-agent": "allow", "jd-judge-a": "allow", "jd-judge-b": "allow", "review-readability": "allow", "review-refuter": "allow", "review-reliability": "allow", "review-resilience": "allow", "review-risk": "allow", "sdd-apply": "allow", "sdd-archive": "allow", "sdd-design": "allow", "sdd-explore": "allow", "sdd-init": "allow", "sdd-onboard": "allow", "sdd-propose": "allow", "sdd-spec": "allow", "sdd-tasks": "allow", "sdd-verify": "allow"}, "judgment-memory_*": "allow", "tony-kernel_*": "allow", "tonymem_mem_search": "allow", "tonymem_mem_context": "allow", "tonymem_mem_get_observation": "allow", "tonymem_mem_review": "allow", "tonymem_mem_suggest_topic_key": "deny", "tonymem_mem_save": "deny", "tonymem_mem_save_prompt": "deny", "tonymem_mem_update": "deny", "tonymem_mem_session_summary": "deny"}, "prompt": "{file:./prompts/agents/tony-orchestrator.md}", "tools": {"bash": true, "edit": true, "question": true, "read": true, "task": true, "write": true}},
     "gga-reviewer": {"description": "GGA code reviewer — responde directo al prompt de gga, no delega", "hidden": true, "mode": "subagent", "model": "ollama/qwen3-coder:30b", "prompt": "You are a code reviewer invoked by gga (Gentleman Guardian Angel).\n\nYou receive staged code changes and the project coding standards (AGENTS.md).\nReview the diff directly and respond with findings. Do NOT delegate or spawn sub-agents.\n\nFor each issue found, report:\n- File and line\n- What the problem is\n- Why it violates the standards\n- Suggested fix\n\nIf the code is clean, say so explicitly. Be concise and technical.", "tools": {"bash": false, "edit": false, "read": true, "task": false, "write": false}}
   },
   "default_agent": "tony-orchestrator",
@@ -34,5 +34,5 @@
   },
   "permission": {"bash": {"*": "allow", "git commit *": "ask", "git push": "ask", "git push --force *": "ask", "git rebase *": "ask", "git reset --hard *": "ask"}, "read": {"*": "allow", "**/*.key": "deny", "**/*.pem": "deny", "**/.aws/credentials": "deny", "**/.config/gh/hosts.yml": "deny", "**/.credentials/**": "deny", "**/.env/**": "deny", "**/.env.*": "deny", "**/.ssh/**": "deny", "**/credentials.json": "deny", "**/secrets/**": "deny"}, "context7_*": "allow", "code-index_*": "allow", "judgment-memory_*": "allow", "tony-kernel_*": "allow"},
   "share": "disabled",
-  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}
+  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384, "output": 4096}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}
 }
