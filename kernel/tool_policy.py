@@ -5,6 +5,9 @@ execution bridge: it asks this policy before executing a tool.
 """
 from __future__ import annotations
 
+import json
+import os
+import sys
 from dataclasses import dataclass
 
 
@@ -14,9 +17,6 @@ class ToolDecision:
     reason: str
 
 
-# Tool names are matched by exact name or prefix. Native read-only inspection
-# tools are allowed during planning phases; mutation/delegation/web tools are
-# explicitly denied until the implementation/verification phases permit them.
 PHASE_ALLOWED_PREFIXES = {
     "explore": ("code-index_", "read", "glob", "grep", "tonymem_mem_save"),
     "propose": ("code-index_", "read", "glob", "grep", "tonymem_"),
@@ -48,3 +48,33 @@ def check_tool_capability(phase: str, tool: str) -> ToolDecision:
         return ToolDecision(True, f"tool '{tool}' allowed during phase '{phase}'")
 
     return ToolDecision(False, f"tool '{tool}' is not allowed during phase '{phase}'")
+
+
+def main() -> None:
+    """CLI bridge used by the OpenCode Kernel capability hook."""
+    if len(sys.argv) != 2:
+        raise SystemExit("usage: python3 -m kernel.tool_policy <tool-name>")
+
+    if not os.environ.get("TONY_RUNTIME_DIR"):
+        raise RuntimeError("TONY_RUNTIME_DIR must be configured")
+
+    from .persistence import load_orchestrator
+    from .artifact_store import disk_artifact_store, disk_artifact_hasher
+
+    base = os.environ.get("TONY_REPO_ROOT") or os.getcwd()
+    orchestrator = load_orchestrator(
+        artifact_store=disk_artifact_store(base),
+        artifact_hasher=disk_artifact_hasher(base),
+    )
+    phase = orchestrator.get_status()["current_phase"]
+    decision = check_tool_capability(phase, sys.argv[1])
+    print(json.dumps({
+        "allowed": decision.allowed,
+        "reason": decision.reason,
+        "phase": phase,
+        "tool": sys.argv[1],
+    }))
+
+
+if __name__ == "__main__":
+    main()
