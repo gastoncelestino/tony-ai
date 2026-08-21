@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+from dataclasses import asdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import core  # noqa: E402
@@ -54,7 +55,8 @@ def code_search(args: dict) -> dict:
 
 
 def code_reindex(args: dict) -> dict:
-    return core.index_repo(args.get("path", PROJECT_ROOT), args.get("project", DEFAULT_PROJECT))
+    stats = core.index_repo(args.get("path", PROJECT_ROOT), args.get("project", DEFAULT_PROJECT))
+    return asdict(stats)
 
 
 def code_index_status(args: dict) -> dict:
@@ -63,56 +65,30 @@ def code_index_status(args: dict) -> dict:
 
 TOOLS = {
     "code_search": {"description": "Semantic search over the indexed codebase. Returns the most relevant code chunks.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "project": {"type": "string"}, "limit": {"type": "number"}, "path_prefix": {"type": "string"}}, "required": ["query"]}, "handler": code_search},
-    "code_reindex": {"description": "Incrementally index or reindex the codebase. Unchanged files are skipped by content hash.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "project": {"type": "string"}}, "required": []}, "handler": code_reindex},
-    "code_index_status": {"description": "Show code-index coverage and manifest status for the project.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "project": {"type": "string"}}, "required": []}, "handler": code_index_status},
+    "code_reindex": {"description": "Index or reindex the project codebase.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "project": {"type": "string"}}}, "handler": code_reindex},
+    "code_index_status": {"description": "Show code-index status for a project.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "project": {"type": "string"}}}, "handler": code_index_status},
 }
-
-
-def send(msg: dict) -> None:
-    sys.stdout.write(json.dumps(msg) + "\n")
-    sys.stdout.flush()
-
-
-def handle(msg: dict):
-    method = msg.get("method")
-    msg_id = msg.get("id")
-    if method == "initialize":
-        return {"jsonrpc": "2.0", "id": msg_id, "result": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "serverInfo": {"name": "code-index", "version": "1.0.0"}}}
-    if method == "notifications/initialized":
-        return None
-    if method == "tools/list":
-        return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": [{"name": n, "description": t["description"], "inputSchema": t["inputSchema"]} for n, t in TOOLS.items()]}}
-    if method == "tools/call":
-        params = msg.get("params", {})
-        tool_name = params.get("name")
-        tool = TOOLS.get(tool_name)
-        args = params.get("arguments", {}) or {}
-        if not tool:
-            return {"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": f"unknown tool: {tool_name}"}}
-        try:
-            result = tool["handler"](args)
-            return {"jsonrpc": "2.0", "id": msg_id, "result": {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}]}}
-        except Exception as exc:
-            return {"jsonrpc": "2.0", "id": msg_id, "result": {"content": [{"type": "text", "text": f"error: {exc}"}], "isError": True}}
-    if method == "ping":
-        return {"jsonrpc": "2.0", "id": msg_id, "result": {}}
-    if msg_id is not None:
-        return {"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32601, "message": f"unknown method: {method}"}}
-    return None
 
 
 def main() -> None:
     for line in sys.stdin:
-        line = line.strip()
-        if not line:
-            continue
         try:
-            msg = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        response = handle(msg)
-        if response is not None:
-            send(response)
+            req = json.loads(line)
+            method = req.get("method")
+            if method == "tools/list":
+                result = {"tools": [{"name": n, "description": t["description"], "inputSchema": t["inputSchema"]} for n, t in TOOLS.items()]}
+            elif method == "tools/call":
+                params = req.get("params", {})
+                name = params.get("name")
+                tool = TOOLS.get(name)
+                if not tool:
+                    raise ValueError(f"Unknown tool: {name}")
+                result = tool["handler"](params.get("arguments", {}))
+            else:
+                result = {"error": f"Unsupported method: {method}"}
+            print(json.dumps({"jsonrpc": "2.0", "id": req.get("id"), "result": result}), flush=True)
+        except Exception as exc:
+            print(json.dumps({"jsonrpc": "2.0", "id": req.get("id") if isinstance(req, dict) else None, "error": {"code": -32000, "message": str(exc)}}), flush=True)
 
 
 if __name__ == "__main__":
