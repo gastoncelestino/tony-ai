@@ -189,8 +189,27 @@ def run_suite(suite: unittest.TestSuite, total: int) -> int:
 
 
 def main() -> int:
-    args = parse_args()
     root = repo_root()
+    env_file = root / ".env"
+    if env_file.is_file():
+        for raw in env_file.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = os.path.expandvars(value.strip())
+            if key and value:
+                os.environ.setdefault(key, value)
+
+    cache_root = Path(os.path.expanduser(os.environ.get("PYTHON_CACHE_DIR", "/tmp/tony-ai-pycache")))
+    cache_root.mkdir(parents=True, exist_ok=True)
+    os.environ["PYTHON_CACHE_DIR"] = str(cache_root)
+    os.environ["PYTHONPYCACHEPREFIX"] = str(cache_root)
+    if hasattr(sys, "pycache_prefix"):
+        sys.pycache_prefix = str(cache_root)
+
+    args = parse_args()
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     try:
