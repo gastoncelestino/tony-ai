@@ -54,7 +54,7 @@ def code_search(args: dict) -> dict:
 
 
 def code_reindex(args: dict) -> dict:
-    return core.index_code(args.get("path", PROJECT_ROOT), args.get("project", DEFAULT_PROJECT))
+    return core.index_repo(args.get("path", PROJECT_ROOT), args.get("project", DEFAULT_PROJECT))
 
 
 def code_index_status(args: dict) -> dict:
