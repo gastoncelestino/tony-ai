@@ -33,10 +33,12 @@ Follow Section A from `skills/_shared/sdd-phase-common.md` (minimal — no phase
 
 ### 2. Investigate
 - **Treat the repository codebase as the primary source of truth for exploration.** Start by locating the relevant implementation, configuration, tests, and documentation in the active workspace.
-- Use the available codebase search/read tools (`code_search`, direct file reads, or equivalent repository inspection) to identify concrete code paths and cite `file:line` references.
+- **Use the workspace/repository inspection tools available in the current session as the primary mechanism.** Search filenames and file contents, then read the relevant files and surrounding code. If a dedicated `code_search` tool is available, use it; otherwise use direct filesystem/repository inspection or the equivalent tool actually exposed by the runtime.
+- **Do not use `WebFetch`, Google, general web search, or external websites to locate or understand code that should be investigated in the project repository.** The task is repository-first; external web research is out of scope unless the orchestrator explicitly requests external research.
 - Use `mem_search` only as a complementary source for prior decisions, historical context, or similar patterns already recorded in TonyMem.
 - **Never stop exploration because `mem_search` returns no results.** If memory has no matching observations, continue with codebase search and direct file inspection.
 - Do not treat an empty memory result as evidence that the requested system or concept does not exist.
+- **If a preferred search tool is unavailable, do not substitute an external web search. Fall back to the repository/filesystem inspection tools that are available in the session.**
 - Compare approaches (trade-offs, pros/cons) only after the relevant codebase path has been established.
 
 ### 3. Synthesize Findings
