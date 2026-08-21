@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compatibility wrapper that keeps Code Index runtime state outside the repo."""
+"""Compatibility wrapper for the Code Index runtime manifest."""
 from __future__ import annotations
 
 import importlib
@@ -9,13 +9,14 @@ _impl = importlib.import_module("core_impl")
 
 
 def _runtime_manifest_path(_root: str) -> str:
-    runtime_root = os.environ.get("TONY_RUNTIME_DIR")
-    if not runtime_root:
-        raise RuntimeError("TONY_RUNTIME_DIR must be configured")
-    runtime_root = os.path.abspath(os.path.expanduser(runtime_root))
-    directory = os.path.join(runtime_root, "code-index", ".codeindex")
-    os.makedirs(directory, exist_ok=True)
-    return os.path.join(directory, "manifest.db")
+    """Keep the SQLite manifest in the repository's code-index directory."""
+    manifest = os.environ.get("TONY_INDEX_MANIFEST")
+    if manifest:
+        manifest = os.path.abspath(os.path.expanduser(manifest))
+    else:
+        manifest = os.path.join(os.path.dirname(os.path.abspath(__file__)), "manifest.db")
+    os.makedirs(os.path.dirname(manifest), exist_ok=True)
+    return manifest
 
 
 _impl.manifest_path = _runtime_manifest_path
