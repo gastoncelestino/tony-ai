@@ -10,6 +10,7 @@ class TestExecutionOrder(unittest.TestCase):
     def test_resolves_ready_task_for_current_phase(self):
         result = resolve_execution(
             "explore",
+            "running",
             {
                 "id": "explore-1",
                 "description": "Inspect the repository",
@@ -25,9 +26,25 @@ class TestExecutionOrder(unittest.TestCase):
         self.assertEqual(result["execution_order"]["worker"], "llm")
         self.assertEqual(result["execution_order"]["task_id"], "explore-1")
 
+    def test_blocks_completed_phase(self):
+        result = resolve_execution(
+            "explore",
+            "completed",
+            {
+                "id": "explore-1",
+                "description": "Inspect the repository",
+                "phase": "explore",
+            },
+        )
+
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["decision"], "blocked")
+        self.assertIsNone(result["execution_order"])
+
     def test_blocks_task_from_different_phase(self):
         result = resolve_execution(
             "explore",
+            "running",
             {
                 "id": "apply-1",
                 "description": "Modify code",
@@ -40,7 +57,7 @@ class TestExecutionOrder(unittest.TestCase):
         self.assertIsNone(result["execution_order"])
 
     def test_blocks_when_no_task_is_ready(self):
-        result = resolve_execution("explore", None)
+        result = resolve_execution("explore", "running", None)
 
         self.assertFalse(result["allowed"])
         self.assertEqual(result["decision"], "blocked")
@@ -49,6 +66,7 @@ class TestExecutionOrder(unittest.TestCase):
     def test_blocks_incomplete_task_definition(self):
         result = resolve_execution(
             "explore",
+            "running",
             {"id": "explore-1", "phase": "explore"},
         )
 
