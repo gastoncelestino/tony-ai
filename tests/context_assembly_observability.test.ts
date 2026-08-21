@@ -44,13 +44,16 @@ test("context assembly logs cumulative accepted context characters per session",
   expect(logs[0].body).toMatchObject({
     service: "context-assembly",
     message: "accepted context characters",
-    extra: { sessionID: "session-A", accepted_context_chars: expect.any(Number) },
+    extra: { sessionID: "session-A" },
   })
   expect(logs[1].body).toMatchObject({
     service: "context-assembly",
     message: "accepted context characters",
-    extra: { sessionID: "session-A", accepted_context_chars: expect.any(Number) },
+    extra: { sessionID: "session-A" },
   })
+
+  expect(typeof (logs[0].body.extra as { accepted_context_chars: unknown }).accepted_context_chars).toBe("number")
+  expect(typeof (logs[1].body.extra as { accepted_context_chars: unknown }).accepted_context_chars).toBe("number")
 
   const firstChars = (logs[0].body.extra as { accepted_context_chars: number }).accepted_context_chars
   const secondChars = (logs[1].body.extra as { accepted_context_chars: number }).accepted_context_chars
