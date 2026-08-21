@@ -5,7 +5,7 @@
     "sdd-verify": {"prompt": "{file:./prompts/sdd/sdd-verify.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
     "sdd-spec": {"prompt": "{file:./prompts/sdd/sdd-spec.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-design": {"prompt": "{file:./prompts/sdd/sdd-design.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
-    "sdd-tasks": {"prompt": "{file:./prompts/sdd/sdd-tasks.md", "permission": {"tonymem_*": "allow"}},
+    "sdd-tasks": {"prompt": "{file:./prompts/sdd/sdd-tasks.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-explore": {"prompt": "{file:./prompts/sdd/sdd-explore.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow"}},
     "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow"}},
