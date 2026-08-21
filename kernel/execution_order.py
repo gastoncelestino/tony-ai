@@ -35,13 +35,24 @@ class ExecutionOrder:
 
 def resolve_execution(
     current_phase: str,
+    current_phase_status: str,
     task: Optional[Mapping[str, object]],
 ) -> dict:
     """Resolve the next execution order from Kernel-owned state.
 
     No requested phase, agent, or workflow decision is accepted from the
-    caller. A task is executable only when it belongs to the current phase.
+    caller. A task is executable only when the current phase is active and the
+    task belongs to that phase.
     """
+    if current_phase_status != "running":
+        return {
+            "decision": "blocked",
+            "allowed": False,
+            "reason": f"Current phase is not executable: {current_phase_status}",
+            "current_phase": current_phase,
+            "execution_order": None,
+        }
+
     if task is None:
         return {
             "decision": "blocked",
