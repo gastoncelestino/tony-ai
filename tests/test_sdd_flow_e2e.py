@@ -37,6 +37,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -292,6 +294,7 @@ class FlowRunner:
         return 0
 
 
+@pytest.mark.e2e
 def test_sdd_flow_e2e() -> None:
     """pytest entry point: runs the full isolated adversarial flow (28 checks)."""
     runner = FlowRunner(REPO_ROOT)
