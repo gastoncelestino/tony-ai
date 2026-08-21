@@ -24,7 +24,7 @@
     "sdd-verify": {"prompt": "{file:./prompts/sdd/sdd-verify.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-spec": {"prompt": "{file:./prompts/sdd/sdd-spec.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-design": {"prompt": "{file:./prompts/sdd/sdd-design.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
-    "sdd-tasks": {"prompt": "{file:./prompts/sdd/sdd-tasks.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
+    "sdd-tasks": {"prompt": "{file:./prompts/sdd/sdd-tasks.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md}", "permission": {"tonymem_*": "allow"}},
@@ -62,11 +62,16 @@
   "share": "disabled",
   "provider": {
     "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (local)",
+      "options": {
+        "baseURL": "http://localhost:11434/v1"
+      },
       "models": {
-        "qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}},
-        "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}},
-        "deepseek-r1:14b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}},
-        "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}
+        "qwen3-coder:30b": {"name": "qwen3-coder:30b", "options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}},
+        "carstenuhlig/omnicoder-2-9b:q4_k_m": {"name": "carstenuhlig/omnicoder-2-9b:q4_k_m", "options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}},
+        "deepseek-r1:14b": {"name": "deepseek-r1:14b", "options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}},
+        "ornith:9b": {"name": "ornith:9b", "options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}
       }
     }
   }
