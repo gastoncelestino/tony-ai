@@ -29,20 +29,22 @@ bun-debug.log*
 .npm/
 
 ### Tony-AI runtime state
-# Estado efímero del Kernel.
-.tony-kernel/
-
-# Bases SQLite configuradas para los servidores MCP.
-.tonymem/
+# Estado persistente local de los servidores MCP. Nunca versionar las DBs/estado.
 local-memory/memory.db
 local-memory/memory.db-*
 judgment-memory/memory.db
 judgment-memory/memory.db-*
 judgment-memory/judgment-memory.db
 judgment-memory/judgment-memory.db-*
+code-index/manifest.db
+code-index/manifest.db-*
+kernel/kernel-state.json
+kernel/kernel-state.json.*
 judgment-memory/__pycache__/
 
-# Índice local de Code Indexer.
+# Legacy/runtime paths kept ignored for compatibility.
+.tony-kernel/
+.tonymem/
 code-index/.codeindex/
 
 # Estado temporal de pruebas E2E.
