@@ -1,38 +1,41 @@
 ---
 name: sdd-verify
-description: "Verify implementation against tasks, specification, design, and runtime evidence."
+description: "Verify the implementation against the SDD contract and runtime evidence."
 disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
   author: gentleman-programming
-  version: "3.0"
+  version: "4.0"
   delegate_only: true
 ---
 
-# Purpose
-Act as the quality gate. Prove completion with source inspection and real execution evidence.
+# SDD Verify
+
+## Objective
+Act as the quality gate and prove whether the implementation satisfies the approved SDD requirements with real execution evidence.
 
 ## Inputs
 - Change name
 - Task completion/apply status
 - Specification and design artifacts when present
-- Changed implementation files / relevant project test configuration
-- TDD mode or cached testing capability
+- Changed implementation files and relevant test configuration
+- Testing capability or TDD mode when applicable
 
 ## Work
-1. Block if tasks are incomplete or workspace-planning mode prevents full verification.
-2. Read only the artifacts required for the verification scope: tasks first, then spec/design when present.
-3. For each spec scenario, identify a covering runtime test and execute it.
-4. Check changed code against design decisions; report deviations without loading unrelated history.
-5. Run the smallest relevant tests, build, and type-check commands and capture exit codes/results.
-6. Load strict-TDD verification only when strict TDD is active.
-7. Persist `verify-report` using the common artifact contract.
-
-## Constraints
-- Source inspection alone is not verification.
-- Do not retrieve proposal/exploration/archive unless a specific verification question requires them.
-- Do not load another phase prompt.
+- Determine completeness against the task set.
+- Map each specification scenario to covering runtime evidence.
+- Inspect changed code against the design.
+- Execute the smallest relevant tests, build, and type-check commands required by the project.
+- Record exit codes, results, deviations, and unresolved issues.
 
 ## Output
-Verification report with completeness, tests/build, spec compliance, design coherence, issues, and `PASS | PASS WITH WARNINGS | FAIL`, followed by the minimal executor envelope.
+Produce a verification report with:
+- completeness
+- test/build/type-check evidence
+- specification compliance
+- design coherence
+- issues and warnings
+- final verdict: `PASS`, `PASS WITH WARNINGS`, or `FAIL`
+
+The Tony Kernel owns phase selection, execution permissions, scope, transitions, blocking conditions, and completion validation. This contract defines the meaning and expected output of the Verify phase; it does not define runtime tool policy.
