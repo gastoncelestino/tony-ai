@@ -26,10 +26,10 @@
   "env": {},
   "mcp": {
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
-    "tonymem": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/local-memory/server.py\""], "type": "local", "environment": {"LOCAL_MEMORY_DB": "{env:PWD}/.tonymem/memory.db"}},
-    "code-index": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/code-index/server.py\""], "type": "local", "environment": {"TONY_INDEX_ROOT": "{env:PWD}", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "bge-m3", "TONY_INDEX_CHUNKER": "tree-sitter"}},
-    "judgment-memory": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/judgment-memory/server.py\""], "type": "local", "environment": {"JUDGMENT_MEMORY_DB": "{env:PWD}/.tonymem/judgment-memory.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5"}},
-    "tony-kernel": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/kernel/mcp_server.py\""], "type": "local", "environment": {}}
+    "tonymem": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/local-memory/server.py\""], "type": "local", "environment": {"LOCAL_MEMORY_DB": "{env:PWD}/local-memory/memory.db"}},
+    "code-index": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/code-index/server.py\""], "type": "local", "environment": {"TONY_INDEX_ROOT": "{env:PWD}", "TONY_INDEX_MANIFEST": "{env:PWD}/code-index/manifest.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "bge-m3", "TONY_INDEX_CHUNKER": "tree-sitter"}},
+    "judgment-memory": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/judgment-memory/server.py\""], "type": "local", "environment": {"JUDGMENT_MEMORY_DB": "{env:PWD}/judgment-memory/judgment-memory.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5"}},
+    "tony-kernel": {"command": ["sh", "-lc", ". .env && exec python3 \"$PWD/kernel/mcp_server.py\""], "type": "local", "environment": {"TONY_KERNEL_STATE_DIR": "{env:PWD}/kernel"}}
   },
   "permission": {"bash": {"*": "allow", "git commit *": "ask", "git push": "ask", "git push --force *": "ask", "git rebase *": "ask", "git reset --hard *": "ask"}, "read": {"*": "allow", "**/*.key": "deny", "**/*.pem": "deny", "**/.aws/credentials": "deny", "**/.config/gh/hosts.yml": "deny", "**/.credentials/**": "deny", "**/.env/**": "deny", "**/.env.*": "deny", "**/.ssh/**": "deny", "**/credentials.json": "deny", "**/secrets/**": "deny"}, "context7_*": "allow", "code-index_*": "allow", "judgment-memory_*": "allow", "tony-kernel_*": "allow"},
   "share": "disabled",
