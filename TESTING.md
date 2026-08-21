@@ -72,10 +72,7 @@ make check-test-deps			# pytest x.x.x
 ---
 
 ## 3. Cómo ejecutar tests directamente
-```bash
-# Python con pytest
-python3 -m pytest tests -v
-```
+
 ```bash
 # Python con runner standalone (sin pytest)
 python3 tests/python_verify.py tests
@@ -98,23 +95,55 @@ Validación de `opencode.json`, prompts, agentes, MCP y referencias de archivos.
 
 **Python:**
 ```bash
-python3 -m pytest tests/test_kernel_state_machine.py -v
-python3 -m pytest tests/test_sdd_flow_e2e.py -v
+python3 -m pytest tests/test_artifact_gate.py -v
 python3 -m pytest tests/test_code_index_core.py -v
+python3 -m pytest tests/test_evidence_ledger.py -v
+python3 -m pytest tests/test_judgment_memory_ledger.py -v
+python3 -m pytest tests/test_kernel_cli.py -v
+python3 -m pytest tests/test_kernel_concurrency.py -v
+python3 -m pytest tests/test_kernel_enforcement.py -v
+python3 -m pytest tests/test_kernel_hardening.py -v
+python3 -m pytest tests/test_kernel_integration.py -v
+python3 -m pytest tests/test_kernel_mcp_contract.py -v
+python3 -m pytest tests/test_kernel_state_machine.py -v
+python3 -m pytest tests/test_knowledge_sources.py -v
+python3 -m pytest tests/test_local_memory_server.py -v
+python3 -m pytest tests/test_orchestrator_scope.py -v
+python3 -m pytest tests/test_phase_checksum.py -v
+python3 -m pytest tests/test_phase_gate.py -v
+python3 -m pytest tests/test_python_test_runner.py -v
+python3 -m pytest tests/test_retry_budget.py -v
+python3 -m pytest tests/test_runtime_paths.py -v
+python3 -m pytest tests/test_sdd_flow_e2e.py -v
+python3 -m pytest tests/test_setup.py -v
+python3 -m pytest tests/test_state_machine.py -v
+python3 -m pytest tests/test_task_dependencies.py -v
+python3 -m pytest tests/test_task_evidence.py -v
 ```
 
 **TypeScript:**
 ```bash
-bun test tests/tony_kernel_hooks.test.ts
+bun test tests/context_assembly.test.ts
+bun test tests/context7_allowlist.test.ts
 bun test tests/judgment_memory_hooks.test.ts
+bun test tests/project_code_context.test.ts
+bun test tests/tony_kernel_e2e.test.ts
+bun test tests/tony_kernel_hooks.test.ts
+bun test tests/tony_kernel_integration.test.ts
+```
+
+### Todos los tests
+```bash
+python3 -m pytest tests             # Todos los tests
 ```
 
 ### Tests por categoría (markers)
 
 ```bash
 python3 -m pytest -m concurrency    # Escenarios de concurrencia
+python3 -m pytest -m integration    # Tests que integran múltiples componentes del kernel
 python3 -m pytest -m mcp            # Contrato MCP JSON-RPC
-python3 -m pytest -m "not concurrency"
+python3 -m pytest -m e2e            # End-to-end workflow test
 ```
 
 ## 4. Antes de hacer `commit`, `push` a rama local, a `main` o `dev`
