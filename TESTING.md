@@ -78,9 +78,9 @@ make check-test-deps			# pytest x.x.x
 python3 tests/python_verify.py tests
 ```
 
-> El runner standalone usa solo stdlib. 
-> Si pytest pasó pero standalone no, significa el test depende de algo no instalable sin pip. 
-> Usar pytest en ese caso.
+- El runner standalone usa solo stdlib. 
+- Si pytest pasó pero standalone no, significa el test depende de algo no instalable sin pip. 
+- Usar pytest en ese caso.
 
 ```bash
 # TypeScript
