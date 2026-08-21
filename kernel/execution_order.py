@@ -1,12 +1,21 @@
 """Deterministic execution-order resolution for Tony Kernel.
 
 The Kernel selects the next executable task. Callers do not choose a phase,
-agent, or workflow step through this resolver.
+agent, task, or workflow step through this resolver.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Optional
+from typing import Protocol
+
+
+class KernelState(Protocol):
+    """Minimal Kernel surface required to resolve an execution order."""
+
+    change_state: object
+
+    def get_next_task(self) -> dict | None:
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,26 +42,26 @@ class ExecutionOrder:
         }
 
 
-def resolve_execution(
-    current_phase: str,
-    current_phase_status: str,
-    task: Optional[Mapping[str, object]],
-) -> dict:
-    """Resolve the next execution order from Kernel-owned state.
+def resolve_execution(kernel: KernelState) -> dict:
+    """Resolve the next execution order from Kernel-owned state only.
 
-    No requested phase, agent, or workflow decision is accepted from the
-    caller. A task is executable only when the current phase is active and the
-    task belongs to that phase.
+    The caller supplies the Kernel, not a phase or task. Phase status and the
+    next task are read from Kernel state and validated here before an order is
+    produced.
     """
-    if current_phase_status != "running":
+    current_phase = kernel.change_state.current_phase.value
+    current_status = kernel.change_state.get_current_phase_state().status.value
+
+    if current_status != "running":
         return {
             "decision": "blocked",
             "allowed": False,
-            "reason": f"Current phase is not executable: {current_phase_status}",
+            "reason": f"Current phase is not executable: {current_status}",
             "current_phase": current_phase,
             "execution_order": None,
         }
 
+    task = kernel.get_next_task()
     if task is None:
         return {
             "decision": "blocked",
