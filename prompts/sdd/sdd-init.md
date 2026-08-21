@@ -6,33 +6,30 @@ user-invocable: false
 license: MIT
 metadata:
   author: gentleman-programming
-  version: "3.0"
+  version: "4.0"
   delegate_only: true
 ---
 
-# Purpose
-Initialize SDD state once per project.
+# SDD Init
+
+## Objective
+Bootstrap the project context required by the SDD workflow.
 
 ## Inputs
-- Project root
+- Active project workspace
 - Optional user preferences
 
-## Work
-1. If `sdd-init/{project}` already exists, return the cached configuration.
-2. Inspect only project configuration needed to identify:
-   - languages/frameworks
-   - test runner and test command
-   - build/type-check command
-   - coverage command when available
-   - `strict_tdd` capability
-3. Select artifact store: `tonymem` (default), `openspec`, `hybrid`, or `none`.
-4. Set preflight defaults: execution mode, delivery strategy, and review budget (400 lines default).
-5. Persist the resulting project context as `sdd-init/{project}` using the common artifact contract.
-
 ## Output
-Return the minimal executor envelope with detected stack/capabilities and next phase: `sdd-onboard` or `sdd-explore`.
+Produce the project initialization artifact containing the detected stack, testing/build capabilities, artifact-store mode, and preflight defaults required by later phases.
 
-## Constraints
-- Run only once per project unless no cached state exists.
-- Do not inspect unrelated source code.
-- Do not load another phase prompt.
+## Work
+- Detect the project languages and frameworks.
+- Detect the test runner and test command.
+- Detect the build/type-check command and coverage command when available.
+- Record the `strict_tdd` capability when it can be established from project configuration.
+- Record the configured artifact-store mode and preflight defaults.
+
+## Boundary
+Inspect only the project configuration needed to establish SDD project context. Do not implement a requested change or perform phase work belonging to Explore or later phases.
+
+The Tony Kernel owns phase selection, execution permissions, scope, transitions, and artifact lifecycle. This contract defines the meaning and expected output of the Init phase; it does not define runtime tool policy.
