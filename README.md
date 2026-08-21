@@ -6,7 +6,7 @@ Combina tres subsistemas principales:
 * `code-index/` — indexación y búsqueda semántica del código mediante Ollama + Qdrant.
 * `judgment-memory/` — almacenamiento y recuperación de decisiones, revisiones y juicios previos para reutilizar conocimiento durante futuras tareas.
 
-La configuración de OpenCode almacena las bases SQLite persistentes de TonyMem y Judgment Memory bajo `.tonymem/`:
+La configuración de OpenCode almacena las bases SQLite persistentes de TonyMem y Judgment Memory:
 
 ```text
 .tonymem/memory.db
