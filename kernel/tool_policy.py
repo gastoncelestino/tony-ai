@@ -35,6 +35,7 @@ ALWAYS_ALLOWED_PREFIXES = (
 )
 ALWAYS_DENIED_PREFIXES = (
     "task",
+    "skill",
     "webfetch",
     "websearch",
     "tony-kernel_kernel_reset",
