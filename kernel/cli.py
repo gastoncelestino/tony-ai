@@ -139,7 +139,8 @@ def _main(argv: list) -> None:
     if command == "resolve_execution":
         orch = _load()
         current_phase = orch.change_state.current_phase.value
-        result = resolve_execution(current_phase, orch.get_next_task())
+        current_status = orch.change_state.get_current_phase_state().status.value
+        result = resolve_execution(current_phase, current_status, orch.get_next_task())
         print(json.dumps(result))
         return
 
