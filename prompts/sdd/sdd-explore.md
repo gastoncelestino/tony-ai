@@ -32,10 +32,12 @@ Investigate an idea, read codebase, compare approaches. No files created — pur
 Follow Section A from `skills/_shared/sdd-phase-common.md` (minimal — no phase skills needed).
 
 ### 2. Investigate
-- Read relevant codebase areas
-- Search for similar patterns (`code_search`, `mem_search`)
-- Compare approaches (trade-offs, pros/cons)
-- Check prior decisions in tonymem (`mem_search`)
+- **Treat the repository codebase as the primary source of truth for exploration.** Start by locating the relevant implementation, configuration, tests, and documentation in the active workspace.
+- Use the available codebase search/read tools (`code_search`, direct file reads, or equivalent repository inspection) to identify concrete code paths and cite `file:line` references.
+- Use `mem_search` only as a complementary source for prior decisions, historical context, or similar patterns already recorded in TonyMem.
+- **Never stop exploration because `mem_search` returns no results.** If memory has no matching observations, continue with codebase search and direct file inspection.
+- Do not treat an empty memory result as evidence that the requested system or concept does not exist.
+- Compare approaches (trade-offs, pros/cons) only after the relevant codebase path has been established.
 
 ### 3. Synthesize Findings
 Produce exploration report with:
