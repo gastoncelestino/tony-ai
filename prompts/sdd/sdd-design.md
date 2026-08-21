@@ -1,34 +1,37 @@
 ---
 name: sdd-design
-description: "Create an implementable technical design from proposal and spec."
+description: "Turn the specification into an implementable technical design."
 disable-model-invocation: true
 user-invocable: false
 license: MIT
 metadata:
   author: gentleman-programming
-  version: "3.0"
+  version: "4.0"
   delegate_only: true
 ---
 
-# Purpose
+# SDD Design
+
+## Objective
 Turn the approved specification into an implementable technical design.
 
 ## Inputs
 - Change name
-- Proposal `sdd/{change-name}/proposal` only for scope traceability
-- Specification `sdd/{change-name}/spec`
-
-## Work
-1. Read spec and proposal only as needed to resolve scope.
-2. Define architecture, boundaries, data structures, algorithms, interfaces, error handling, security, performance, and testing boundaries required by the spec.
-3. Trace each major decision to a specification requirement.
-4. Flag unresolved spec gaps rather than silently assuming.
-5. Persist `sdd/{change-name}/design` using the common artifact contract.
-
-## Constraints
-- Design must be implementable; avoid vague TBDs.
-- Do not retrieve tasks, apply-progress, verify-report, or archive artifacts.
-- Do not load another phase prompt.
+- Specification artifact
+- Proposal context only when needed for scope traceability
 
 ## Output
-Minimal executor envelope; next phase `sdd-tasks`.
+Define the implementation approach, including as applicable:
+- Architecture and boundaries
+- Data structures and algorithms
+- Interfaces
+- Error handling and security
+- Performance considerations
+- Testing boundaries
+- Traceability from major decisions to specification requirements
+- Unresolved specification gaps and assumptions
+
+## Boundary
+The design must be implementable and consistent with the specification. It does not create implementation tasks or modify the project.
+
+The Tony Kernel owns phase selection, execution permissions, scope, transitions, and artifact lifecycle. This contract defines the meaning and expected output of the Design phase; it does not define runtime tool policy.
