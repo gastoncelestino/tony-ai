@@ -42,7 +42,10 @@ from kernel.orchestrator_integration import (
     OrchestrationDecision,
 )
 
+import pytest
 
+
+@pytest.mark.integration
 class TestIntegrationTransitions(unittest.TestCase):
     """Integration tests for phase transitions."""
 
@@ -122,6 +125,7 @@ class TestIntegrationTransitions(unittest.TestCase):
             orch.record_phase_completion(phase, artifact_map[phase])
 
 
+@pytest.mark.integration
 class TestIntegrationEvidence(unittest.TestCase):
     """Integration tests for evidence requirements."""
 
@@ -233,6 +237,7 @@ class TestIntegrationEvidence(unittest.TestCase):
         self.assertEqual(result.decision, OrchestrationDecision.BLOCK_EVIDENCE_REQUIRED)
 
 
+@pytest.mark.integration
 class TestIntegrationRetryBudget(unittest.TestCase):
     """Integration tests for retry budget."""
 
@@ -281,6 +286,7 @@ class TestIntegrationRetryBudget(unittest.TestCase):
         self.assertTrue(retry.is_exhausted("apply"))
 
 
+@pytest.mark.integration
 class TestIntegrationArtifactGate(unittest.TestCase):
     """Integration tests for artifact gate."""
 
@@ -305,6 +311,7 @@ class TestIntegrationArtifactGate(unittest.TestCase):
         self.assertEqual(result.decision, OrchestrationDecision.PROCEED)
 
 
+@pytest.mark.integration
 class TestIntegrationChecksum(unittest.TestCase):
     """Integration tests for phase checksum verification."""
 
