@@ -1,13 +1,31 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "agent": {
+    "sdd-explore": {
+      "description": "Tony AI SDD Explore phase executor",
+      "mode": "subagent",
+      "hidden": true,
+      "prompt": "{file:./prompts/sdd/sdd-explore.md}",
+      "permission": {
+        "code-index_*": "allow",
+        "tonymem_*": "deny",
+        "tonymem_mem_save": "allow",
+        "edit": "deny",
+        "task": "deny",
+        "skill": "deny",
+        "webfetch": "deny",
+        "websearch": "deny"
+      },
+      "tools": {
+        "skill": false
+      }
+    },
     "sdd-apply": {"prompt": "{file:./prompts/sdd/sdd-apply.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-verify": {"prompt": "{file:./prompts/sdd/sdd-verify.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-spec": {"prompt": "{file:./prompts/sdd/sdd-spec.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-design": {"prompt": "{file:./prompts/sdd/sdd-design.md}", "permission": {"code-index_*": "allow", "tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-tasks": {"prompt": "{file:./prompts/sdd/sdd-tasks.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
-    "sdd-explore": {"prompt": "{file:./prompts/sdd/sdd-explore.md}", "permission": {"code-index_*": "allow", "tonymem_*": "deny", "tonymem_mem_save": "allow", "edit": "deny", "task": "deny", "skill": "deny", "webfetch": "deny", "websearch": "deny"}, "tools": {"skill": false}},
     "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-onboard": {"prompt": "{file:./prompts/sdd/sdd-onboard.md}", "permission": {"tonymem_*": "allow"}},
