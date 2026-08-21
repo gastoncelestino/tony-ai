@@ -1,16 +1,6 @@
----
-name: sdd-explore
-description: "Investigate the active codebase and produce the exploration artifact."
-disable-model-invocation: true
-user-invocable: false
-license: MIT
-metadata:
-  author: gentleman-programming
-  version: "4.0"
-  delegate_only: true
----
-
 # SDD Explore
+
+This file is an SDD phase contract loaded as the prompt of the `sdd-explore` phase agent. It is **not a Skill** and must never be invoked through the `skill` tool. The identifier `sdd-explore` names the phase agent only. Do not search for, load, or invoke a skill named `sdd-explore`; execute this phase directly from this contract.
 
 ## Objective
 Investigate the active project workspace and produce the exploration artifact required by the SDD workflow.
