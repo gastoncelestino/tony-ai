@@ -13,6 +13,17 @@ interface ToolDecision {
   tool: string
 }
 
+const FSM_PHASE_AGENTS = new Set([
+  "sdd-explore",
+  "sdd-propose",
+  "sdd-spec",
+  "sdd-design",
+  "sdd-tasks",
+  "sdd-apply",
+  "sdd-verify",
+  "sdd-archive",
+])
+
 function checkWithKernel(tool: string): Promise<ToolDecision> {
   return new Promise((resolve, reject) => {
     const proc = spawn("python3", ["-m", "kernel.tool_policy", tool], {
@@ -56,10 +67,20 @@ export async function kernelToolCapabilityBeforeHook(
   input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
   _output: unknown,
 ): Promise<void> {
-  // Task delegation has its own transition gate in plugins/tony-kernel.ts.
-  // All other tools, including Kernel control-plane tools, are checked by
-  // the authoritative Kernel policy.
-  if (input.tool === "Task") return
+  // Task delegation has a separate FSM transition gate in plugins/tony-kernel.ts.
+  // This hook additionally prevents a phase executor from creating arbitrary
+  // nested agents. Only configured SDD phase agents may be delegated.
+  if (input.tool === "Task") {
+    const subAgent = input.arguments.subagent_type
+    if (typeof subAgent !== "string" || !FSM_PHASE_AGENTS.has(subAgent)) {
+      throw new Error(
+        `[Tony Kernel] Nested Task delegation blocked: '${String(subAgent ?? "unknown")}' is not an authorized SDD phase agent`,
+      )
+    }
+
+    // The main Tony Kernel plugin performs the authoritative phase gate.
+    return
+  }
 
   const decision = await checkWithKernel(input.tool)
   if (!decision.allowed) {
