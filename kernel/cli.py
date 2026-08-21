@@ -32,6 +32,7 @@ def _ensure_runtime() -> str:
 
 from .persistence import load_orchestrator, update_orchestrator, reset_state
 from .artifact_store import disk_artifact_store, disk_artifact_hasher
+from .execution_order import resolve_execution
 from .schemas import ArtifactRef, Evidence, EvidenceType
 
 
@@ -133,6 +134,13 @@ def _main(argv: list) -> None:
     if command == "reset":
         reset_state()
         print(json.dumps({"ok": True}))
+        return
+
+    if command == "resolve_execution":
+        orch = _load()
+        current_phase = orch.change_state.current_phase.value
+        result = resolve_execution(current_phase, orch.get_next_task())
+        print(json.dumps(result))
         return
 
     if command == "can_start_phase":
