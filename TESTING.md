@@ -126,6 +126,7 @@ python3 -m pytest tests/test_task_evidence.py -v
 **TypeScript:**
 ```bash
 bun test tests/context_assembly.test.ts
+bun test tests/context_assembly_observability.test.ts
 bun test tests/context7_allowlist.test.ts
 bun test tests/judgment_memory_hooks.test.ts
 bun test tests/project_code_context.test.ts
