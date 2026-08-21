@@ -1,16 +1,7 @@
-/**
- * Tony Kernel capability bridge.
- *
- * OpenCode remains the runtime, but the Kernel is authoritative for which
- * tools may execute while an SDD phase is active. This hook asks the Kernel
- * before every tool execution and fails closed on denial.
- */
-
 import type { Plugin } from "@opencode-ai/plugin"
 import { spawn } from "node:child_process"
-import { join } from "path"
+import { join, dirname } from "path"
 import { fileURLToPath } from "url"
-import { dirname } from "path"
 
 const PLUGIN_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = join(PLUGIN_DIR, "..")
@@ -37,8 +28,12 @@ function checkWithKernel(tool: string): Promise<ToolDecision> {
     let stdout = ""
     let stderr = ""
 
-    proc.stdout.on("data", (data: Buffer) => { stdout += data.toString() })
-    proc.stderr.on("data", (data: Buffer) => { stderr += data.toString() })
+    proc.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString()
+    })
+    proc.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString()
+    })
 
     proc.on("close", (code) => {
       if (code !== 0) {
@@ -63,8 +58,7 @@ export async function kernelToolCapabilityBeforeHook(
 ): Promise<void> {
   // Task delegation has its own transition gate in plugins/tony-kernel.ts.
   // All other tools, including Kernel control-plane tools, are checked by
-  // the authoritative Kernel policy. This prevents phase agents from using
-  // reset/transition operations to bypass the state machine.
+  // the authoritative Kernel policy.
   if (input.tool === "Task") return
 
   const decision = await checkWithKernel(input.tool)
@@ -75,13 +69,8 @@ export async function kernelToolCapabilityBeforeHook(
   }
 }
 
-const plugin: Plugin = {
-  name: "tony-kernel-capabilities",
-  version: "1.1.0",
-  description: "Tony Kernel phase capability enforcement",
-  hooks: {
-    "tool.execute.before": kernelToolCapabilityBeforeHook,
-  },
-}
+export const TonyKernelCapabilities: Plugin = async () => ({
+  "tool.execute.before": kernelToolCapabilityBeforeHook,
+})
 
-export default plugin
+export default TonyKernelCapabilities
