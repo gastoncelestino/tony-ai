@@ -21,8 +21,22 @@ type PendingContext = {
   codeReceived: number
 }
 
+type ContextAssemblyClient = {
+  app: {
+    log: (request: {
+      body: {
+        service: string
+        level: "debug" | "info" | "warn" | "error"
+        message: string
+        extra?: Record<string, unknown>
+      }
+    }) => Promise<unknown>
+  }
+}
+
 export type ContextAssemblyStats = {
   sessionID: string
+  accepted_context_chars: number
   documentation: {
     received: number
     accepted: number
@@ -45,6 +59,7 @@ export type ContextAssemblyStats = {
 
 type ContextAssemblyOptions = {
   worktree: string
+  client?: ContextAssemblyClient
   onContextDecision?: (stats: ContextAssemblyStats) => void
 }
 
@@ -154,6 +169,7 @@ function formatContext(context: PendingContext, sessionID: string): { block: str
     block,
     stats: {
       sessionID,
+      accepted_context_chars: block.length,
       documentation: {
         received: context.documentationReceived,
         accepted: documentation.length,
@@ -176,10 +192,41 @@ function formatContext(context: PendingContext, sessionID: string): { block: str
   }
 }
 
-export const ContextAssembly = ({ worktree, onContextDecision }: ContextAssemblyOptions) => {
+export const ContextAssembly = ({ worktree, client, onContextDecision }: ContextAssemblyOptions) => {
   const pending = new Map<string, PendingContext>()
+  const acceptedContextCharsBySession = new Map<string, number>()
+
+  const recordObservation = (stats: ContextAssemblyStats): void => {
+    const acceptedContextChars = (acceptedContextCharsBySession.get(stats.sessionID) ?? 0) + stats.accepted_context_chars
+    acceptedContextCharsBySession.set(stats.sessionID, acceptedContextChars)
+
+    const observedStats = { ...stats, accepted_context_chars: acceptedContextChars }
+    onContextDecision?.(observedStats)
+
+    if (!client) return
+    void client.app.log({
+      body: {
+        service: "context-assembly",
+        level: "info",
+        message: "accepted context characters",
+        extra: {
+          sessionID: stats.sessionID,
+          accepted_context_chars: acceptedContextChars,
+        },
+      },
+    }).catch(() => undefined)
+  }
 
   return {
+    event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
+      if (event.type !== "session.deleted") return
+      const sessionID = event.properties?.sessionID
+      if (typeof sessionID === "string") {
+        acceptedContextCharsBySession.delete(sessionID)
+        pending.delete(sessionID)
+      }
+    },
+
     "tool.execute.after": async (input: { tool: string; sessionID?: string }, output: ToolOutput) => {
       const sessionID = input.sessionID
       if (!sessionID || !output?.metadata) return
@@ -217,7 +264,7 @@ export const ContextAssembly = ({ worktree, onContextDecision }: ContextAssembly
       if (output.system.length) output.system[output.system.length - 1] += "\n\n" + block
       else output.system.push(block)
       pending.delete(sessionID)
-      onContextDecision?.(stats)
+      recordObservation(stats)
     },
   }
 }
