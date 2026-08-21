@@ -9,7 +9,7 @@
     "sdd-archive": {"prompt": "{file:./prompts/sdd/sdd-archive.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-explore": {"prompt": "{file:./prompts/sdd/sdd-explore.md}", "permission": {"code-index_*": "allow", "tonymem_*": "deny", "tonymem_mem_save": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
     "sdd-propose": {"prompt": "{file:./prompts/sdd/sdd-propose.md}", "permission": {"tonymem_*": "allow", "edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny"}},
-    "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md", "permission": {"tonymem_*": "allow"}},
+    "sdd-init": {"prompt": "{file:./prompts/sdd/sdd-init.md}", "permission": {"tonymem_*": "allow"}},
     "sdd-onboard": {"prompt": "{file:./prompts/sdd/sdd-onboard.md}", "permission": {"tonymem_*": "allow"}},
     "review-readability": {"prompt": "{file:./prompts/agents/phase-prompts/review-readability.md}"},
     "review-reliability": {"prompt": "{file:./prompts/agents/phase-prompts/review-reliability.md}"},
@@ -29,10 +29,10 @@
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
     "tonymem": {"type": "local", "command": ["python3", "local-memory/server.py"], "cwd": ".", "environment": {"LOCAL_MEMORY_DB": "local-memory/memory.db", "PYTHONDONTWRITEBYTECODE": "1"}},
     "code-index": {"type": "local", "command": ["python3", "code-index/server.py"], "cwd": ".", "environment": {"TONY_INDEX_ROOT": ".", "TONY_INDEX_MANIFEST": "code-index/manifest.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "bge-m3", "TONY_INDEX_CHUNKER": "tree-sitter", "PYTHONDONTWRITEBYTECODE": "1"}},
-    "judgment-memory": {"type": "local", "command": ["python3", "judgment-memory/server.py"], "cwd": ".", "environment": {"JUDGMENT_MEMORY_DB": "judgment-memory/judgment-memory.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5"}},
+    "judgment-memory": {"type": "local", "command": ["python3", "judgment-memory/server.py"], "cwd": ".", "environment": {"JUDGMENT_MEMORY_DB": "judgment-memory/judgment-memory.db", "TONY_OLLAMA_URL": "http://localhost:11434", "TONY_QDRANT_URL": "http://localhost:6333", "TONY_EMBED_MODEL": "nomic-embed-text", "TONY_RECALL_SCORE_THRESHOLD": "0.5", "PYTHONDONTWRITEBYTECODE": "1"}},
     "tony-kernel": {"type": "local", "command": ["python3", "kernel/mcp_server.py"], "cwd": ".", "environment": {"TONY_RUNTIME_DIR": ".", "TONY_KERNEL_STATE_DIR": "kernel", "PYTHONDONTWRITEBYTECODE": "1"}}
   },
   "permission": {"bash": {"*": "allow", "git commit *": "ask", "git push": "ask", "git push --force *": "ask", "git rebase *": "ask", "git reset --hard *": "ask"}, "read": {"*": "allow", "**/*.key": "deny", "**/*.pem": "deny", "**/.aws/credentials": "deny", "**/.config/gh/hosts.yml": "deny", "**/.credentials/**": "deny", "**/.env/**": "deny", "**/.env.*": "deny", "**/.ssh/**": "deny", "**/credentials.json": "deny", "**/secrets/**": "deny"}, "context7_*": "allow", "code-index_*": "allow", "judgment-memory_*": "allow", "tony-kernel_*": "allow"},
   "share": "disabled",
-  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384, "output": 4096}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}
+  "provider": {"ollama": {"models": {"qwen3-coder:30b": {"options": {"numCtx": 32768}, "limit": {"context": 32768, "output": 8192}}, "carstenuhlig/omnicoder-2-9b:q4_k_m": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "deepseek-r1:14b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}, "ornith:9b": {"options": {"numCtx": 16384}, "limit": {"context": 16384, "output": 4096}}}}}
 }
