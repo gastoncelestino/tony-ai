@@ -4,9 +4,12 @@ import json
 import unittest
 from unittest import mock
 
+import pytest
+
 from kernel import mcp_server
 
 
+@pytest.mark.mcp
 class TestMcpContract(unittest.TestCase):
     def test_parse_line_returns_jsonrpc_parse_error_for_invalid_json(self) -> None:
         response = mcp_server.parse_line('{"jsonrpc":')
