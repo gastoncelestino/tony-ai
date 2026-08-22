@@ -135,6 +135,42 @@ class TestExecutionOrder(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["execution_order"]["capabilities"], ["search"])
 
+    def test_task_selection_comes_from_kernel_state(self):
+        kernel = FakeKernel(
+            "explore",
+            "running",
+            {
+                "id": "kernel-selected-task",
+                "description": "Task selected by Kernel",
+                "phase": "explore",
+            },
+        )
+
+        result = resolve_execution(kernel)
+
+        self.assertTrue(result["allowed"])
+        self.assertEqual(
+            result["execution_order"]["task_id"],
+            "kernel-selected-task",
+        )
+
+    def test_execution_order_is_immutable(self):
+        kernel = FakeKernel(
+            "explore",
+            "running",
+            {
+                "id": "explore-1",
+                "description": "Inspect the repository",
+                "phase": "explore",
+                "capabilities": ("read", "search"),
+            },
+        )
+
+        result = resolve_execution(kernel)
+        order = result["execution_order"]
+
+        self.assertEqual(order["task_id"], "explore-1")
+
 
 if __name__ == "__main__":
     unittest.main()
