@@ -1,0 +1,65 @@
+macros:
+  llamaServerBase: >
+    /home/tony/llama.cpp/build/bin/llama-server
+    --port ${PORT}
+    --host 0.0.0.0
+    --flash-attn on
+
+models:
+
+  qwen3-coder-30b:
+    aliases:
+      - "qwen3-coder:30b"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/qwen3-coder-30B.q4_k_m.gguf
+      --ctx-size 32768
+      --n-gpu-layers 99
+      --n-cpu-moe 32
+    ttl: 600
+
+  omnicoder-9b:
+    aliases:
+      - "omnicoder:9b"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/omnicoder-2-9b.q5_k_m.gguf
+      --ctx-size 16384
+      --n-gpu-layers 99
+    ttl: 600
+
+  deepseek-r1-14b:
+    aliases:
+      - "deepseek-r1:14b"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/deepseek-r1-14b.q4_k_m.gguf
+      --ctx-size 16384
+      --n-gpu-layers 99
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+    ttl: 600
+    
+  nomic-embed-text:
+    aliases:
+      - "nomic-embed-text"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/nomic-embed-text-v1.5.q8_0.gguf
+      --embedding
+      --pooling mean
+      --ctx-size 8192
+      --n-gpu-layers 99
+    ttl: 600
+
+  bge-m3:
+    aliases:
+      - "bge-m3"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/bge-m3-q8_0.gguf
+      --embedding
+      --pooling cls
+      --ctx-size 8192
+      --n-gpu-layers 99
+    ttl: 600
