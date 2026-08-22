@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import FrozenInstanceError
 from types import SimpleNamespace
 
-from kernel.execution_order import resolve_execution
+from kernel.execution_order import ExecutionOrder, resolve_execution
 
 
 class FakeKernel:
@@ -155,21 +156,17 @@ class TestExecutionOrder(unittest.TestCase):
         )
 
     def test_execution_order_is_immutable(self):
-        kernel = FakeKernel(
-            "explore",
-            "running",
-            {
-                "id": "explore-1",
-                "description": "Inspect the repository",
-                "phase": "explore",
-                "capabilities": ("read", "search"),
-            },
+        order = ExecutionOrder(
+            phase="explore",
+            task_id="explore-1",
+            description="Inspect the repository",
+            files=("kernel/",),
+            dependencies=(),
+            capabilities=("read", "search"),
         )
 
-        result = resolve_execution(kernel)
-        order = result["execution_order"]
-
-        self.assertEqual(order["task_id"], "explore-1")
+        with self.assertRaises(FrozenInstanceError):
+            order.task_id = "apply-1"
 
 
 if __name__ == "__main__":
