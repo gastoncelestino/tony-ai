@@ -9,6 +9,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 
+ALLOWED_CAPABILITIES = frozenset({"read", "search"})
+
+
 class KernelState(Protocol):
     """Minimal Kernel surface required to resolve an execution order."""
 
@@ -27,6 +30,7 @@ class ExecutionOrder:
     description: str
     files: tuple[str, ...]
     dependencies: tuple[str, ...]
+    capabilities: tuple[str, ...]
     executor: str = "opencode"
     worker: str = "llm"
 
@@ -37,6 +41,7 @@ class ExecutionOrder:
             "description": self.description,
             "files": list(self.files),
             "dependencies": list(self.dependencies),
+            "capabilities": list(self.capabilities),
             "executor": self.executor,
             "worker": self.worker,
         }
@@ -95,12 +100,24 @@ def resolve_execution(kernel: KernelState) -> dict:
             "execution_order": None,
         }
 
+    capabilities = tuple(str(value) for value in task.get("capabilities", ()))
+    invalid_capabilities = sorted(set(capabilities) - ALLOWED_CAPABILITIES)
+    if invalid_capabilities:
+        return {
+            "decision": "blocked",
+            "allowed": False,
+            "reason": f"Unsupported capabilities: {invalid_capabilities}",
+            "current_phase": current_phase,
+            "execution_order": None,
+        }
+
     order = ExecutionOrder(
         phase=current_phase,
         task_id=task_id,
         description=description,
         files=tuple(str(value) for value in task.get("files", ())),
         dependencies=tuple(str(value) for value in task.get("dependencies", ())),
+        capabilities=capabilities,
     )
     return {
         "decision": "proceed",
