@@ -3,7 +3,7 @@
 Combina tres subsistemas principales:   
 
 * `local-memory/` — servidor MCP de memoria persistente y duradera basada en SQLite.
-* `code-index/` — indexación y búsqueda semántica del código mediante Ollama + Qdrant.
+* `code-index/` — indexación y búsqueda semántica del código mediante llama.cpp / Qdrant.
 * `judgment-memory/` — almacenamiento y recuperación de decisiones, revisiones y juicios previos para reutilizar conocimiento durante futuras tareas.
 
 La configuración de OpenCode almacena las bases SQLite persistentes de TonyMem y Judgment Memory:
@@ -12,8 +12,6 @@ La configuración de OpenCode almacena las bases SQLite persistentes de TonyMem 
 .tonymem/memory.db
 .tonymem/judgment-memory.db
 ```
-
-Los servicios definidos en `docker/` proporcionan la infraestructura local para Ollama y Qdrant cuando estos servicios no están disponibles en el host.   
 
 ## ¿Cómo funciona?
 `Tony-AI` orquesta el desarrollo de software mediante un flujo de trabajo basado en **Spec-Driven Development (SDD)**. El proceso separa la planificación de la implementación, la revisión, la verificación y el archivado, y utiliza agentes especializados para cada etapa.
@@ -269,23 +267,18 @@ docker --version
 docker compose version
 ```
 
-- **GGA (Gentleman Guardian Angel)** — code review. 
-Se instala automáticamente desde `scripts/setup.sh`
-- **tree-sitter** — chunking estructural del Code Indexer.  
-- **tree-sitter-language-pack** — grammars utilizadas por el Code Indexer.
-
 ## Modelos locales por defecto
 
 | Función | Modelo |
 |---|---|
 | Planning / propuesta | `qwen3-coder:30b` |
-| Implementación | `carstenuhlig/omnicoder-2-9b:q4_k_m` |
+| Implementación | `omnicoder-2-9b` |
 | Review / Judgment | `deepseek-r1:14b` |
 | Archive / jd-fix-agent | `ornith:9b` |
 | Code embeddings | `bge-m3` |
 | Judgment embeddings | `nomic-embed-text` |
 
-Los modelos se ejecutan localmente mediante Ollama.
+Los modelos se ejecutan localmente mediante llama.cpp.
 
 # Instalación
 
@@ -592,7 +585,7 @@ Usuario
 | `/kernel-status` | Estado del Kernel (fase actual, artifacts, checksums) | kernel-state.json | ✅ |
 | `/kernel-reset` | Resetear estado del Kernel (solo desarrollo) | kernel-state.json | ✅ |
 
-💡 Todo funciona offline excepto los comandos que requieren sub-agentes (`/sdd-new`, `/sdd-explore`, `/sdd-propose`, `/sdd-spec`, `/sdd-design`, `/sdd-tasks`, `/sdd-apply`, `/sdd-verify`, `/sdd-onboard`, `/sdd-continue`, `/sdd-ff`, `juzgar esto`) y búsqueda semántica (`/memory-search` con Qdrant/Ollama).
+💡 Todo funciona offline excepto los comandos que requieren sub-agentes (`/sdd-new`, `/sdd-explore`, `/sdd-propose`, `/sdd-spec`, `/sdd-design`, `/sdd-tasks`, `/sdd-apply`, `/sdd-verify`, `/sdd-onboard`, `/sdd-continue`, `/sdd-ff`, `juzgar esto`) y búsqueda semántica (`/memory-search` con Qdrant/llama.cpp).
 
 ## Code Review automático
 `GGA` valida los archivos staged contra tu `AGENTS.md` antes de cada commit, usando OpenCode como proveedor de IA.
