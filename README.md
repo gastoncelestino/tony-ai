@@ -161,26 +161,106 @@ source ~/.bashrc
 python3 --version
 python3 -m pip --version
 ```
+
 - **Bun** — scripts TypeScript y plugins.
 ```bash
 sudo apt update && sudo apt install -y unzip curl && curl -fsSL https://bun.sh/install | bash
 source ~/.bashrc
 bun --version
 ```
+
 - **OpenCode CLI** — orquestador SDD.
 ```bash
 curl -fsSL https://opencode.ai/install | bash
 source ~/.bashrc
 opencode --version
 ```
-- **Ollama** — ejecución de LLM locales.
+
+- **cuda-toolkit** — si tenes tarjeta de video nvidia.
 ```bash
-sudo apt-get install zstd
-curl -fsSL https://ollama.com/install.sh | sh
-source ~/.bashrc
-ollama --version
-curl http://localhost:11434/api/tags
+cd /tmp
+wget -N https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/cuda-keyring_1.1-1_all.deb
+
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+sudo apt install -y cuda-toolkit-13-3
+
+# Verificar nvcc
+export PATH=/usr/local/cuda/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+
+which nvcc
+nvcc --version
 ```
+
+- **llama.cpp** — llama-server.
+```bash
+cd ~
+sudo apt update && sudo apt install -y git build-essential cmake
+git clone https://github.com/ggml-org/llama.cpp
+
+# Instalar build
+cd cd ~/llama.cpp
+rm -rf build
+
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DGGML_CUDA=ON
+
+cmake --build build --config Release -j"$(nproc)"
+
+# Verificar
+~/llama.cpp/build/bin/llama-server --list-devices
+
+# Deberia devolver algo asi:
+Available devices:
+  CUDA0: NVIDIA GeForce RTX 3080 (10239 MiB, 9069 MiB free)
+```
+
+- **llama-swap** — para ejecutar llama-server automático.
+```bash
+TAG=$(curl -s https://api.github.com/repos/mostlygeek/llama-swap/releases/latest \
+  | grep -oP '"tag_name":\s*"\K[^"]+')
+echo "Última versión: ${TAG}"
+
+VER="${TAG#v}"
+curl -LO "https://github.com/mostlygeek/llama-swap/releases/download/${TAG}/llama-swap_${VER}_linux_amd64.tar.gz"
+
+tar -xvzf "llama-swap_${VER}_linux_amd64.tar.gz"
+chmod +x llama-swap
+sudo mv llama-swap /usr/local/bin/llama-swap
+rm "llama-swap_${VER}_linux_amd64.tar.gz"
+
+llama-swap --version
+
+llama-swap --config ~/.tony-ai/llama-swap/config.yaml --listen localhost:8080
+
+curl http://localhost:8080/health
+
+# Deberia devolver algo asi:
+OK
+
+curl http://localhost:8080/v1/models
+
+# Deberia devolver algo asi:
+{"data":[{"id":"bge-m3","object":"model","created":1787379476,"owned_by":"llama-swap"....
+
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3-coder:30b",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Respond only with: LLAMA_CPP_OK"
+      }
+    ]
+  }'
+
+# Deberia devolver algo asi:
+{"choices":[{"finish_reason":"stop","index":0,"message":....
+```
+
 - **Docker + Docker Compose** — infraestructura de servicios, incluido Qdrant.
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
@@ -188,6 +268,7 @@ sudo usermod -aG docker $USER && newgrp docker
 docker --version
 docker compose version
 ```
+
 - **GGA (Gentleman Guardian Angel)** — code review. 
 Se instala automáticamente desde `scripts/setup.sh`
 - **tree-sitter** — chunking estructural del Code Indexer.  
