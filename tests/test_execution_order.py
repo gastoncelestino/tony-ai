@@ -32,6 +32,7 @@ class TestExecutionOrder(unittest.TestCase):
                 "phase": "explore",
                 "dependencies": (),
                 "files": ("kernel/",),
+                "capabilities": ("read", "search"),
             },
         )
 
@@ -42,6 +43,9 @@ class TestExecutionOrder(unittest.TestCase):
         self.assertEqual(result["execution_order"]["executor"], "opencode")
         self.assertEqual(result["execution_order"]["worker"], "llm")
         self.assertEqual(result["execution_order"]["task_id"], "explore-1")
+        self.assertEqual(
+            result["execution_order"]["capabilities"], ["read", "search"]
+        )
 
     def test_blocks_completed_phase(self):
         result = resolve_execution(
@@ -95,6 +99,41 @@ class TestExecutionOrder(unittest.TestCase):
 
         self.assertFalse(result["allowed"])
         self.assertEqual(result["decision"], "blocked")
+
+    def test_blocks_unsupported_capability(self):
+        result = resolve_execution(
+            FakeKernel(
+                "explore",
+                "running",
+                {
+                    "id": "explore-1",
+                    "description": "Inspect the repository",
+                    "phase": "explore",
+                    "capabilities": ("write",),
+                },
+            )
+        )
+
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["decision"], "blocked")
+        self.assertIsNone(result["execution_order"])
+
+    def test_capabilities_are_kernel_order_fields(self):
+        result = resolve_execution(
+            FakeKernel(
+                "explore",
+                "running",
+                {
+                    "id": "explore-1",
+                    "description": "Inspect the repository",
+                    "phase": "explore",
+                    "capabilities": ("search",),
+                },
+            )
+        )
+
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["execution_order"]["capabilities"], ["search"])
 
 
 if __name__ == "__main__":
