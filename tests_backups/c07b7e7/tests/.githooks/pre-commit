@@ -1,0 +1,13 @@
+#!/bin/bash
+# Pre-commit hook: validate repository configuration and tests
+# Install: cp .githooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -e
+
+echo "▶ Validating repository configuration..."
+make validate-config
+
+echo "▶ Running tests..."
+make test
+
+echo "✓ Repository validation passed"
