@@ -9,13 +9,16 @@
       },
       "models": {
         "qwen3-coder:30b": {
-          "name": "Qwen3-Coder 30B"
+          "name": "Qwen3-Coder 30B",
+          "limit": { "context": 32768, "output": 8192 }
         },
         "omnicoder:9b": {
-          "name": "OmniCoder 9B"
+          "name": "OmniCoder 9B",
+          "limit": { "context": 16384, "output": 4096 }
         },
         "deepseek-r1:14b": {
-          "name": "DeepSeek R1 14B"
+          "name": "DeepSeek R1 14B",
+          "limit": { "context": 16384, "output": 4096 }
         }
       }
     }

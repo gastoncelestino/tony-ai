@@ -10,13 +10,14 @@
   "pruneNotification": "detailed",
   "pruneNotificationType": "chat",
 
-  // Your models are local (Ollama), not frontier cloud models — two
-  // consequences that shape everything below:
-  //   1. Real usable context is whatever `num_ctx` you configured per model
-  //      in Ollama (often much smaller than the architecture's advertised
-  //      max, and NOT auto-detected by DCP's percentage math unless your
-  //      OpenCode provider entry declares the same number as `limit.context`).
-  //      Check with `ollama show <model>` before trusting the numbers below.
+  // Your models are local (llama.cpp via llama-swap), not frontier cloud
+  // models — two consequences that shape everything below:
+  //   1. Real usable context is whatever --ctx-size you set per model in
+  //      config.yaml (llama-swap), often much smaller than the
+  //      architecture's advertised max, and NOT auto-detected by DCP's
+  //      percentage math unless your OpenCode provider entry declares the
+  //      same number as `limit.context` (see opencode.json).
+  //      Check config.yaml before trusting the numbers below.
   //   2. Smaller/weaker local models are less reliable at deciding on their
   //      own to call `compress` — so nudging is turned up (nudgeForce:
   //      "strong") rather than left on the "soft" default.
@@ -34,24 +35,22 @@
     "minContextLimit": 6000,
 
     // Per-model overrides, keyed by the exact "provider/model" strings used
-    // in opencode.json's agent.*.model fields (Model Router). Percentages
-    // are of whatever context length your OpenCode provider config declares
-    // for that model — verify that number is accurate before trusting these.
-    // Calibration baseline (opencode.json provider.ollama.models.*.limit.
-    // context): qwen3-coder:30b = 32768, the 9B/14B models = 16384. These
-    // numbers must match each model's real Ollama num_ctx (see
-    // scripts/calibrate-ctx.sh) or DCP's percentage math is wrong.
+    // in opencode.json's provider.llamaswap.models keys (must match exactly,
+    // including the llamaswap/ prefix). Percentages are of whatever
+    // limit.context your opencode.json declares for that model — verify
+    // that number is accurate before trusting these.
+    // Calibration baseline (opencode.json provider.llamaswap.models.*.limit.
+    // context, mirrored from config.yaml's --ctx-size per model):
+    // qwen3-coder:30b = 32768, omnicoder:9b / deepseek-r1:14b = 16384.
     "modelMaxLimits": {
-      "ollama/qwen3-coder:30b": "75%",
-      "ollama/carstenuhlig/omnicoder-2-9b:q4_k_m": "70%",
-      "ollama/deepseek-r1:14b": "70%",
-      "ollama/ornith:9b": "70%"
+      "llamaswap/qwen3-coder:30b": "75%",
+      "llamaswap/omnicoder:9b": "70%",
+      "llamaswap/deepseek-r1:14b": "70%"
     },
     "modelMinLimits": {
-      "ollama/qwen3-coder:30b": "40%",
-      "ollama/carstenuhlig/omnicoder-2-9b:q4_k_m": "35%",
-      "ollama/deepseek-r1:14b": "35%",
-      "ollama/ornith:9b": "35%"
+      "llamaswap/qwen3-coder:30b": "40%",
+      "llamaswap/omnicoder:9b": "35%",
+      "llamaswap/deepseek-r1:14b": "35%"
     },
 
     "nudgeFrequency": 3,

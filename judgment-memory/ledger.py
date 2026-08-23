@@ -13,9 +13,9 @@ A judgment record (see schema.json) is:
   2. Normalized into one plain-text passage (normalize()) suitable for
      embedding — task + judges' decisions + the lesson, since the lesson
      is what future recall actually needs to match against.
-  3. Embedded via Ollama (same /api/embed contract `code-index/core.py`
-     already uses) and upserted into Qdrant as a `jdmem_{project}`
-     collection, point payload = the full record.
+  3. Embedded via llama-server/llama-swap (same /v1/embeddings contract
+     `code-index/core.py` already uses) and upserted into Qdrant as a
+     `jdmem_{project}` collection, point payload = the full record.
   4. Recalled later (recall()) by embedding a new task description and
      searching that collection — "we saw a similar problem before" —
      which is what `jd_recall` (server.py) and the judgment-day skill's
@@ -25,10 +25,11 @@ Zero third-party dependencies: SQLite via stdlib `sqlite3`, HTTP via
 stdlib `urllib.request` — same constraint as every other Tony-AI local
 tool (`local-memory/server.py`, `code-index/core.py`).
 
-Requires Ollama (embeddings) and Qdrant (vector store) running locally,
-same as code-index — see judgment-memory/README.md. Both are optional at
-import time: write/read to the SQLite ledger always works even if
-Ollama/Qdrant are down; only embed()/index()/recall() need them.
+Requires llama-server/llama-swap (embeddings) and Qdrant (vector store)
+running locally, same as code-index — see judgment-memory/README.md. Both
+are optional at import time: write/read to the SQLite ledger always works
+even if the embeddings server/Qdrant are down; only embed()/index()/recall()
+need them.
 
 CLI:
     python3 ledger.py record --file record.json
@@ -56,7 +57,7 @@ DB_PATH = os.environ.get(
     "JUDGMENT_MEMORY_DB",
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "judgment-memory.db"),
 )
-OLLAMA_URL = os.environ.get("TONY_OLLAMA_URL", "http://localhost:11434")
+EMBEDDINGS_URL = os.environ.get("TONY_EMBEDDINGS_URL", "http://localhost:8080")
 EMBED_MODEL = os.environ.get("TONY_EMBED_MODEL", "nomic-embed-text")
 QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
 
@@ -265,15 +266,15 @@ def normalize(record: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Ollama embeddings (same contract as code-index/core.py's embed_texts)
+# Embeddings via llama-server/llama-swap (same contract as code-index/core.py's embed_texts)
 # ---------------------------------------------------------------------------
 
-def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_URL) -> list:
+def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = EMBEDDINGS_URL) -> list:
     if not texts:
         return []
     payload = json.dumps({"model": model, "input": texts}).encode("utf-8")
     req = urllib.request.Request(
-        f"{base_url}/api/embed",
+        f"{base_url}/v1/embeddings",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -283,16 +284,18 @@ def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_UR
             body = json.loads(resp.read().decode("utf-8"))
     except urllib.error.URLError as exc:
         raise RuntimeError(
-            f"Could not reach Ollama at {base_url} for embeddings (model={model}): {exc}. "
-            f"Is `ollama serve` running and has `ollama pull {model}` been run?"
+            f"Could not reach llama-server/llama-swap at {base_url} for embeddings (model={model}): {exc}. "
+            f"Is llama-swap running with '{model}' declared in config.yaml?"
         ) from exc
-    embeddings = body.get("embeddings")
-    if not embeddings:
-        raise RuntimeError(f"Ollama returned no embeddings for model={model}: {body}")
-    return embeddings
+    # OpenAI-compatible response shape: {"data": [{"embedding": [...], "index": 0}, ...]}
+    data = body.get("data")
+    if not data:
+        raise RuntimeError(f"llama-server returned no embeddings for model={model}: {body}")
+    ordered = sorted(data, key=lambda item: item.get("index", 0))
+    return [item["embedding"] for item in ordered]
 
 
-def embedding_dim(model: str = EMBED_MODEL, base_url: str = OLLAMA_URL) -> int:
+def embedding_dim(model: str = EMBED_MODEL, base_url: str = EMBEDDINGS_URL) -> int:
     return len(embed_texts(["dimension probe"], model=model, base_url=base_url)[0])
 
 
@@ -354,12 +357,12 @@ def point_id_for(project: str, execution_id: str) -> str:
 # High-level pipeline: Decision -> Normalize -> Embedding -> Qdrant
 # ---------------------------------------------------------------------------
 
-def record_judgment(record: dict, embed_model: str = EMBED_MODEL, ollama_url: str = OLLAMA_URL,
+def record_judgment(record: dict, embed_model: str = EMBED_MODEL, embeddings_url: str = EMBEDDINGS_URL,
                      qdrant_url: str = QDRANT_URL, index: bool = True) -> dict:
     """Full pipeline for one judgment record.
 
     Always writes to the SQLite ledger first (durable regardless of
-    Ollama/Qdrant availability). Indexing into Qdrant is best-effort:
+    embeddings server/Qdrant availability). Indexing into Qdrant is best-effort:
     failures are reported in the result but never lose the ledger write.
     """
     project = record.get("project", "default")
@@ -371,7 +374,7 @@ def record_judgment(record: dict, embed_model: str = EMBED_MODEL, ollama_url: st
 
     try:
         text = normalize(record)
-        vec = embed_texts([text], model=embed_model, base_url=ollama_url)[0]
+        vec = embed_texts([text], model=embed_model, base_url=embeddings_url)[0]
         coll = collection_name(project)
         qdrant_ensure_collection(coll, len(vec), base_url=qdrant_url)
         qdrant_upsert(
@@ -385,7 +388,7 @@ def record_judgment(record: dict, embed_model: str = EMBED_MODEL, ollama_url: st
 
 
 def recall(task: str, project: str = "default", limit: int = 5,
-           embed_model: str = EMBED_MODEL, ollama_url: str = OLLAMA_URL, qdrant_url: str = QDRANT_URL) -> dict:
+           embed_model: str = EMBED_MODEL, embeddings_url: str = EMBEDDINGS_URL, qdrant_url: str = QDRANT_URL) -> dict:
     """'Did we already see a problem like this?' — the step that runs
     BEFORE Judgment Day launches judges (see judgment-day/SKILL.md's
     pre-flight recall step). Embeds the incoming task description and
@@ -393,7 +396,7 @@ def recall(task: str, project: str = "default", limit: int = 5,
     """
     coll = collection_name(project)
     try:
-        vec = embed_texts([task], model=embed_model, base_url=ollama_url)[0]
+        vec = embed_texts([task], model=embed_model, base_url=embeddings_url)[0]
         hits = qdrant_search(coll, vec, limit=limit, base_url=qdrant_url)
     except RuntimeError as exc:
         return {"available": False, "error": str(exc), "results": []}

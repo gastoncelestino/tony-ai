@@ -1,5 +1,5 @@
 /**
- * qdrant.ts — thin Qdrant + Ollama REST client for OpenCode plugins.
+ * qdrant.ts — thin Qdrant + embeddings (llama-server/llama-swap) REST client for OpenCode plugins.
  *
  * Not a Plugin itself — a small library `judgment-memory.ts` (and any
  * future plugin) imports. Mirrors the exact contract `code-index/core.py`
@@ -13,9 +13,11 @@
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 // Same env var names as code-index/core.py and judgment-memory/ledger.py —
-// one source of truth across Python and TS callers.
+// one source of truth across Python and TS callers. TONY_EMBEDDINGS_URL now
+// points at llama-swap (default port 8080), which serves the embedding
+// models declared in config.yaml the same way it serves chat models.
 
-export const OLLAMA_URL = process.env.TONY_OLLAMA_URL ?? "http://localhost:11434"
+export const EMBEDDINGS_URL = process.env.TONY_EMBEDDINGS_URL ?? "http://localhost:8080"
 export const EMBED_MODEL = process.env.TONY_EMBED_MODEL ?? "nomic-embed-text"
 export const QDRANT_URL = process.env.TONY_QDRANT_URL ?? "http://localhost:6333"
 
@@ -33,32 +35,33 @@ export interface QdrantHit {
   payload: Record<string, unknown>
 }
 
-// ─── Ollama embeddings ──────────────────────────────────────────────────────
+// ─── Embeddings (llama-server, OpenAI-compatible /v1/embeddings) ──────────────
 
 export async function embedTexts(
   texts: string[],
   model: string = EMBED_MODEL,
-  baseUrl: string = OLLAMA_URL,
+  baseUrl: string = EMBEDDINGS_URL,
 ): Promise<number[][]> {
   if (texts.length === 0) return []
-  const res = await fetch(`${baseUrl}/api/embed`, {
+  const res = await fetch(`${baseUrl}/v1/embeddings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model, input: texts }),
   }).catch((err) => {
     throw new Error(
-      `Could not reach Ollama at ${baseUrl} for embeddings (model=${model}): ${err}. ` +
-        `Is 'ollama serve' running and has 'ollama pull ${model}' been run?`,
+      `Could not reach llama-server/llama-swap at ${baseUrl} for embeddings (model=${model}): ${err}. ` +
+        `Is llama-swap running with '${model}' declared in config.yaml?`,
     )
   })
   if (!res.ok) {
-    throw new Error(`Ollama /api/embed failed (${res.status}): ${await res.text()}`)
+    throw new Error(`llama-server /v1/embeddings failed (${res.status}): ${await res.text()}`)
   }
-  const body = (await res.json()) as { embeddings?: number[][] }
-  if (!body.embeddings || body.embeddings.length === 0) {
-    throw new Error(`Ollama returned no embeddings for model=${model}`)
+  // OpenAI-compatible response shape: { data: [{ embedding: [...], index: 0 }, ...] }
+  const body = (await res.json()) as { data?: { embedding: number[]; index: number }[] }
+  if (!body.data || body.data.length === 0) {
+    throw new Error(`llama-server returned no embeddings for model=${model}`)
   }
-  return body.embeddings
+  return [...body.data].sort((a, b) => a.index - b.index).map((item) => item.embedding)
 }
 
 // ─── Qdrant REST ────────────────────────────────────────────────────────────
@@ -142,18 +145,18 @@ export async function semanticSearch(
   project: string,
   query: string,
   limit: number = 5,
-  opts: { embedModel?: string; ollamaUrl?: string; qdrantUrl?: string } = {},
+  opts: { embedModel?: string; embeddingsUrl?: string; qdrantUrl?: string } = {},
 ): Promise<{ available: boolean; error?: string; hits: QdrantHit[] }> {
   const embedModel = opts.embedModel ?? EMBED_MODEL
-  const ollamaUrl = opts.ollamaUrl ?? OLLAMA_URL
+  const embeddingsUrl = opts.embeddingsUrl ?? EMBEDDINGS_URL
   const qdrantUrl = opts.qdrantUrl ?? QDRANT_URL
   try {
-    const [vec] = await embedTexts([query], embedModel, ollamaUrl)
+    const [vec] = await embedTexts([query], embedModel, embeddingsUrl)
     const hits = await searchPoints(collectionName(project), vec, limit, qdrantUrl)
     return { available: true, hits }
   } catch (err) {
-    // Degrade gracefully — Ollama/Qdrant being down should never break the
-    // agent turn, only skip the recall step (same contract as
+    // Degrade gracefully — embeddings server/Qdrant being down should never
+    // break the agent turn, only skip the recall step (same contract as
     // judgment-memory/ledger.py's recall()).
     return { available: false, error: String(err), hits: [] }
   }

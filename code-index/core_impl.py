@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Tony-AI Code Indexer — chunk the repo, embed with Ollama, store in Qdrant.
+Tony-AI Code Indexer — chunk the repo, embed via llama-server, store in Qdrant.
 
 This is the "Code Indexer" + "Qdrant" nodes of the Context Pipeline, built as
 one module because in practice they're one pipeline: nothing to embed
 without chunking, nothing to search without a vector store. Zero
-third-party Python dependencies — Ollama and Qdrant are both talked to over
-their plain HTTP APIs via `urllib.request`, same stdlib-only philosophy as
-`local-memory/server.py`.
+third-party Python dependencies — the embeddings server and Qdrant are both
+talked to over their plain HTTP APIs via `urllib.request`, same stdlib-only
+philosophy as `local-memory/server.py`.
 
 Two ways to use this file:
   1. As a library, imported by `server.py` (the MCP tool wrapper).
@@ -18,9 +18,10 @@ Two ways to use this file:
        python3 core.py search --query "vaccination MERGE upsert" --project myproj
 
 Requires:
-  - Ollama running locally with an embedding model pulled (default: bge-m3)
-  - Qdrant running locally (default: http://localhost:6333) — e.g.
-      docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
+  - llama-server (via llama-swap) running locally with the embedding model
+    declared in config.yaml (default: bge-m3), exposing the OpenAI-compatible
+    /v1/embeddings endpoint — not a native /api/embed-style endpoint.
+  - Qdrant running locally (default: http://localhost:6333)
   - tree-sitter and tree-sitter-language-pack for structural chunking
 """
 
@@ -47,12 +48,17 @@ except ImportError:  # pragma: no cover - optional dependency for tests without 
 # Configuration
 # ---------------------------------------------------------------------------
 
-OLLAMA_URL = os.environ.get("TONY_OLLAMA_URL", "http://localhost:11434")
+# Points at llama-swap,
+# which serves the embedding models (nomic-embed-text, bge-m3) declared in
+# config.yaml the same way it serves chat models — same port as
+# TONY_LLAMASWAP_URL. Kept as a distinct env var (TONY_EMBEDDINGS_URL, not
+# renamed) so it can still be overridden independently if needed.
+EMBEDDINGS_URL = os.environ.get("TONY_EMBEDDINGS_URL", "http://localhost:8080")
 EMBED_MODEL = os.environ.get("TONY_EMBED_MODEL", "bge-m3")
 QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
 
-OLLAMA_HEALTH_TIMEOUT = float(os.environ.get("TONY_OLLAMA_HEALTH_TIMEOUT", "3"))
-OLLAMA_HEALTH_TTL = float(os.environ.get("TONY_OLLAMA_HEALTH_TTL", "5"))
+EMBEDDINGS_HEALTH_TIMEOUT = float(os.environ.get("TONY_EMBEDDINGS_HEALTH_TIMEOUT", "3"))
+EMBEDDINGS_HEALTH_TTL = float(os.environ.get("TONY_EMBEDDINGS_HEALTH_TTL", "5"))
 
 # Tree-sitter is mandatory. The environment variable is retained as an
 # explicit contract, but regex is no longer a supported chunker.
@@ -285,37 +291,37 @@ def manifest_connect(root: str) -> sqlite3.Connection:
 
 
 # ---------------------------------------------------------------------------
-# Ollama embeddings client (stdlib only)
+# Embeddings client (llama-server/llama-swap, stdlib only)
 # ---------------------------------------------------------------------------
 
-_ollama_health_at: dict = {}
+_embeddings_health_at: dict = {}
 
 
-def _ensure_ollama_alive(base_url: str = OLLAMA_URL) -> None:
+def _ensure_embeddings_server_alive(base_url: str = EMBEDDINGS_URL) -> None:
     now = time.monotonic()
-    if now - _ollama_health_at.get(base_url, 0.0) < OLLAMA_HEALTH_TTL:
+    if now - _embeddings_health_at.get(base_url, 0.0) < EMBEDDINGS_HEALTH_TTL:
         return
     try:
-        req = urllib.request.Request(f"{base_url}/api/version", method="GET")
-        with urllib.request.urlopen(req, timeout=OLLAMA_HEALTH_TIMEOUT) as resp:
+        req = urllib.request.Request(f"{base_url}/health", method="GET")
+        with urllib.request.urlopen(req, timeout=EMBEDDINGS_HEALTH_TIMEOUT) as resp:
             resp.read()
-        _ollama_health_at[base_url] = now
+        _embeddings_health_at[base_url] = now
     except urllib.error.HTTPError:
-        _ollama_health_at[base_url] = now
+        _embeddings_health_at[base_url] = now
     except Exception as exc:
         raise RuntimeError(
-            f"Could not reach Ollama at {base_url} (health check): {exc}. "
-            f"Is `ollama serve` running and has `ollama pull {EMBED_MODEL}` been run?"
+            f"Could not reach llama-server/llama-swap at {base_url} (health check): {exc}. "
+            f"Is llama-swap running with '{EMBED_MODEL}' declared in config.yaml?"
         ) from exc
 
 
-def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_URL) -> list:
+def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = EMBEDDINGS_URL) -> list:
     if not texts:
         return []
-    _ensure_ollama_alive(base_url)
+    _ensure_embeddings_server_alive(base_url)
     payload = json.dumps({"model": model, "input": texts}).encode("utf-8")
     req = urllib.request.Request(
-        f"{base_url}/api/embed",
+        f"{base_url}/v1/embeddings",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -325,16 +331,19 @@ def embed_texts(texts: list, model: str = EMBED_MODEL, base_url: str = OLLAMA_UR
             body = json.loads(resp.read().decode("utf-8"))
     except urllib.error.URLError as exc:
         raise RuntimeError(
-            f"Could not reach Ollama at {base_url} for embeddings (model={model}): {exc}. "
-            f"Is `ollama serve` running and has `ollama pull {model}` been run?"
+            f"Could not reach llama-server/llama-swap at {base_url} for embeddings (model={model}): {exc}. "
+            f"Is llama-swap running with '{model}' declared in config.yaml?"
         ) from exc
-    embeddings = body.get("embeddings")
-    if not embeddings:
-        raise RuntimeError(f"Ollama returned no embeddings for model={model}: {body}")
+    # OpenAI-compatible response shape: {"data": [{"embedding": [...], "index": 0}, ...]}
+    data = body.get("data")
+    if not data:
+        raise RuntimeError(f"llama-server returned no embeddings for model={model}: {body}")
+    ordered = sorted(data, key=lambda item: item.get("index", 0))
+    embeddings = [item["embedding"] for item in ordered]
     return embeddings
 
 
-def embedding_dim(model: str = EMBED_MODEL, base_url: str = OLLAMA_URL) -> int:
+def embedding_dim(model: str = EMBED_MODEL, base_url: str = EMBEDDINGS_URL) -> int:
     vecs = embed_texts(["dimension probe"], model=model, base_url=base_url)
     return len(vecs[0])
 
@@ -420,12 +429,12 @@ def collection_name(project: str) -> str:
 
 def index_repo(root: str, project: str, embed_batch_size: int = 32,
                base_url_qdrant: str = QDRANT_URL,
-               base_url_ollama: str = OLLAMA_URL,
+               base_url_embeddings: str = EMBEDDINGS_URL,
                embed_model: str = EMBED_MODEL,
                chunker: Optional[str] = None) -> IndexStats:
     stats = IndexStats()
     manifest = manifest_connect(root)
-    dim = embedding_dim(model=embed_model, base_url=base_url_ollama)
+    dim = embedding_dim(model=embed_model, base_url=base_url_embeddings)
     coll = collection_name(project)
     qdrant_ensure_collection(coll, dim, base_url=base_url_qdrant)
     seen_paths = set()
@@ -452,7 +461,7 @@ def index_repo(root: str, project: str, embed_batch_size: int = 32,
             continue
 
         try:
-            vectors = embed_texts([c.text for c in chunks], model=embed_model, base_url=base_url_ollama)
+            vectors = embed_texts([c.text for c in chunks], model=embed_model, base_url=base_url_embeddings)
         except RuntimeError as exc:
             stats.errors.append(f"{rel_path}: {exc}")
             continue
@@ -504,10 +513,10 @@ def index_repo(root: str, project: str, embed_batch_size: int = 32,
 
 
 def search_code(query: str, project: str, limit: int = 8, path_prefix: str = None,
-                 base_url_qdrant: str = QDRANT_URL, base_url_ollama: str = OLLAMA_URL,
+                 base_url_qdrant: str = QDRANT_URL, base_url_embeddings: str = EMBEDDINGS_URL,
                  embed_model: str = EMBED_MODEL) -> list:
     coll = collection_name(project)
-    vec = embed_texts([query], model=embed_model, base_url=base_url_ollama)[0]
+    vec = embed_texts([query], model=embed_model, base_url=base_url_embeddings)[0]
     hits = qdrant_search(coll, vec, limit=limit, path_prefix=path_prefix, base_url=base_url_qdrant)
     return [{
         "score": h["score"],

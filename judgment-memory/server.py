@@ -18,7 +18,7 @@ Tools:
                same "only the parent writes the ledger" rule as
                review-ledger-contract.md.
   jd_history — recent judgments for a project, SQLite-only (no embedding
-               dependency, always available even if Qdrant/Ollama are down).
+               dependency, always available even if Qdrant/embeddings server are down).
   jd_stats   — aggregate counts (by outcome, by agreement, contradiction
                rate) for a project.
 """
@@ -27,7 +27,7 @@ import json
 import os
 import sys
 
-OLLAMA_URL = os.environ.get("TONY_OLLAMA_URL", "http://localhost:11434")
+EMBEDDINGS_URL = os.environ.get("TONY_EMBEDDINGS_URL", "http://localhost:8080")
 EMBED_MODEL = os.environ.get("TONY_EMBED_MODEL", "nomic-embed-text")
 QDRANT_URL = os.environ.get("TONY_QDRANT_URL", "http://localhost:6333")
 RECALL_SCORE_THRESHOLD = float(os.environ.get("TONY_RECALL_SCORE_THRESHOLD", "0.5"))
@@ -41,7 +41,7 @@ TOOLS = {
             "Semantic recall of past Judgment Day outcomes similar to a new task. "
             "Call before launching judges — if a close match exists, use its 'lesson' "
             "and 'fix' as context for the judges instead of relitigating from scratch. "
-            "Degrades gracefully (available=false) if Ollama/Qdrant aren't running."
+            "Degrades gracefully (available=false) if the embeddings server/Qdrant aren't running."
         ),
         "inputSchema": {
             "type": "object",
@@ -54,7 +54,7 @@ TOOLS = {
         },
         "handler": lambda args: ledger.recall(
             args["task"], project=args.get("project", "default"), limit=int(args.get("limit", 5)),
-            embed_model=EMBED_MODEL, ollama_url=OLLAMA_URL, qdrant_url=QDRANT_URL,
+            embed_model=EMBED_MODEL, embeddings_url=EMBEDDINGS_URL, qdrant_url=QDRANT_URL,
         ),
     },
     "jd_record": {

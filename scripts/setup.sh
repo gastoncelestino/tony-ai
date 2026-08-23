@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/setup.sh — bootstrap idempotente para tony-ai.
 # Requisitos obligatorios: Python 3.10+, Bun, OpenCode CLI, llama.cpp
-# (llama-server) + llama-swap, Docker, GGA y tree-sitter.
+# (llama-server) + llama-swap, Qdrant, GGA y tree-sitter. Sin Docker: todo
+# corre nativo (llama-server/llama-swap sirven tanto chat como embeddings).
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,6 +33,16 @@ LLAMA_SERVER_BIN="${TONY_LLAMA_SERVER_BIN:-${HOME}/llama.cpp/build/bin/llama-ser
 # "warm-up" que hace este script, no un limite de tony-ai en produccion.
 MODEL_WARMUP_TIMEOUT="${TONY_MODEL_WARMUP_TIMEOUT:-120}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
+# Nombre historico de la variable (la lee code-index/, judgment-memory/ y
+# plugins/qdrant.ts) pero se sirven via llama-swap: nomic-embed-text y bge-m3
+# estan declarados en config.yaml y los sirve el mismo llama-swap que los
+# modelos de chat, via /v1/embeddings compatible con OpenAI.
+EMBEDDINGS_URL="${TONY_EMBEDDINGS_URL:-http://localhost:8080}"
+# Opcional: binario nativo de Qdrant para autoarrancarlo si no esta
+# corriendo (sin Docker). Dejalo vacio si preferis levantarlo vos mismo
+# (systemd, manualmente, etc.) - el script solo lo va a chequear.
+QDRANT_BIN="${TONY_QDRANT_BIN:-}"
+QDRANT_STORAGE_DIR="${TONY_QDRANT_STORAGE_DIR:-${HOME}/.tony-ai/qdrant/storage}"
 PYTHON_CACHE_DIR="${PYTHON_CACHE_DIR:-${HOME}/.tony-ai/pycache}"
 PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-${PYTHON_CACHE_DIR}}"
 PYTEST_CACHE_DIR="${PYTEST_CACHE_DIR:-${PYTHON_CACHE_DIR}/pytest}"
@@ -65,12 +76,6 @@ if command -v bun >/dev/null 2>&1; then ok "bun $(bun --version)"; else bad "bun
 
 hdr "OpenCode CLI"
 if command -v opencode >/dev/null 2>&1; then ok "opencode $(opencode --version 2>/dev/null || echo instalado)"; else bad "opencode CLI no esta en PATH (https://opencode.ai)"; fi
-
-hdr "Docker"
-DOCKER_AVAILABLE=0
-if command -v docker >/dev/null 2>&1; then
-  if docker info >/dev/null 2>&1; then ok "docker $(docker --version | awk '{print $3}' | sed 's/,//') y daemon disponible"; DOCKER_AVAILABLE=1; else bad "docker esta instalado pero el daemon no responde"; fi
-else bad "docker no esta instalado"; fi
 
 hdr "llama.cpp (llama-server)"
 if [[ -x "${LLAMA_SERVER_BIN}" ]]; then
@@ -135,8 +140,9 @@ else
 fi
 
 hdr "Servicios de soporte (llama-swap + Qdrant)"
-# llama-swap corre nativo (no via docker-compose): lo levantamos nosotros
-# mas abajo si no esta arriba. Docker/compose ahora solo maneja Qdrant.
+# Ambos corren nativos, sin Docker: llama-swap ya lo maneja el bloque de
+# abajo; Qdrant, si no responde y hay un binario declarado en
+# TONY_QDRANT_BIN, lo autoarrancamos aca del mismo modo.
 LLAMASWAP_UP=0; QDRANT_UP=0
 if command -v curl >/dev/null 2>&1; then
   curl -sf -m 5 "${LLAMASWAP_URL}/health" >/dev/null 2>&1 && LLAMASWAP_UP=1
@@ -144,21 +150,23 @@ if command -v curl >/dev/null 2>&1; then
 else
   bad "curl no esta instalado; se necesita para verificar llama-swap/Qdrant"
 fi
-[[ "${QDRANT_UP}" -eq 1 ]] && ok "Qdrant ya responde en ${QDRANT_URL} - no se levanta container Qdrant"
-SERVICES_TO_START=()
-[[ "${QDRANT_UP}" -eq 0 ]] && SERVICES_TO_START+=(qdrant)
-if [[ "${#SERVICES_TO_START[@]}" -gt 0 ]]; then
-  if [[ "${DOCKER_AVAILABLE}" -eq 1 ]]; then
-    if [[ -f "${REPO_ROOT}/docker/docker-compose.yml" ]]; then
-      printf "  . docker compose up -d %s ...\n" "${SERVICES_TO_START[*]}"
-      COMPOSE_ERR="$(mktemp)"
-      if docker compose -f "${REPO_ROOT}/docker/docker-compose.yml" up -d "${SERVICES_TO_START[@]}" 2>"${COMPOSE_ERR}"; then
-        rm -f "${COMPOSE_ERR}"
-        wait_for() { local url="$1" timeout="${2:-60}" elapsed=0; while [[ "${elapsed}" -lt "${timeout}" ]]; do curl -sf -m 3 "${url}" >/dev/null 2>&1 && return 0; sleep 3; elapsed=$((elapsed+3)); done; return 1; }
-        if [[ "${QDRANT_UP}" -eq 0 ]]; then printf "  . esperando Qdrant (hasta 60s) ...\n"; if wait_for "${QDRANT_URL}/readyz" 60; then QDRANT_UP=1; ok "Qdrant arriba via Docker"; else bad "Qdrant no respondio tras 60s"; fi; fi
-      else printf "  \033[31merror\033[0m docker compose: %s\n" "$(cat "${COMPOSE_ERR}")"; rm -f "${COMPOSE_ERR}"; bad "docker compose up fallo"; fi
-    else bad "no se encontro docker/docker-compose.yml"; fi
-  else bad "faltan servicios y Docker no esta disponible"; fi
+
+if [[ "${QDRANT_UP}" -eq 1 ]]; then
+  ok "Qdrant ya responde en ${QDRANT_URL}"
+elif [[ -n "${QDRANT_BIN}" ]] && command -v "${QDRANT_BIN}" >/dev/null 2>&1; then
+  printf "  . levantando Qdrant en background (storage: %s) ...\n" "${QDRANT_STORAGE_DIR}"
+  mkdir -p "${QDRANT_STORAGE_DIR}"
+  QDRANT_LOG="${PYTHON_CACHE_DIR}/qdrant.log"
+  QDRANT__STORAGE__STORAGE_PATH="${QDRANT_STORAGE_DIR}" nohup "${QDRANT_BIN}" >"${QDRANT_LOG}" 2>&1 &
+  disown
+  elapsed=0
+  while [[ "${elapsed}" -lt 30 ]]; do
+    curl -sf -m 3 "${QDRANT_URL}/readyz" >/dev/null 2>&1 && { QDRANT_UP=1; break; }
+    sleep 2; elapsed=$((elapsed+2))
+  done
+  if [[ "${QDRANT_UP}" -eq 1 ]]; then ok "Qdrant arriba en ${QDRANT_URL} (log: ${QDRANT_LOG})"; else bad "Qdrant no respondio tras 30s (revisa ${QDRANT_LOG})"; fi
+else
+  bad "Qdrant no responde en ${QDRANT_URL} y no se pudo autoarrancar (instalalo nativo y seteá TONY_QDRANT_BIN, o levantalo vos mismo antes de correr este script)"
 fi
 
 if [[ "${LLAMASWAP_UP}" -eq 0 ]]; then
@@ -184,7 +192,7 @@ hdr "llama-swap (${LLAMASWAP_URL})"
 if curl -sf -m 5 "${LLAMASWAP_URL}/health" >/dev/null 2>&1; then
   ok "llama-swap respondiendo en ${LLAMASWAP_URL}"
 
-  # A diferencia de Ollama, llama-swap no "descarga" modelos: los toma de
+  # llama-swap no "descarga" modelos: los toma de
   # rutas locales de GGUF definidas en config.yaml. Ac\u00e1 verificamos que
   # cada modelo requerido este declarado (via /v1/models) y, si
   # TONY_WARM_MODELS=1 (default), forzamos una carga real con una request
@@ -213,14 +221,29 @@ if curl -sf -m 5 "${LLAMASWAP_URL}/health" >/dev/null 2>&1; then
     fi
   done
 
-  # Los modelos de embeddings (JUDGMENT_EMBED_MODEL / CODE_EMBED_MODEL) no
-  # pasan por llama-swap en este setup: si los seguis sirviendo con Ollama
-  # en paralelo, dejá TONY_EMBEDDINGS_VIA_OLLAMA=1 en .env para que el
-  # script no los busque ac\u00e1. Si migraste tambien los embeddings a
-  # llama.cpp, agregalos a la lista de arriba con su alias correspondiente.
-  if [[ "${TONY_EMBEDDINGS_VIA_OLLAMA:-1}" -eq 1 ]]; then
-    printf "  . embeddings (%s, %s) se asumen servidos por Ollama por separado - no verificados aca\n" "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}"
-  fi
+  # nomic-embed-text y bge-m3 estan declarados en config.yaml y los sirve
+  # el mismo llama-swap que los modelos de chat (un unico servidor para todo),
+  # asi que los verificamos igual que a los modelos de chat: que esten
+  # declarados y, si TONY_WARM_MODELS=1, que efectivamente respondan.
+  for m in "${JUDGMENT_EMBED_MODEL}" "${CODE_EMBED_MODEL}"; do
+    if ! grep -q "\"${m}\"" <<<"${MODELS_JSON}"; then
+      bad "modelo de embeddings ${m} no aparece en ${LLAMASWAP_URL}/v1/models (revisa aliases en ${LLAMASWAP_CONFIG})"
+      continue
+    fi
+    if [[ "${WARM_MODELS}" -eq 1 ]]; then
+      printf "  . cargando %s (embeddings, timeout %ss) ...\n" "${m}" "${MODEL_WARMUP_TIMEOUT}"
+      if curl -sf -m "${MODEL_WARMUP_TIMEOUT}" "${EMBEDDINGS_URL}/v1/embeddings" \
+          -H "Content-Type: application/json" \
+          -d "{\"model\":\"${m}\",\"input\":[\"ping\"]}" \
+          >/dev/null 2>&1; then
+        ok "modelo de embeddings ${m} carga y responde"
+      else
+        bad "modelo de embeddings ${m} esta declarado pero no respondio dentro de ${MODEL_WARMUP_TIMEOUT}s"
+      fi
+    else
+      ok "modelo de embeddings ${m} declarado en llama-swap (warm-up salteado, TONY_WARM_MODELS=0)"
+    fi
+  done
 else
   bad "llama-swap no responde en ${LLAMASWAP_URL}"
 fi
@@ -244,7 +267,7 @@ else
   ok ".env encontrado (no modificado)"
   set +u
   ENV_VALID=0
-  REQUIRED_VARS=("TONY_RUNTIME_DIR" "PYTHONPYCACHEPREFIX" "TONY_LLAMASWAP_URL" "TONY_LLAMASWAP_CONFIG" "TONY_QDRANT_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
+  REQUIRED_VARS=("TONY_RUNTIME_DIR" "PYTHONPYCACHEPREFIX" "TONY_LLAMASWAP_URL" "TONY_LLAMASWAP_CONFIG" "TONY_QDRANT_URL" "TONY_EMBEDDINGS_URL" "JUDGMENT_EMBED_MODEL" "CODE_EMBED_MODEL" "TONY_IMPLEMENTATION_MODEL" "TONY_INDEX_CHUNKER")
 
   if ENV_CHECK=$(bash -c "set -a; source '${ENV_FILE}'; set +a; for var in ${REQUIRED_VARS[*]}; do echo \"\${!var}\"; done"); then
     mapfile -t ENV_VALUES < <(echo "$ENV_CHECK")
@@ -282,6 +305,14 @@ else
         ok "TONY_QDRANT_URL=${TONY_QDRANT_URL} accesible"
       else
         bad "TONY_QDRANT_URL=${TONY_QDRANT_URL} no es accesible"
+      fi
+
+      if [[ ! "${TONY_EMBEDDINGS_URL}" =~ ^https?:// ]]; then
+        bad "TONY_EMBEDDINGS_URL debe ser http(s)://"
+      elif curl -sf -m 5 "${TONY_EMBEDDINGS_URL}/health" >/dev/null 2>&1; then
+        ok "TONY_EMBEDDINGS_URL=${TONY_EMBEDDINGS_URL} accesible (embeddings via llama-swap)"
+      else
+        bad "TONY_EMBEDDINGS_URL=${TONY_EMBEDDINGS_URL} no es accesible"
       fi
     else
       bad ".env tiene ${MISSING} variable(s) faltante(s) o vacía(s)"
