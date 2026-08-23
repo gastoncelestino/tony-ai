@@ -168,6 +168,58 @@ class TestExecutionOrder(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             order.task_id = "apply-1"
 
+    def test_execution_order_materializes_kernel_state(self):
+        kernel = FakeKernel(
+            "explore",
+            "running",
+            {
+                "id": "explore-2",
+                "description": "Materialize the execution order",
+                "phase": "explore",
+                "files": ("kernel/", "tests/"),
+                "dependencies": ("explore-1",),
+                "capabilities": ("read", "search"),
+            },
+        )
+
+        result = resolve_execution(kernel)
+        order = result["execution_order"]
+
+        self.assertEqual(order["phase"], "explore")
+        self.assertEqual(order["task_id"], "explore-2")
+        self.assertEqual(order["description"], "Materialize the execution order")
+        self.assertEqual(order["files"], ["kernel/", "tests/"])
+        self.assertEqual(order["dependencies"], ["explore-1"])
+        self.assertEqual(order["capabilities"], ["read", "search"])
+        self.assertEqual(order["executor"], "opencode")
+        self.assertEqual(order["worker"], "llm")
+
+    def test_execution_order_is_independent_from_later_kernel_state_changes(self):
+        task = {
+            "id": "explore-3",
+            "description": "Capture a stable execution order",
+            "phase": "explore",
+            "files": ("kernel/",),
+            "dependencies": (),
+            "capabilities": ("read",),
+        }
+        kernel = FakeKernel("explore", "running", task)
+
+        result = resolve_execution(kernel)
+        order = result["execution_order"]
+
+        task["id"] = "apply-3"
+        task["description"] = "Mutated later"
+        task["files"] = ("plugins/",)
+        task["capabilities"] = ("search",)
+        kernel.change_state.current_phase.value = "apply"
+
+        self.assertEqual(order["phase"], "explore")
+        self.assertEqual(order["task_id"], "explore-3")
+        self.assertEqual(order["description"], "Capture a stable execution order")
+        self.assertEqual(order["files"], ["kernel/"])
+        self.assertEqual(order["capabilities"], ["read"])
+
 
 if __name__ == "__main__":
     unittest.main()
