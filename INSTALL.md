@@ -53,14 +53,14 @@ La configuración inicial es reutilizable y ejecuta, secuencialmente:
 
 ```text
 qwen3-coder:30b
-carstenuhlig/omnicoder-2-9b:q4_k_m
+omnicoder-2-9b:q5_k_m
 deepseek-r1:14b
-ornith:9b
+ornith:9b ** falta
 bge-m3
 nomic-embed-text
 ```
 
-El modelo canónico de implementación es `carstenuhlig/omnicoder-2-9b:q4_k_m`.
+El modelo canónico de implementación es `omnicoder-2-9b:q5_k_m`.
 
 ## 4. Configuración del entorno
 
