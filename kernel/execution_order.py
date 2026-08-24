@@ -126,3 +126,12 @@ def resolve_execution(kernel: KernelState) -> dict:
         "current_phase": current_phase,
         "execution_order": order.to_dict(),
     }
+
+
+def authorize_execution_order(order: ExecutionOrder, requested_task_id: str) -> bool:
+    """Allow runtime execution only for the task selected by Kernel.
+
+    The runtime cannot substitute another task for the immutable order emitted
+    by Kernel. No runtime-side task selection or fallback is performed here.
+    """
+    return requested_task_id == order.task_id
