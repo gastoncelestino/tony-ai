@@ -5,7 +5,11 @@ import unittest
 from dataclasses import FrozenInstanceError
 from types import SimpleNamespace
 
-from kernel.execution_order import ExecutionOrder, resolve_execution
+from kernel.execution_order import (
+    ExecutionOrder,
+    authorize_execution_order,
+    resolve_execution,
+)
 
 
 class FakeKernel:
@@ -219,6 +223,30 @@ class TestExecutionOrder(unittest.TestCase):
         self.assertEqual(order["description"], "Capture a stable execution order")
         self.assertEqual(order["files"], ["kernel/"])
         self.assertEqual(order["capabilities"], ["read"])
+
+    def test_runtime_accepts_only_the_kernel_authorized_task(self):
+        order = ExecutionOrder(
+            phase="explore",
+            task_id="explore-4",
+            description="Run the Kernel-authorized task",
+            files=("kernel/",),
+            dependencies=(),
+            capabilities=("read",),
+        )
+
+        self.assertTrue(authorize_execution_order(order, "explore-4"))
+
+    def test_runtime_rejects_a_different_task_than_the_kernel_authorized_task(self):
+        order = ExecutionOrder(
+            phase="explore",
+            task_id="explore-4",
+            description="Run the Kernel-authorized task",
+            files=("kernel/",),
+            dependencies=(),
+            capabilities=("read",),
+        )
+
+        self.assertFalse(authorize_execution_order(order, "explore-5"))
 
 
 if __name__ == "__main__":
