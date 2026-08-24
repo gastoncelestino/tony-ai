@@ -39,7 +39,7 @@ flowchart LR
     I["Implementation<br/>OmniCoder 2 9B"]
     R["Review 4R<br/>DeepSeek-R1 14B"]
     V["Verify<br/>sdd-verify"]
-    A["Archive<br/>Ornith 9B"]
+    A["Archive"]
 
     U --> P --> I --> R --> V --> A
 
@@ -259,14 +259,6 @@ curl http://localhost:8080/v1/chat/completions \
 {"choices":[{"finish_reason":"stop","index":0,"message":....
 ```
 
-- **Docker + Docker Compose** — infraestructura de servicios, incluido Qdrant.
-```bash
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER && newgrp docker
-docker --version
-docker compose version
-```
-
 ## Modelos locales por defecto
 
 | Función | Modelo |
@@ -274,7 +266,6 @@ docker compose version
 | Planning / propuesta | `qwen3-coder:30b` |
 | Implementación | `omnicoder-2-9b` |
 | Review / Judgment | `deepseek-r1:14b` |
-| Archive / jd-fix-agent | `ornith:9b` |
 | Code embeddings | `bge-m3` |
 | Judgment embeddings | `nomic-embed-text` |
 
@@ -288,7 +279,7 @@ cd tony-ai
 git checkout dev
 ./scripts/setup.sh
 ```
-Valida las dependencias, instala `requirements-dev.txt`, tree-sitter, levanta los servicios Docker, descarga todos los modelos, genera `.env.example` y configuración de OpenCode.
+Valida las dependencias, instala `requirements-dev.txt`, tree-sitter, levanta llama-swap y Qdrant nativos, descarga todos los modelos, genera `.env.example` y configuración de OpenCode.
 
 Después:
 

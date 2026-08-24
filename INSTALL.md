@@ -5,15 +5,15 @@
 Tony-AI tiene dos niveles de ejecución:
 
 - **Suite local de desarrollo/tests:** Python 3.10+, Bun y las dependencias de `requirements-dev.txt`.
-- **Runtime completo:** además requiere OpenCode CLI, Ollama, Docker + Compose, Qdrant y GGA.
+- **Runtime completo:** además requiere OpenCode CLI, llama.cpp (llama-server) + llama-swap, Qdrant y GGA.
 
 | Requisito | Uso | Obligatorio para |
 |---|---|---|
 | Python 3.10+ | MCP servers, Kernel y tooling | Desarrollo y runtime |
 | Bun | Plugins y tests TypeScript | Desarrollo y runtime OpenCode |
 | OpenCode CLI | Orquestación de agentes/SDD | Runtime |
-| Ollama | Modelos locales y embeddings | Runtime |
-| Docker + Compose | Qdrant y Ollama | Instalador/runtime |
+| llama.cpp + llama-swap | Modelos locales y embeddings | Runtime |
+| Qdrant | Vector store | Instalador/runtime |
 | GGA | Revisión de código antes de commit | Instalador/runtime |
 | tree-sitter + `tree-sitter-language-pack` | Chunking estructural del Code Indexer | Desarrollo/runtime |
 
@@ -37,30 +37,30 @@ Ejecutar desde la raíz del repositorio:
 
 La configuración inicial es reutilizable y ejecuta, secuencialmente:
 
-1. verifica Python 3.10+, Bun, OpenCode CLI, Docker y Ollama;
+1. verifica Python 3.10+, Bun, OpenCode CLI, llama-server y llama-swap;
 2. verifica GGA y, si no está instalado, intenta clonarlo e instalarlo en un directorio temporal;
-3. comprueba por separado la disponibilidad de Ollama y Qdrant;
-4. inicia mediante Docker solamente el servicio de soporte que falte;
-5. descarga los modelos locales requeridos;
-6. instala `requirements-dev.txt` y verifica `tree_sitter` y `tree_sitter_language_pack`;
-7. regenera `opencode.json` con `TONY_REPO_ROOT` y fuerza `TONY_INDEX_CHUNKER=tree-sitter`;
-8. verifica que `.env.example` existe en el repositorio (no lo modifica);
-9. crea `.env` copiando desde `.env.example` (si no existe ya);
-10. valida que `.env` tiene todas las variables obligatorias y que los URLs/rutas son accesibles.
-11. crea `opencode.json.bak` antes de modificar la configuración.
+3. copia `config.yaml` de llama-swap al directorio de runtime (`~/.tony-ai/llama-swap/config.yaml`);
+4. comprueba por separado la disponibilidad de llama-swap y Qdrant;
+5. si Qdrant no responde y hay un binario nativo declarado en `TONY_QDRANT_BIN`, lo autoarranca;
+6. verifica que los modelos de chat y de embeddings estén declarados en llama-swap (y opcionalmente los "calienta" con una request mínima);
+7. instala `requirements-dev.txt` y verifica `tree_sitter` y `tree_sitter_language_pack`;
+8. regenera `opencode.json` con `TONY_REPO_ROOT` y fuerza `TONY_INDEX_CHUNKER=tree-sitter`;
+9. verifica que `.env.example` existe en el repositorio (no lo modifica);
+10. crea `.env` copiando desde `.env.example` (si no existe ya);
+11. valida que `.env` tiene todas las variables obligatorias y que los URLs/rutas son accesibles.
+12. crea `opencode.json.bak` antes de modificar la configuración.
 
-### Modelos descargados
+### Modelos declarados en llama-swap
 
 ```text
 qwen3-coder:30b
-omnicoder-2-9b:q5_k_m
+omnicoder:9b
 deepseek-r1:14b
-ornith:9b ** falta
 bge-m3
 nomic-embed-text
 ```
 
-El modelo canónico de implementación es `omnicoder-2-9b:q5_k_m`.
+El modelo canónico de implementación es `omnicoder:9b`. Los GGUF de cada modelo se descargan aparte (no los baja `setup.sh`) y se declaran en `config.yaml` de llama-swap con su ruta local.
 
 ## 4. Configuración del entorno
 
@@ -69,7 +69,8 @@ El instalador `setup.sh` verifica su existencia y automáticamente crea `.env` c
 
 ```env
 TONY_REPO_ROOT=/path/to/tony-ai          # → reemplazado con ruta real
-TONY_OLLAMA_URL=http://localhost:11434
+TONY_LLAMASWAP_URL=http://localhost:8080
+TONY_EMBEDDINGS_URL=http://localhost:8080
 TONY_QDRANT_URL=http://localhost:6333
 TONY_INDEX_CHUNKER=tree-sitter
 ```
@@ -87,50 +88,40 @@ code-index/.codeindex/
 
 Pueden cambiarse mediante las variables que consumen los componentes correspondientes, en particular `LOCAL_MEMORY_DB` y `JUDGMENT_MEMORY_DB` para las bases SQLite.
 
-## 5. Ollama y Qdrant
+## 5. llama-swap y Qdrant
 
-El instalador detecta cada servicio de forma independiente.
+El instalador detecta cada servicio de forma independiente. Ninguno de los dos requiere Docker.
 
-### Ollama nativo
+### llama-swap (modelos de chat y embeddings)
 
-Si Ollama ya está ejecutándose en `http://localhost:11434`, Tony-AI reutiliza esa instancia y no levanta otro contenedor de Ollama.
+Si `llama-swap` ya está ejecutándose en `http://localhost:8080`, Tony-AI reutiliza esa instancia.
 
 Verificación:
 
 ```bash
-curl http://localhost:11434/api/tags
+curl http://localhost:8080/health
+curl http://localhost:8080/v1/models
 ```
 
 Si es necesario iniciarlo manualmente:
 
 ```bash
-ollama serve
+llama-swap --config ~/.tony-ai/llama-swap/config.yaml --listen localhost:8080
 ```
 
-### Qdrant mediante Docker
+### Qdrant nativo
 
 ```bash
-cd docker
-docker compose up -d qdrant
+qdrant
 ```
+
+(o el binario que hayas declarado en `TONY_QDRANT_BIN`). `setup.sh` lo autoarranca en background si está disponible y no responde todavía.
 
 Verificación:
 
 ```bash
 curl http://localhost:6333/readyz
-docker compose ps
 ```
-
-### Ambos servicios mediante Docker
-
-Si ninguno está disponible:
-
-```bash
-cd docker
-docker compose up -d ollama qdrant
-```
-
-No ejecute una segunda instancia de Ollama sobre el puerto `11434` si ya existe una instancia nativa activa.
 
 ## 6. GGA
 
@@ -162,32 +153,23 @@ command -v gga
 
 Cada comando debe devolver una ruta válida.
 
-### Docker no responde
+### llama-swap no responde
 
 ```bash
-docker info
-docker compose version
+curl http://localhost:8080/health
 ```
 
-El daemon debe estar activo.
-
-### Ollama no responde
+Si es necesario iniciarlo manualmente:
 
 ```bash
-curl http://localhost:11434/api/tags
-```
-
-Si utiliza Ollama nativo:
-
-```bash
-ollama serve
+llama-swap --config ~/.tony-ai/llama-swap/config.yaml --listen localhost:8080
 ```
 
 ### Qdrant no responde
 
 ```bash
 curl http://localhost:6333/readyz
-cd docker && docker compose up -d qdrant
+qdrant   # o el binario declarado en TONY_QDRANT_BIN
 ```
 
 ### `tree_sitter` no se puede importar
@@ -210,12 +192,11 @@ El instalador regenera las rutas MCP utilizando `TONY_REPO_ROOT`.
 
 ### El health check falla aunque `make test` pasa
 
-Esto es posible y no implica necesariamente un fallo del código. `make test` valida la suite local sin servicios externos; `make health` valida además Ollama, Qdrant, MCP y embeddings reales. Revise primero:
+Esto es posible y no implica necesariamente un fallo del código. `make test` valida la suite local sin servicios externos; `make health` valida además llama-swap, Qdrant, MCP y embeddings reales. Revise primero:
 
 ```bash
-curl http://localhost:11434/api/tags
+curl http://localhost:8080/health
 curl http://localhost:6333/readyz
-docker compose -f docker/docker-compose.yml ps
 ```
 
 ## Documentación
