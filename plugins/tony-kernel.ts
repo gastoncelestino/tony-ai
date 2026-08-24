@@ -68,6 +68,12 @@ export async function taskExecuteBeforeHook(
   input: ExecutionRequest,
   _output: unknown
 ): Promise<void> {
+  console.error("[TONY DEBUG] tool.execute.before", {
+    tool: input.tool,
+    sessionID: input.sessionID,
+    arguments: input.arguments,
+  })
+
   if (input.tool !== "Task") return
 
   await authorizeExecution(executionRequest(input))
