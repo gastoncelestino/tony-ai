@@ -65,18 +65,29 @@ export async function authorizeExecution(
 }
 
 export async function taskExecuteBeforeHook(
-  input: ExecutionRequest,
-  _output: unknown
+  input: {
+    tool: string
+    sessionID: string
+    callID: string
+  },
+  output: {
+    args: Record<string, unknown>
+  }
 ): Promise<void> {
   console.error("[TONY DEBUG] tool.execute.before", {
     tool: input.tool,
     sessionID: input.sessionID,
-    arguments: input.arguments,
+    callID: input.callID,
+    args: output.args,
   })
 
   if (input.tool !== "Task") return
 
-  await authorizeExecution(executionRequest(input))
+  await authorizeExecution({
+    sessionID: input.sessionID,
+    tool: input.tool,
+    arguments: output.args,
+  })
 }
 
 const TonyKernelPlugin: Plugin = {
