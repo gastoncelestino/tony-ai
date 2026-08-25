@@ -7,42 +7,50 @@
  * The legacy Python CLI/orchestrator bridge was removed while the new
  * Kernel execution boundary is being rebuilt. Until that boundary exists,
  * Task execution fails closed rather than falling back to legacy behavior.
+ *
+ * IMPORTANT: OpenCode's local-file plugin loader treats a module as
+ * exporting "one or more plugin functions" — it scans EVERY top-level
+ * export, not just `default`, and calls anything callable as if it were a
+ * plugin entry point. A `class` is `typeof === "function"` in JS, so an
+ * exported error class gets invoked without `new` and crashes the loader
+ * ("Cannot call a class constructor ... without |new|"); an exported plain
+ * helper function gets called with the wrong arguments instead. That's why
+ * everything below except `export default` is intentionally NOT exported —
+ * this file must expose exactly one callable: the plugin itself.
  */
-
 import type { Plugin } from "@opencode-ai/plugin"
 
-export class KernelBlockedError extends Error {
+class KernelBlockedError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "KernelBlockedError"
   }
 }
-
-export class KernelUnavailableError extends Error {
+class KernelUnavailableError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "KernelUnavailableError"
   }
 }
-
-export interface ExecutionRequest {
+interface ExecutionRequest {
   sessionID: string
   tool: string
   arguments: Record<string, unknown>
 }
-
 /**
  * Extract only the execution identity carried by the OpenCode Task event.
  * This is transport parsing, not Kernel policy.
  */
-export function executionRequest(input: ExecutionRequest): ExecutionRequest {
+function executionRequest(
+  input: { sessionID: string; tool: string },
+  args: Record<string, unknown>
+): ExecutionRequest {
   return {
     sessionID: input.sessionID,
     tool: input.tool,
-    arguments: input.arguments,
+    arguments: args,
   }
 }
-
 /**
  * Temporary fail-closed boundary.
  *
@@ -50,21 +58,17 @@ export function executionRequest(input: ExecutionRequest): ExecutionRequest {
  * call returning an ExecutionOrder. Keeping the boundary explicit prevents
  * the plugin from silently retaining the removed legacy orchestration path.
  */
-export async function authorizeExecution(
-  input: ExecutionRequest
-): Promise<never> {
+async function authorizeExecution(input: ExecutionRequest): Promise<never> {
   if (input.tool !== "Task") {
     throw new KernelUnavailableError(
       "[Tony Kernel] Execution authorization is not implemented for this runtime boundary"
     )
   }
-
   throw new KernelUnavailableError(
     "[Tony Kernel] Task execution blocked: new Kernel execution boundary is not wired yet"
   )
 }
-
-export async function taskExecuteBeforeHook(
+async function taskExecuteBeforeHook(
   input: {
     tool: string
     sessionID: string
@@ -80,28 +84,20 @@ export async function taskExecuteBeforeHook(
     callID: input.callID,
     args: output.args,
   })
-
   if (input.tool !== "Task") return
-
-  await authorizeExecution({
-    sessionID: input.sessionID,
-    tool: input.tool,
-    arguments: output.args,
-  })
+  await authorizeExecution(executionRequest(input, output.args))
 }
+/**
+ * OpenCode 1.18.x requires the default export to be a FUNCTION that
+ * receives the plugin context ({project, client, $, directory, worktree})
+ * and RETURNS the hooks object.
+ */
+const TonyKernelPlugin: Plugin = async () => {
+  console.log("[tony-kernel] Plugin loaded; execution boundary is fail-closed")
 
-const TonyKernelPlugin: Plugin = {
-  name: "tony-kernel",
-  version: "2.0.0",
-  description: "Tony Kernel — thin OpenCode execution boundary",
-
-  hooks: {
+  return {
     "tool.execute.before": taskExecuteBeforeHook,
-  },
-
-  async onLoad() {
-    console.log("[tony-kernel] Plugin loaded; execution boundary is fail-closed")
-  },
+  }
 }
 
 export default TonyKernelPlugin
