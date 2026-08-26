@@ -6,7 +6,6 @@ macros:
     --flash-attn on
 
 models:
-
   qwen3-coder-30b:
     aliases:
       - "qwen3-coder:30b"
@@ -15,7 +14,13 @@ models:
       --model /home/tony/.tony-ai/models/qwen3-coder-30B.q4_k_m.gguf
       --ctx-size 32768
       --n-gpu-layers 99
-      --n-cpu-moe 32
+      --n-cpu-moe 24
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --spec-type ngram-mod
+      --spec-ngram-mod-n-match 24
+      --spec-ngram-mod-n-min 48
+      --spec-ngram-mod-n-max 64
     ttl: 600
 
   omnicoder-9b:
@@ -26,6 +31,15 @@ models:
       --model /home/tony/.tony-ai/models/omnicoder-2-9b.q5_k_m.gguf
       --ctx-size 16384
       --n-gpu-layers 99
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --temp 0.3
+      --top-p 0.95
+      --top-k 20
+      --spec-type ngram-mod
+      --spec-ngram-mod-n-match 16
+      --spec-ngram-mod-n-min 24
+      --spec-ngram-mod-n-max 48
     ttl: 600
 
   deepseek-r1-14b:
@@ -38,8 +52,31 @@ models:
       --n-gpu-layers 99
       --cache-type-k q8_0
       --cache-type-v q8_0
+      --temp 0.6
+      --top-p 0.95
     ttl: 600
-    
+
+  ornith-1.5-9b:
+    aliases:
+      - "ornith-1.5-9b"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/ornith-1.5-9b-q5_k_m.gguf
+      --ctx-size 8192
+      --n-gpu-layers 99
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --temp 0.6
+      --top-p 0.95
+      --top-k 20
+      --min-p 0.0
+      --repeat-penalty 1.0
+      --spec-type ngram-mod
+      --spec-ngram-mod-n-match 16
+      --spec-ngram-mod-n-min 24
+      --spec-ngram-mod-n-max 48
+    ttl: 600
+
   nomic-embed-text:
     aliases:
       - "nomic-embed-text"

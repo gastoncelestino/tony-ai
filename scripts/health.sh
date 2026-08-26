@@ -5,7 +5,8 @@
 # Componentes:
 #   OpenCode     opencode.json existe, parsea y no tiene rutas absolutas.
 #   MCP          los 4 servers arrancan y responden 'initialize' JSON-RPC.
-#   Ollama       /api/tags responde y los modelos de embedding estan pull-eados.
+#   LlamaSwap    /health responde y los modelos de embedding (nomic-embed-text,
+#                bge-m3) estan declarados en config.yaml.
 #   Qdrant       /readyz 200 y /collections responde.
 #   Disk         directorios .tonymem/ existen y son escribibles.
 #   embeddings   judgment_qdrant.verify.ts pasa (roundtrip embed+upsert+search).
@@ -16,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${TONY_REPO_ROOT:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 export TONY_REPO_ROOT
 
-OLLAMA_URL="${TONY_OLLAMA_URL:-http://localhost:11434}"
+LLAMASWAP_URL="${TONY_LLAMASWAP_URL:-http://localhost:8080}"
 QDRANT_URL="${TONY_QDRANT_URL:-http://localhost:6333}"
 EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
 CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
@@ -47,7 +48,7 @@ fi
 HEALTH_LOCAL_MEMORY_DB="${HEALTH_DB_DIR}/memory.db"
 HEALTH_JUDGMENT_MEMORY_DB="${HEALTH_DB_DIR}/judgment-memory.db"
 
-declare -A STATUS=([OpenCode]=0 [MCP]=0 [Ollama]=0 [Qdrant]=0 [Disk]=0 [embeddings]=0)
+declare -A STATUS=([OpenCode]=0 [MCP]=0 [LlamaSwap]=0 [Qdrant]=0 [Disk]=0 [embeddings]=0)
 declare -a MSGS=()
 
 emit() {
@@ -90,24 +91,21 @@ mcp_probe "kernel/mcp_server.py"       || MCP_OK=0
 emit MCP "${MCP_OK}" \
   "$([[ $MCP_OK -eq 1 ]] && echo 'los 4 servers arrancan con SQLite temporal' || echo 'al menos un server MCP fallo al initialize')"
 
-# 3. Ollama
-if curl -sf -m 5 "${OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
-  TAGS="$(curl -sf -m 5 "${OLLAMA_URL}/api/tags")"
-  HAS_ALL="$(EMBED_MODEL="${EMBED_MODEL}" CODE_EMBED_MODEL="${CODE_EMBED_MODEL}" \
-             python3 - <<PY
-import json, os
-tags = json.loads('''${TAGS}''').get('models', [])
-need = [os.environ['EMBED_MODEL'], os.environ['CODE_EMBED_MODEL']]
-print('yes' if all(any(m.get('name','').startswith(n) for m in tags) for n in need) else 'no')
-PY
-  )"
-  if [[ "${HAS_ALL}" == "yes" ]]; then
-    emit Ollama 1 "tags OK y modelos ${EMBED_MODEL}, ${CODE_EMBED_MODEL} presentes"
+# 3. llama-swap (sirve chat y embeddings; nomic-embed-text y bge-m3
+#    declarados en config.yaml, mismo patron de verificacion que setup.sh)
+if curl -sf -m 5 "${LLAMASWAP_URL}/health" >/dev/null 2>&1; then
+  MODELS_JSON="$(curl -sf -m 5 "${LLAMASWAP_URL}/v1/models" 2>/dev/null || echo '')"
+  HAS_ALL=1
+  for m in "${EMBED_MODEL}" "${CODE_EMBED_MODEL}"; do
+    grep -q "\"${m}\"" <<<"${MODELS_JSON}" || HAS_ALL=0
+  done
+  if [[ "${HAS_ALL}" -eq 1 ]]; then
+    emit LlamaSwap 1 "/health OK y modelos ${EMBED_MODEL}, ${CODE_EMBED_MODEL} declarados"
   else
-    emit Ollama 0 "tags OK pero falta alguno de ${EMBED_MODEL} / ${CODE_EMBED_MODEL}"
+    emit LlamaSwap 0 "/health OK pero falta alguno de ${EMBED_MODEL} / ${CODE_EMBED_MODEL} en ${LLAMASWAP_URL}/v1/models"
   fi
 else
-  emit Ollama 0 "no responde en ${OLLAMA_URL}"
+  emit LlamaSwap 0 "no responde en ${LLAMASWAP_URL}"
 fi
 
 # 4. Qdrant
@@ -139,7 +137,7 @@ emit Disk "${DISK_OK}" "${DISK_MSG}"
 # 6. embeddings: subshell reusando judgment_qdrant.verify.ts (sin duplicar logica)
 EMB_OK=1
 EMB_MSG="judgment_qdrant.verify.ts paso"
-if [[ "${STATUS[Ollama]}" -eq 1 && "${STATUS[Qdrant]}" -eq 1 ]]; then
+if [[ "${STATUS[LlamaSwap]}" -eq 1 && "${STATUS[Qdrant]}" -eq 1 ]]; then
   if ! command -v bun >/dev/null 2>&1; then
     EMB_OK=0; EMB_MSG="bun no instalado - no puedo correr judgment_qdrant.verify.ts"
   elif ! (cd "${REPO_ROOT}" \
@@ -147,7 +145,7 @@ if [[ "${STATUS[Ollama]}" -eq 1 && "${STATUS[Qdrant]}" -eq 1 ]]; then
     EMB_OK=0; EMB_MSG="judgment_qdrant.verify.ts fallo - tail: $(tail -3 /tmp/verify.log | tr '\n' ' ')"
   fi
 else
-  EMB_OK=0; EMB_MSG="skipped - Ollama o Qdrant estan abajo"
+  EMB_OK=0; EMB_MSG="skipped - llama-swap o Qdrant estan abajo"
 fi
 emit embeddings "${EMB_OK}" "${EMB_MSG}"
 
@@ -157,7 +155,7 @@ for m in "${MSGS[@]}"; do echo -e "$m"; done
 echo ""
 
 CRIT=0
-for k in OpenCode MCP Ollama Qdrant Disk embeddings; do
+for k in OpenCode MCP LlamaSwap Qdrant Disk embeddings; do
   [[ "${STATUS[$k]}" -eq 0 ]] && CRIT=1
 done
 exit "${CRIT}"

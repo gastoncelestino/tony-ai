@@ -150,55 +150,75 @@ Entre otras cosas, controla: artifacts requeridos; checksums; alcance permitido 
 Esto permite que el workflow no dependa únicamente de que un agente "recuerde" qué debe hacer: las condiciones críticas del proceso son verificadas por una capa de control.
 	
 # Requisitos
-- **Python 3.10+** — servidores MCP y tooling Python.
+- **Python 3.14** — servidores MCP y tooling Python.
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3 python3-pip python3-venv
+sudo apt install software-properties-common -y
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt update
+sudo apt install python3.14 python3.14-venv python3.14-dev -y
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 python3 --version
+
+sudo apt install python3-pip -y
 python3 -m pip --version
+
+# Deberia devolver algo asi:
+pip 25.1.1 from /usr/lib/python3/dist-packages/pip (python 3.14)
 ```
 
-- **Bun** — scripts TypeScript y plugins.
+- **Bun 1.4.0** — scripts TypeScript y plugins.
 ```bash
-sudo apt update && sudo apt install -y unzip curl && curl -fsSL https://bun.sh/install | bash
+sudo apt update && sudo apt install -y unzip curl
+curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.0"
 source ~/.bashrc
 bun --version
 ```
 
-- **OpenCode CLI** — orquestador SDD.
+- **OpenCode CLI 1.18.22** — orquestador SDD.
 ```bash
-curl -fsSL https://opencode.ai/install | bash
+curl -fsSL https://opencode.ai/install | bash -s -- --version 1.18.22
 source ~/.bashrc
 opencode --version
 ```
 
-- **cuda-toolkit** — si tenes tarjeta de video nvidia.
+- **Qdrant v1.19.0** — base de datos vectorial para code index y judgment memory.
+```bash
+cd ~
+QDRANT_VERSION=v1.19.0
+wget "https://github.com/qdrant/qdrant/releases/download/${QDRANT_VERSION}/qdrant-x86_64-unknown-linux-gnu.tar.gz"
+tar -xzf qdrant-x86_64-unknown-linux-gnu.tar.gz
+chmod +x qdrant
+sudo mv qdrant /usr/local/bin/qdrant
+rm qdrant-x86_64-unknown-linux-gnu.tar.gz
+qdrant --version
+```
+
+- **cuda-toolkit 13.3** — si tenes tarjeta de video nvidia.
 ```bash
 cd /tmp
-wget -N https://developer.download.nvidia.com/compute/cuda/repos/debian13/x86_64/cuda-keyring_1.1-1_all.deb
+wget -N https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/cuda-keyring_1.1-1_all.deb
 
 sudo dpkg -i cuda-keyring_1.1-1_all.deb
 sudo apt update
 sudo apt install -y cuda-toolkit-13-3
 
-# Verificar nvcc
 export PATH=/usr/local/cuda/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 
+# Verificar nvcc
 which nvcc
 nvcc --version
 ```
 
-- **llama.cpp** — llama-server.
+- **llama.cpp (build b10573)** — llama-server.
 ```bash
 cd ~
 sudo apt update && sudo apt install -y git build-essential cmake
 git clone https://github.com/ggml-org/llama.cpp
-
-# Instalar build
-cd cd ~/llama.cpp
+cd ~/llama.cpp
+git checkout b10573
 rm -rf build
 
 cmake -S . -B build \
@@ -215,23 +235,25 @@ Available devices:
   CUDA0: NVIDIA GeForce RTX 3080 (10239 MiB, 9069 MiB free)
 ```
 
-- **llama-swap** — para ejecutar llama-server automático.
+- **llama-swap v250** — para ejecutar llama-server automático.
 ```bash
-TAG=$(curl -s https://api.github.com/repos/mostlygeek/llama-swap/releases/latest \
-  | grep -oP '"tag_name":\s*"\K[^"]+')
-echo "Última versión: ${TAG}"
+curl -LO "https://github.com/mostlygeek/llama-swap/releases/download/v250/llama-swap_250_linux_amd64.tar.gz"
 
-VER="${TAG#v}"
-curl -LO "https://github.com/mostlygeek/llama-swap/releases/download/${TAG}/llama-swap_${VER}_linux_amd64.tar.gz"
-
-tar -xvzf "llama-swap_${VER}_linux_amd64.tar.gz"
+tar -xvzf "llama-swap_250_linux_amd64.tar.gz"
 chmod +x llama-swap
 sudo mv llama-swap /usr/local/bin/llama-swap
-rm "llama-swap_${VER}_linux_amd64.tar.gz"
+rm "llama-swap_250_linux_amd64.tar.gz"
 
 llama-swap --version
 
-llama-swap --config ~/.tony-ai/llama-swap/config.yaml --listen localhost:8080
+# Deberia devolver algo asi:
+version: v250 (60226b6)
+
+llama-swap --config config.yaml --listen localhost:8080
+
+# Deberia decir algo asi
+[INFO] using nvidia-smi for GPU monitoring
+[INFO] llama-swap listening on http://localhost:8080
 
 curl http://localhost:8080/health
 

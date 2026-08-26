@@ -19,14 +19,12 @@ PYTHON_MIN_MINOR=10
 JUDGMENT_EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
 CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 # Estos IDs deben coincidir con las claves/aliases definidos en el
-# config.yaml de llama-swap (ver TONY_LLAMASWAP_CONFIG mas abajo).
 PLANNING_MODEL="${TONY_PLANNING_MODEL:-qwen3-coder:30b}"
 IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-omnicoder:9b}"
 REVIEW_MODEL="${TONY_REVIEW_MODEL:-deepseek-r1:14b}"
 LLAMASWAP_URL="${TONY_LLAMASWAP_URL:-http://localhost:8080}"
-# Origen versionado en el repo. Destino donde lo lee llama-swap en runtime.
-LLAMASWAP_CONFIG_SRC="${TONY_LLAMASWAP_CONFIG_SRC:-${REPO_ROOT}/config.yaml}"
-LLAMASWAP_CONFIG="${TONY_LLAMASWAP_CONFIG:-${HOME}/.tony-ai/llama-swap/config.yaml}"
+# llama-swap lee el config.yaml directamente desde el repo
+LLAMASWAP_CONFIG="${TONY_LLAMASWAP_CONFIG:-${REPO_ROOT}/config.yaml}"
 LLAMA_SERVER_BIN="${TONY_LLAMA_SERVER_BIN:-${HOME}/llama.cpp/build/bin/llama-server}"
 # Si un modelo nunca se cargo antes, la primera request tarda en levantar
 # el proceso de llama-server y leer el GGUF. Este timeout es solo para el
@@ -125,18 +123,10 @@ else
 fi
 
 hdr "Config de llama-swap"
-if [[ -f "${LLAMASWAP_CONFIG_SRC}" ]]; then
-  LLAMASWAP_CONFIG_DIR="$(dirname "${LLAMASWAP_CONFIG}")"
-  if mkdir -p "${LLAMASWAP_CONFIG_DIR}" && cp "${LLAMASWAP_CONFIG_SRC}" "${LLAMASWAP_CONFIG}"; then
-    ok "config.yaml copiado a ${LLAMASWAP_CONFIG}"
-  else
-    bad "no se pudo copiar ${LLAMASWAP_CONFIG_SRC} a ${LLAMASWAP_CONFIG}"
-    printf "    diagnostico: whoami=%s\n" "$(whoami)"
-    printf "    diagnostico: %s\n" "$(ls -ld "${LLAMASWAP_CONFIG_DIR}" 2>&1 || echo "${LLAMASWAP_CONFIG_DIR} no existe")"
-    printf "    fix probable: sudo chown -R \"\$(whoami)\":\"\$(whoami)\" \"%s\"\n" "$(dirname "${LLAMASWAP_CONFIG_DIR}")"
-  fi
+if [[ -f "${LLAMASWAP_CONFIG}" ]]; then
+  ok "config.yaml encontrado en ${LLAMASWAP_CONFIG}"
 else
-  bad "no se encontro ${LLAMASWAP_CONFIG_SRC} en el repo (ajusta TONY_LLAMASWAP_CONFIG_SRC en .env)"
+  bad "no se encontro ${LLAMASWAP_CONFIG} (ajusta TONY_LLAMASWAP_CONFIG en .env o crea config.yaml en la raiz del repo)"
 fi
 
 hdr "Servicios de soporte (llama-swap + Qdrant)"
