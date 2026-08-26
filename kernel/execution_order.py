@@ -60,3 +60,8 @@ def resolve_execution(kernel: KernelState) -> dict:
 def authorize_execution_order(order: ExecutionOrder, requested_task_id: str) -> bool:
     """Allow runtime execution only for the task selected by Kernel."""
     return requested_task_id == order.task_id
+
+
+def authorize_file_access(order: ExecutionOrder, file_path: str) -> bool:
+    """Allow access only to a file explicitly included in the Kernel order."""
+    return file_path in order.files
