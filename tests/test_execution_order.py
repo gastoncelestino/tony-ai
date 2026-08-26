@@ -5,7 +5,12 @@ import unittest
 from dataclasses import FrozenInstanceError
 from types import SimpleNamespace
 
-from kernel.execution_order import ExecutionOrder, authorize_execution_order, resolve_execution
+from kernel.execution_order import (
+    ExecutionOrder,
+    authorize_execution_order,
+    authorize_file_access,
+    resolve_execution,
+)
 
 
 class FakeKernel:
@@ -67,6 +72,18 @@ class TestExecutionOrder(unittest.TestCase):
         order = ExecutionOrder("explore", "explore-4", "Run", ("kernel/",))
         self.assertTrue(authorize_execution_order(order, "explore-4"))
         self.assertFalse(authorize_execution_order(order, "explore-5"))
+
+    def test_file_inside_order_scope_is_allowed(self):
+        order = ExecutionOrder("explore", "explore-5", "Inspect", ("kernel/execution_order.py", "tests/"))
+        self.assertTrue(authorize_file_access(order, "kernel/execution_order.py"))
+
+    def test_file_outside_order_scope_is_blocked(self):
+        order = ExecutionOrder("explore", "explore-6", "Inspect", ("kernel/execution_order.py",))
+        self.assertFalse(authorize_file_access(order, "plugins/opencode.ts"))
+
+    def test_scope_does_not_match_by_prefix(self):
+        order = ExecutionOrder("explore", "explore-7", "Inspect", ("kernel/task.py",))
+        self.assertFalse(authorize_file_access(order, "kernel/task.py.bak"))
 
 
 if __name__ == "__main__":
