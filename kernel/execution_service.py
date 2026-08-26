@@ -16,9 +16,5 @@ def authorize_runtime_execution(order: dict, requested_task_id: str) -> bool:
         task_id=order["task_id"],
         description=order["description"],
         files=tuple(order["files"]),
-        dependencies=tuple(order["dependencies"]),
-        capabilities=tuple(order["capabilities"]),
-        executor=order["executor"],
-        worker=order["worker"],
     )
     return authorize_execution_order(execution_order, requested_task_id)
