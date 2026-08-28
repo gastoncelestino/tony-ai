@@ -24,7 +24,7 @@ class KernelState:
         return KernelState(
             self.current_phase,
             transition_start_task(self.current_status),
-            self.next_task,
+            self.get_next_task(),
         )
 
     def complete_task(self, evidence: object) -> "KernelState":
@@ -32,5 +32,5 @@ class KernelState:
         return KernelState(
             self.current_phase,
             transition_complete_task(self.current_status, evidence),
-            self.next_task,
+            self.get_next_task(),
         )
