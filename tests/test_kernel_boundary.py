@@ -1,11 +1,11 @@
 from kernel.boundary import resolve_boundary
 
 
-def task(task_id, dependencies=()):
+def task(task_id, dependencies=(), phase="explore"):
     return {
         "id": task_id,
         "description": task_id,
-        "phase": "explore",
+        "phase": phase,
         "dependencies": dependencies,
     }
 
@@ -39,18 +39,19 @@ def test_boundary_uses_completed_tasks_to_enable_successor():
     assert result["execution_order"]["task_id"] == "B"
 
 
-def test_boundary_blocks_when_no_task_is_ready():
+def test_boundary_blocks_when_no_task_is_ready_in_current_phase():
     result = resolve_boundary(
         {
             "phase": "explore",
             "status": "pending",
-            "tasks": [task("A"), task("B", ("A",))],
+            "tasks": [task("A", phase="execute")],
             "completed": [],
         }
     )
 
-    assert result["allowed"] is True
-    assert result["execution_order"]["task_id"] == "A"
+    assert result["allowed"] is False
+    assert result["decision"] == "blocked"
+    assert result["execution_order"] is None
 
 
 def test_boundary_fails_closed_on_invalid_task_snapshot():
