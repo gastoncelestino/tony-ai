@@ -6,9 +6,10 @@ from typing import Protocol
 
 
 class KernelState(Protocol):
-    """Minimal Kernel surface required to resolve an execution order."""
+    """Minimal Kernel state surface required to resolve an execution order."""
 
-    change_state: object
+    current_phase: str
+    current_status: str
 
     def get_next_task(self) -> dict | None:
         ...
@@ -34,8 +35,8 @@ class ExecutionOrder:
 
 def resolve_execution(kernel: KernelState) -> dict:
     """Resolve the next execution order from Kernel-owned state only."""
-    current_phase = kernel.change_state.current_phase.value
-    current_status = kernel.change_state.get_current_phase_state().status.value
+    current_phase = kernel.current_phase
+    current_status = kernel.current_status
 
     if current_status != "running":
         return {"decision": "blocked", "allowed": False, "reason": f"Current phase is not executable: {current_status}", "current_phase": current_phase, "execution_order": None}
