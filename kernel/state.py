@@ -3,8 +3,8 @@
 from copy import deepcopy
 from dataclasses import dataclass
 
-from kernel.task_completion_transition import complete_task
-from kernel.task_execution_transition import start_task
+from kernel.task_completion_transition import complete_task as transition_complete_task
+from kernel.task_execution_transition import start_task as transition_start_task
 
 
 @dataclass(frozen=True)
@@ -21,10 +21,16 @@ class KernelState:
 
     def start_task(self) -> "KernelState":
         """Return a new state with the current task transitioned to running."""
-        new_status = start_task(self.current_status)
-        return KernelState(self.current_phase, new_status, self.get_next_task())
+        return KernelState(
+            self.current_phase,
+            transition_start_task(self.current_status),
+            self.next_task,
+        )
 
     def complete_task(self, evidence: object) -> "KernelState":
         """Return a new state with the current task transitioned to completed."""
-        new_status = complete_task(self.current_status, evidence)
-        return KernelState(self.current_phase, new_status, self.get_next_task())
+        return KernelState(
+            self.current_phase,
+            transition_complete_task(self.current_status, evidence),
+            self.next_task,
+        )
