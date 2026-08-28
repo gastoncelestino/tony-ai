@@ -2,28 +2,14 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
 
 from kernel.execution_service import authorize_runtime_execution, resolve_runtime_execution
-
-
-class FakeKernel:
-    def __init__(self, phase: str, status: str, task: dict | None):
-        self.change_state = SimpleNamespace(
-            current_phase=SimpleNamespace(value=phase),
-            get_current_phase_state=lambda: SimpleNamespace(
-                status=SimpleNamespace(value=status)
-            ),
-        )
-        self._task = task
-
-    def get_next_task(self):
-        return self._task
+from kernel.state import KernelState
 
 
 class TestExecutionService(unittest.TestCase):
     def test_resolve_runtime_execution_returns_v1_order(self):
-        kernel = FakeKernel(
+        kernel = KernelState(
             "explore",
             "running",
             {
@@ -49,7 +35,7 @@ class TestExecutionService(unittest.TestCase):
         )
 
     def test_resolve_runtime_execution_blocks_without_order(self):
-        kernel = FakeKernel("explore", "completed", None)
+        kernel = KernelState("explore", "completed", None)
 
         result = resolve_runtime_execution(kernel)
 
