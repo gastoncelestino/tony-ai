@@ -1,6 +1,8 @@
 """Transport-neutral boundary between callers and the Tony Kernel."""
 from __future__ import annotations
 
+import json
+import sys
 from typing import Mapping, Sequence
 
 from kernel.execution_order import resolve_execution
@@ -40,3 +42,23 @@ def _blocked(reason: str) -> dict:
         "current_phase": None,
         "execution_order": None,
     }
+
+
+def main() -> int:
+    """Read one JSON request from stdin and write one JSON response to stdout."""
+    try:
+        request = json.load(sys.stdin)
+        if not isinstance(request, Mapping):
+            raise TypeError("request must be an object")
+        response = resolve_boundary(request)
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        response = _blocked(str(exc))
+
+    sys.stdout.write(json.dumps(response, separators=(",", ":")))
+    sys.stdout.write("\n")
+    sys.stdout.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
