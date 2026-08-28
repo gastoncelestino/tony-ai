@@ -19,8 +19,9 @@ def test_authorized_execution_result_can_complete_selected_task():
     tasks = TaskSet((task("A"),))
     state = KernelState("explore", "pending").select_next_task(tasks).start_task()
 
-    order = resolve_execution(state)
-    assert order["task_id"] == "A"
+    result = resolve_execution(state)
+    assert result["allowed"] is True
+    assert result["execution_order"]["task_id"] == "A"
 
     evidence = VALID_EVIDENCE
     completed_state, completed_tasks = state.complete_current_task(tasks, evidence)
@@ -33,7 +34,8 @@ def test_blocked_execution_does_not_complete_task():
     tasks = TaskSet((task("A"),))
     state = KernelState("explore", "pending").select_next_task(tasks)
 
-    order = resolve_execution(state)
-    assert order["status"] == "blocked"
+    result = resolve_execution(state)
+    assert result["allowed"] is False
+    assert result["decision"] == "blocked"
     assert state.current_status == "pending"
     assert tasks.completed == ()
