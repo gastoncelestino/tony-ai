@@ -44,3 +44,21 @@ class KernelState:
             transition_complete_task(self.current_status, evidence),
             self.get_next_task(),
         )
+
+    def complete_current_task(self, task_set: object, evidence: object):
+        """Complete the selected task and return the new state and task set."""
+        selected_task = self.get_next_task()
+        if selected_task is None or not selected_task.get("id"):
+            raise ValueError("No current task is selected")
+        if self.current_status != "running":
+            raise ValueError("Current task must be running")
+
+        task_id = selected_task["id"]
+        try:
+            task_set.get(task_id)
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise ValueError(f"Task is not present in task set: {task_id}") from exc
+
+        new_state = self.complete_task(evidence)
+        new_task_set = task_set.complete(task_id)
+        return new_state, new_task_set
