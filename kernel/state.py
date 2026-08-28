@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from kernel.task_completion_transition import complete_task as transition_complete_task
 from kernel.task_execution_transition import start_task as transition_start_task
+from kernel.task_selection import select_ready_task
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,15 @@ class KernelState:
     def get_next_task(self) -> dict | None:
         """Return a detached copy of the selected task, if any."""
         return deepcopy(self._next_task)
+
+    def select_next_task(self, task_set: object) -> "KernelState":
+        """Return a new state containing the first ready task for this phase."""
+        selected_task = select_ready_task(task_set, self.current_phase)
+        return KernelState(
+            self.current_phase,
+            self.current_status,
+            selected_task,
+        )
 
     def start_task(self) -> "KernelState":
         """Return a new state with the current task transitioned to running."""
