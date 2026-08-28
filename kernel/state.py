@@ -21,11 +21,11 @@ class KernelState:
         return deepcopy(self._next_task)
 
     def select_next_task(self, task_set: object) -> "KernelState":
-        """Return a new state containing the first ready task for this phase."""
+        """Select the first ready task for this phase as a new pending task state."""
         selected_task = select_ready_task(task_set, self.current_phase)
         return KernelState(
             self.current_phase,
-            self.current_status,
+            "pending" if selected_task is not None else self.current_status,
             selected_task,
         )
 
