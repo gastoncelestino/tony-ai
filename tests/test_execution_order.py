@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import FrozenInstanceError
-from types import SimpleNamespace
 
 from kernel.execution_order import (
     ExecutionOrder,
@@ -11,14 +10,13 @@ from kernel.execution_order import (
     authorize_file_access,
     resolve_execution,
 )
+from kernel.state import KernelState
 
 
 class FakeKernel:
     def __init__(self, phase: str, status: str, task: dict | None):
-        self.change_state = SimpleNamespace(
-            current_phase=SimpleNamespace(value=phase),
-            get_current_phase_state=lambda: SimpleNamespace(status=SimpleNamespace(value=status)),
-        )
+        self.current_phase = phase
+        self.current_status = status
         self._task = task
 
     def get_next_task(self):
@@ -34,6 +32,19 @@ class TestExecutionOrder(unittest.TestCase):
         self.assertEqual(result["execution_order"], {
             "phase": "explore", "task_id": "explore-1", "description": "Inspect the repository", "files": ["kernel/"]
         })
+
+    def test_kernel_state_resolves_execution_order(self):
+        state = KernelState(
+            "explore",
+            "running",
+            {"id": "explore-8", "description": "Inspect", "phase": "explore", "files": ("kernel/",)},
+        )
+
+        result = resolve_execution(state)
+
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["execution_order"]["task_id"], "explore-8")
+        self.assertEqual(result["execution_order"]["phase"], "explore")
 
     def test_missing_task_id_blocks(self):
         result = resolve_execution(FakeKernel("explore", "running", {"description": "Inspect", "phase": "explore"}))
