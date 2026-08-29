@@ -29,6 +29,27 @@ def test_after_result_transitions_attempt_to_succeeded():
     assert finished.task_id == "T1"
 
 
+def test_after_error_transitions_attempt_to_failed_with_result():
+    attempt = ExecutionAttempt.started(
+        project_id="p1", session_id="s1", call_id="call-1",
+        task_id="T1", phase="apply", started_at="2026-08-29T10:00:00+00:00",
+    )
+    result = ExecutionResult("Task execution error", "boom", {"status": "error"})
+    finished = attempt.failed(result, finished_at="2026-08-29T10:00:02+00:00")
+    assert finished.status == "failed"
+    assert finished.result == result
+
+
+def test_unobserved_completion_is_incomplete():
+    attempt = ExecutionAttempt.started(
+        project_id="p1", session_id="s1", call_id="call-1",
+        task_id="T1", phase="apply", started_at="2026-08-29T10:00:00+00:00",
+    )
+    incomplete = attempt.incomplete(finished_at="2026-08-29T10:00:03+00:00")
+    assert incomplete.status == "incomplete"
+    assert incomplete.result is None
+
+
 def test_running_attempt_cannot_have_result():
     with pytest.raises(ExecutionAttemptError):
         ExecutionAttempt(
@@ -40,6 +61,11 @@ def test_running_attempt_cannot_have_result():
 def test_succeeded_attempt_requires_result():
     with pytest.raises(ExecutionAttemptError):
         ExecutionAttempt("p1", "s1", "c1", "T1", "apply", status="succeeded", started_at="now")
+
+
+def test_failed_attempt_requires_result():
+    with pytest.raises(ExecutionAttemptError):
+        ExecutionAttempt("p1", "s1", "c1", "T1", "apply", status="failed", started_at="now")
 
 
 def test_result_requires_complete_after_hook_shape():
