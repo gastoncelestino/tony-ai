@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """Structured SDD state persistence for TonyMem.
 
-This module deliberately keeps SDD workflow state separate from free-form
-memory observations. The database remains a single SQLite file, while SDD
-state, its history, prompts, and other memory domains can evolve independently.
-
-Only read access is exposed by the CLI. State writes are an internal Python
-API so an authoritative workflow transition can be responsible for changing
-state instead of an arbitrary model/tool call.
+This module keeps SDD workflow state separate from free-form memory
+observations while using the same SQLite database. State writes are an
+internal Python API; the command line exposes read-only access for the Kernel
+context provider.
 """
 
 from __future__ import annotations
@@ -42,27 +39,27 @@ def init_sdd_state(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS sdd_state (
-            project_id  TEXT NOT NULL,
-            session_id  TEXT NOT NULL,
-            change_id   TEXT NOT NULL,
-            phase       TEXT NOT NULL,
-            status      TEXT NOT NULL,
-            tasks_json  TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            change_id TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            status TEXT NOT NULL,
+            tasks_json TEXT NOT NULL,
             completed_json TEXT NOT NULL,
-            version     INTEGER NOT NULL,
-            updated_at  TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            updated_at TEXT NOT NULL,
             PRIMARY KEY (project_id, session_id)
         );
 
         CREATE TABLE IF NOT EXISTS sdd_state_history (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id  TEXT NOT NULL,
-            session_id  TEXT NOT NULL,
-            change_id   TEXT NOT NULL,
-            version     INTEGER NOT NULL,
-            phase       TEXT NOT NULL,
-            status      TEXT NOT NULL,
-            tasks_json  TEXT NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            change_id TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            phase TEXT NOT NULL,
+            status TEXT NOT NULL,
+            tasks_json TEXT NOT NULL,
             completed_json TEXT NOT NULL,
             recorded_at TEXT NOT NULL,
             UNIQUE (project_id, session_id, version)
@@ -123,15 +120,16 @@ def record_sdd_state(
     expected_version: int | None = None,
     db_path: str | None = None,
 ) -> dict[str, Any]:
-    """Persist a state snapshot and append its history atomically.
+    """Persist a state snapshot and append history atomically.
 
     The expected_version check provides optimistic concurrency control. This
-    function is intentionally not exposed as an MCP tool; the caller that is
-    authoritative for workflow transitions must decide when to invoke it.
+    function is intentionally not exposed as an MCP tool; the authoritative
+    workflow transition layer must decide when to invoke it.
     """
     conn = connect(db_path)
     try:
         init_sdd_state(conn)
+        conn.execute("BEGIN IMMEDIATE")
         current = conn.execute(
             "SELECT version FROM sdd_state WHERE project_id=? AND session_id=?",
             (project_id, session_id),
@@ -148,11 +146,9 @@ def record_sdd_state(
         tasks_json = json.dumps(tasks, ensure_ascii=False, separators=(",", ":"))
         completed_json = json.dumps(completed, ensure_ascii=False, separators=(",", ":"))
 
-        conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             "INSERT INTO sdd_state (project_id, session_id, change_id, phase, status, "
-            "tasks_json, completed_json, version, updated_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?) "
+            "tasks_json, completed_json, version, updated_at) VALUES (?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(project_id, session_id) DO UPDATE SET "
             "change_id=excluded.change_id, phase=excluded.phase, status=excluded.status, "
             "tasks_json=excluded.tasks_json, completed_json=excluded.completed_json, "
@@ -210,7 +206,7 @@ def main() -> int:
         else:
             print(json.dumps({"available": True, "state": state}, ensure_ascii=False))
         return 0
-    except Exception as exc:  # fail closed for the provider
+    except Exception as exc:
         print(json.dumps({"available": False, "reason": f"SDD state read failed: {exc}"}))
         return 0
 
