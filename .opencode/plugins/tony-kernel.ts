@@ -11,6 +11,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 import { adaptTaskExecutionContext } from "./kernel-boundary-adapter"
 import { createKernelContextProvider } from "./kernel-context-provider"
 import { callKernelBoundary } from "./kernel-boundary-transport"
+import type { KernelBoundaryRequest, KernelBoundaryResponse } from "./kernel-boundary-protocol"
 
 class KernelBlockedError extends Error {
   constructor(message: string) {
@@ -44,14 +45,13 @@ function executionRequest(
 }
 
 function validateExecutionOrder(
-  request: Parameters<typeof adaptTaskExecutionContext>[1] & object,
-  response: Awaited<ReturnType<typeof callKernelBoundary>>,
+  request: KernelBoundaryRequest,
+  response: KernelBoundaryResponse,
 ): void {
   if (!response.allowed) throw new KernelBlockedError(response.reason)
 
   const order = response.execution_order
-  const tasks = (request as { tasks: Array<{ id: string; description: string; phase: string }> }).tasks
-  const task = tasks.find((candidate) => candidate.id === order.task_id)
+  const task = request.tasks.find((candidate) => candidate.id === order.task_id)
 
   if (!task || task.phase !== order.phase || task.description !== order.description) {
     throw new KernelBlockedError("[Tony Kernel] Invalid execution order")
