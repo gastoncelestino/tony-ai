@@ -59,21 +59,47 @@ class ExecutionAttempt:
         for field_name in ("project_id", "session_id", "call_id", "task_id", "phase"):
             if not getattr(self, field_name).strip():
                 raise ExecutionAttemptError(f"{field_name} must be non-empty")
-        if self.status not in {"running", "succeeded", "incomplete"}:
+        if self.status not in {"running", "succeeded", "failed", "incomplete"}:
             raise ExecutionAttemptError(f"Invalid attempt status: {self.status}")
         if self.status == "running" and self.result is not None:
             raise ExecutionAttemptError("running attempt cannot have a result")
-        if self.status == "succeeded" and self.result is None:
-            raise ExecutionAttemptError("succeeded attempt requires a result")
+        if self.status in {"succeeded", "failed"} and self.result is None:
+            raise ExecutionAttemptError(f"{self.status} attempt requires a result")
 
     @classmethod
-    def started(cls, *, project_id: str, session_id: str, call_id: str, task_id: str, phase: str, started_at: str | None = None) -> "ExecutionAttempt":
+    def started(
+        cls,
+        *,
+        project_id: str,
+        session_id: str,
+        call_id: str,
+        task_id: str,
+        phase: str,
+        started_at: str | None = None,
+    ) -> "ExecutionAttempt":
         return cls(project_id, session_id, call_id, task_id, phase, started_at=started_at or now())
 
     def succeeded(self, result: ExecutionResult, *, finished_at: str | None = None) -> "ExecutionAttempt":
+        return self._finished("succeeded", result, finished_at)
+
+    def failed(self, result: ExecutionResult, *, finished_at: str | None = None) -> "ExecutionAttempt":
+        return self._finished("failed", result, finished_at)
+
+    def incomplete(self, *, finished_at: str | None = None) -> "ExecutionAttempt":
         return ExecutionAttempt(
             self.project_id, self.session_id, self.call_id, self.task_id, self.phase,
-            "succeeded", self.started_at, finished_at or now(), result,
+            "incomplete", self.started_at, finished_at or now(), None,
+        )
+
+    def _finished(
+        self,
+        status: str,
+        result: ExecutionResult,
+        finished_at: str | None,
+    ) -> "ExecutionAttempt":
+        return ExecutionAttempt(
+            self.project_id, self.session_id, self.call_id, self.task_id, self.phase,
+            status, self.started_at, finished_at or now(), result,
         )
 
 
