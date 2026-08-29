@@ -1,24 +1,16 @@
 /**
  * Tony Kernel Plugin — OpenCode adapter.
  *
- * The plugin is intentionally kept thin: OpenCode events belong here;
- * Kernel policy and execution decisions belong in the Kernel.
- *
- * The legacy Python CLI/orchestrator bridge was removed while the new
- * Kernel execution boundary is being rebuilt. Until that boundary exists,
- * Task execution fails closed rather than falling back to legacy behavior.
- *
- * IMPORTANT: OpenCode's local-file plugin loader treats a module as
- * exporting "one or more plugin functions" — it scans EVERY top-level
- * export, not just `default`, and calls anything callable as if it were a
- * plugin entry point. A `class` is `typeof === "function"` in JS, so an
- * exported error class gets invoked without `new` and crashes the loader
- * ("Cannot call a class constructor ... without |new|"); an exported plain
- * helper function gets called with the wrong arguments instead. That's why
- * everything below except `export default` is intentionally NOT exported —
- * this file must expose exactly one callable: the plugin itself.
+ * OpenCode supplies only execution identity. Persistent SDD state is read
+ * through the explicit Kernel context provider, normalized by the boundary
+ * adapter, and authorized by the Python Kernel. Missing state, provider
+ * errors, transport errors, blocked decisions, or invalid execution orders
+ * all fail closed.
  */
 import type { Plugin } from "@opencode-ai/plugin"
+import { adaptTaskExecutionContext } from "./kernel-boundary-adapter"
+import { createKernelContextProvider } from "./kernel-context-provider"
+import { callKernelBoundary } from "./kernel-boundary-transport"
 
 class KernelBlockedError extends Error {
   constructor(message: string) {
@@ -26,24 +18,23 @@ class KernelBlockedError extends Error {
     this.name = "KernelBlockedError"
   }
 }
+
 class KernelUnavailableError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "KernelUnavailableError"
   }
 }
+
 interface ExecutionRequest {
   sessionID: string
   tool: string
   arguments: Record<string, unknown>
 }
-/**
- * Extract only the execution identity carried by the OpenCode Task event.
- * This is transport parsing, not Kernel policy.
- */
+
 function executionRequest(
   input: { sessionID: string; tool: string },
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
 ): ExecutionRequest {
   return {
     sessionID: input.sessionID,
@@ -51,23 +42,46 @@ function executionRequest(
     arguments: args,
   }
 }
-/**
- * Temporary fail-closed boundary.
- *
- * The next Kernel phase will replace this with the real Kernel authorization
- * call returning an ExecutionOrder. Keeping the boundary explicit prevents
- * the plugin from silently retaining the removed legacy orchestration path.
- */
-async function authorizeExecution(input: ExecutionRequest): Promise<never> {
+
+function validateExecutionOrder(
+  request: Parameters<typeof adaptTaskExecutionContext>[1] & object,
+  response: Awaited<ReturnType<typeof callKernelBoundary>>,
+): void {
+  if (!response.allowed) throw new KernelBlockedError(response.reason)
+
+  const order = response.execution_order
+  const tasks = (request as { tasks: Array<{ id: string; description: string; phase: string }> }).tasks
+  const task = tasks.find((candidate) => candidate.id === order.task_id)
+
+  if (!task || task.phase !== order.phase || task.description !== order.description) {
+    throw new KernelBlockedError("[Tony Kernel] Invalid execution order")
+  }
+}
+
+async function authorizeExecution(
+  input: ExecutionRequest,
+  provider: ReturnType<typeof createKernelContextProvider>,
+): Promise<void> {
   if (input.tool !== "Task") {
     throw new KernelUnavailableError(
-      "[Tony Kernel] Execution authorization is not implemented for this runtime boundary"
+      "[Tony Kernel] Execution authorization is not implemented for this runtime boundary",
     )
   }
-  throw new KernelUnavailableError(
-    "[Tony Kernel] Task execution blocked: new Kernel execution boundary is not wired yet"
-  )
+
+  const provided = await provider.getContext(input)
+  if (provided.kind !== "available") {
+    throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
+  }
+
+  const adapted = adaptTaskExecutionContext(input, provided.context)
+  if (adapted.kind !== "ready") {
+    throw new KernelUnavailableError(`[Tony Kernel] ${adapted.reason}`)
+  }
+
+  const response = await callKernelBoundary(adapted.request)
+  validateExecutionOrder(adapted.request, response)
 }
+
 async function taskExecuteBeforeHook(
   input: {
     tool: string
@@ -76,27 +90,26 @@ async function taskExecuteBeforeHook(
   },
   output: {
     args: Record<string, unknown>
-  }
+  },
+  provider: ReturnType<typeof createKernelContextProvider>,
 ): Promise<void> {
+  if (input.tool !== "Task") return
+
   console.error("[TONY DEBUG] tool.execute.before", {
     tool: input.tool,
     sessionID: input.sessionID,
     callID: input.callID,
-    args: output.args,
   })
-  if (input.tool !== "Task") return
-  await authorizeExecution(executionRequest(input, output.args))
+
+  await authorizeExecution(executionRequest(input, output.args), provider)
 }
-/**
- * OpenCode 1.18.x requires the default export to be a FUNCTION that
- * receives the plugin context ({project, client, $, directory, worktree})
- * and RETURNS the hooks object.
- */
-const TonyKernelPlugin: Plugin = async () => {
-  console.log("[tony-kernel] Plugin loaded; execution boundary is fail-closed")
+
+const TonyKernelPlugin: Plugin = async ({ directory }) => {
+  const provider = createKernelContextProvider(directory)
+  console.log("[tony-kernel] Plugin loaded; Kernel execution boundary is active and fail-closed")
 
   return {
-    "tool.execute.before": taskExecuteBeforeHook,
+    "tool.execute.before": (input, output) => taskExecuteBeforeHook(input, output, provider),
   }
 }
 
