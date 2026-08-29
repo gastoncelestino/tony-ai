@@ -1,8 +1,17 @@
-import json
+import importlib.util
+from pathlib import Path
 
 import pytest
 
-from local_memory_sdd_state import get_sdd_state, record_sdd_state
+
+MODULE_PATH = Path(__file__).parents[1] / "local-memory" / "sdd_state.py"
+_spec = importlib.util.spec_from_file_location("tony_sdd_state", MODULE_PATH)
+assert _spec and _spec.loader
+_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_module)
+
+get_sdd_state = _module.get_sdd_state
+record_sdd_state = _module.record_sdd_state
 
 
 def test_sdd_state_is_separate_and_versioned(tmp_path):
