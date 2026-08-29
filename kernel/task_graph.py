@@ -6,17 +6,17 @@ existing canonical TaskSet. It deliberately does not authorize execution.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Iterable, Optional
+from dataclasses import asdict, dataclass
+from typing import Iterable
 
-from .task_set import Task, TaskSet
+from .task_set import TaskSet
 
 
 class TaskGraphProposalError(ValueError):
     """Raised when a task graph proposal cannot become a valid TaskSet."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TaskProposal:
     id: str
     description: str
@@ -24,8 +24,12 @@ class TaskProposal:
     dependencies: tuple[str, ...] = ()
     files: tuple[str, ...] = ()
 
+    def to_task_dict(self) -> dict:
+        """Convert the proposal to the dictionary schema used by TaskSet."""
+        return asdict(self)
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class TaskGraphProposal:
     tasks: tuple[TaskProposal, ...]
     max_tasks: int = 100
@@ -53,16 +57,7 @@ class TaskGraphProposal:
         if len(ids) != len(set(ids)):
             raise TaskGraphProposalError("task ids must be unique")
 
-        canonical = tuple(
-            Task(
-                id=task.id,
-                description=task.description,
-                phase=task.phase,
-                dependencies=task.dependencies,
-                files=task.files,
-            )
-            for task in self.tasks
-        )
+        canonical = tuple(task.to_task_dict() for task in self.tasks)
 
         try:
             return TaskSet(canonical)
