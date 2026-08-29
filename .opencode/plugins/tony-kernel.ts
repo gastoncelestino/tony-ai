@@ -106,16 +106,10 @@ function normalizeResult(value: unknown): { title: string; output: string; metad
   }
 }
 
-function normalizeError(value: unknown): { title: string; output: string; metadata: unknown } {
-  const message = value && typeof value === "object" && "message" in value
-    ? String((value as { message: unknown }).message)
-    : String(value ?? "Unknown tool execution error")
-
-  return {
-    title: "Task execution error",
-    output: message,
-    metadata: { status: "error" },
-  }
+function resultIndicatesFailure(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object") return false
+  const value = metadata as Record<string, unknown>
+  return value.status === "error" || value.error === true || value.failed === true
 }
 
 async function taskExecuteBeforeHook(
@@ -161,37 +155,23 @@ function taskExecuteAfterHook(
 ): void {
   if (input.tool !== "Task") return
 
-  const event = output as {
-    status?: string
-    result?: unknown
-    error?: unknown
-  }
-
   try {
-    if (event.status === "error") {
-      const finished = observations.fail(input.callID, normalizeError(event.error))
-      console.error("[TONY DEBUG] tool.execute.after", {
-        tool: input.tool,
-        sessionID: input.sessionID,
-        callID: input.callID,
-        status: finished.status,
-      })
-      return
-    }
+    const result = normalizeResult(output)
+    const finished = resultIndicatesFailure(result.metadata)
+      ? observations.fail(input.callID, result)
+      : observations.succeed(input.callID, result)
 
-    if (event.status === "completed") {
-      const finished = observations.succeed(input.callID, normalizeResult(event.result))
-      console.error("[TONY DEBUG] tool.execute.after", {
-        tool: input.tool,
-        sessionID: input.sessionID,
-        callID: input.callID,
-        status: finished.status,
-      })
-    }
+    console.error("[TONY DEBUG] tool.execute.after", {
+      tool: input.tool,
+      sessionID: input.sessionID,
+      callID: input.callID,
+      status: finished.status,
+    })
   } catch (error) {
-    // An unknown callID is an observation problem, not permission to mutate
-    // execution state. Keep the runtime fail-closed and leave no invented
-    // Attempt/Result relationship behind.
+    // OpenCode's normal tool.execute.after hook is a successful-result
+    // surface. A tool exception may never reach this hook. Therefore we do
+    // not invent a failed Result here; the still-running observation remains
+    // eligible to be classified as incomplete by a later reconciliation step.
     console.error("[TONY DEBUG] execution observation unavailable", {
       callID: input.callID,
       error,
