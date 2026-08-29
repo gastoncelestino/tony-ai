@@ -17,8 +17,8 @@ def test_proposal_becomes_canonical_task_set():
 
     task_set = proposal.to_task_set()
 
-    assert [task.id for task in task_set.tasks] == ["T1", "T2"]
-    assert task_set.ready_tasks() == [task_set.tasks[0]]
+    assert [task["id"] for task in task_set.tasks] == ["T1", "T2"]
+    assert task_set.ready_tasks() == (task_set.tasks[0],)
 
 
 def test_empty_proposal_is_rejected():
