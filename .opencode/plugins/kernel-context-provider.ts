@@ -12,6 +12,7 @@ export type KernelContextProviderOptions = {
   pythonCommand?: string
   stateScript?: string
   timeoutMs?: number
+  readState?: (projectDirectory: string, sessionID: string) => Promise<unknown>
 }
 
 type PersistedState = {
@@ -45,7 +46,7 @@ function isBoundaryContext(value: unknown): value is KernelBoundaryRequest {
   )
 }
 
-function parsePersistedState(stdout: string): KernelContextProviderResult {
+export function parsePersistedState(stdout: string): KernelContextProviderResult {
   let payload: PersistedState
   try {
     payload = JSON.parse(stdout) as PersistedState
@@ -80,15 +81,21 @@ export function createKernelContextProvider(
 
   return {
     async getContext(input: { sessionID: string; tool: string }): Promise<KernelContextProviderResult> {
-      if (input.tool !== "Task") return { kind: "available", context: undefined as never }
+      if (input.tool !== "Task") {
+        return { kind: "unavailable", reason: "Kernel context requested for non-Task tool" }
+      }
 
       try {
-        const result = await execFileAsync(
-          pythonCommand,
-          [stateScript, "--get", "--project", projectDirectory, "--session-id", input.sessionID],
-          { cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024 },
-        )
-        return parsePersistedState(result.stdout)
+        const stdout = options.readState
+          ? JSON.stringify(await options.readState(projectDirectory, input.sessionID))
+          : (
+              await execFileAsync(
+                pythonCommand,
+                [stateScript, "--get", "--project", projectDirectory, "--session-id", input.sessionID],
+                { cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024 },
+              )
+            ).stdout
+        return parsePersistedState(stdout)
       } catch {
         return { kind: "unavailable", reason: "TonyMem SDD state provider unavailable" }
       }
