@@ -10,12 +10,11 @@ export type KernelContextProviderResult =
 
 export type KernelContextProviderOptions = {
   pythonCommand?: string
-  stateScript?: string
+  contextScript?: string
   timeoutMs?: number
-  readState?: (projectDirectory: string, sessionID: string) => Promise<unknown>
 }
 
-type PersistedState = {
+type CanonicalContext = {
   available: boolean
   reason?: string
   state?: unknown
@@ -46,23 +45,23 @@ function isBoundaryContext(value: unknown): value is KernelBoundaryRequest {
   )
 }
 
-export function parsePersistedState(stdout: string): KernelContextProviderResult {
-  let payload: PersistedState
+export function parseCanonicalContext(stdout: string): KernelContextProviderResult {
+  let payload: CanonicalContext
   try {
-    payload = JSON.parse(stdout) as PersistedState
+    payload = JSON.parse(stdout) as CanonicalContext
   } catch {
-    return { kind: "unavailable", reason: "Invalid TonyMem SDD state response" }
+    return { kind: "unavailable", reason: "Invalid canonical TaskSet context response" }
   }
 
   if (payload.available !== true) {
     return {
       kind: "unavailable",
-      reason: payload.reason ?? "TonyMem SDD state unavailable",
+      reason: payload.reason ?? "Canonical TaskSet context unavailable",
     }
   }
 
   if (!isBoundaryContext(payload.state)) {
-    return { kind: "unavailable", reason: "TonyMem SDD state is incomplete" }
+    return { kind: "unavailable", reason: "Canonical TaskSet context is incomplete" }
   }
 
   return { kind: "available", context: payload.state }
@@ -73,10 +72,10 @@ export function createKernelContextProvider(
   options: KernelContextProviderOptions = {},
 ) {
   const pythonCommand = options.pythonCommand ?? process.env.TONYMEM_PYTHON ?? "python3"
-  const stateScript =
-    options.stateScript ??
-    process.env.TONYMEM_SDD_STATE_SCRIPT ??
-    `${projectDirectory}/local-memory/sdd_state.py`
+  const contextScript =
+    options.contextScript ??
+    process.env.TONYMEM_TASKSET_CONTEXT_SCRIPT ??
+    `${projectDirectory}/kernel/task_set_context.py`
   const timeoutMs = options.timeoutMs ?? 3000
 
   return {
@@ -86,18 +85,16 @@ export function createKernelContextProvider(
       }
 
       try {
-        const stdout = options.readState
-          ? JSON.stringify(await options.readState(projectDirectory, input.sessionID))
-          : (
-              await execFileAsync(
-                pythonCommand,
-                [stateScript, "--get", "--project", projectDirectory, "--session-id", input.sessionID],
-                { cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024 },
-              )
-            ).stdout
-        return parsePersistedState(stdout)
+        const stdout = (
+          await execFileAsync(
+            pythonCommand,
+            [contextScript, "--get", "--project", projectDirectory, "--session-id", input.sessionID],
+            { cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024 },
+          )
+        ).stdout
+        return parseCanonicalContext(stdout)
       } catch {
-        return { kind: "unavailable", reason: "TonyMem SDD state provider unavailable" }
+        return { kind: "unavailable", reason: "Canonical TaskSet context provider unavailable" }
       }
     },
   }
