@@ -36,7 +36,18 @@ class TaskSetPersistence:
             completed = state["completed"]
             if not isinstance(tasks, list) or not isinstance(completed, list):
                 raise TypeError("tasks/completed must be lists")
-            task_set = TaskSet(tuple(tasks), tuple(completed))
+            normalized_tasks = []
+            for task in tasks:
+                if not isinstance(task, dict):
+                    raise TypeError("each task must be an object")
+                normalized = dict(task)
+                for field in ("dependencies", "files"):
+                    value = normalized.get(field, ())
+                    if not isinstance(value, (list, tuple)):
+                        raise TypeError(f"{field} must be a list or tuple")
+                    normalized[field] = tuple(value)
+                normalized_tasks.append(normalized)
+            task_set = TaskSet(tuple(normalized_tasks), tuple(completed))
         except (KeyError, TypeError, ValueError) as exc:
             raise TaskSetPersistenceError(f"Invalid persisted TaskSet: {exc}") from exc
         return task_set
