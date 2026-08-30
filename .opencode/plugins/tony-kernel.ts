@@ -125,6 +125,12 @@ async function taskExecuteBeforeHook(
   observations: ReturnType<typeof createExecutionObservationStore>,
   directory: string,
 ): Promise<void> {
+  console.error("[TONY DEBUG] tool.execute.before hook received", {
+    tool: input.tool,
+    sessionID: input.sessionID,
+    callID: input.callID,
+  })
+
   if (input.tool !== "Task") return
 
   console.error("[TONY DEBUG] tool.execute.before", {
