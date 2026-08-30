@@ -26,6 +26,8 @@ import type { KernelBoundaryRequest, KernelBoundaryResponse, KernelExecutionOrde
 const execFileAsync = promisify(execFile)
 const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
 const BOOTSTRAP_DESCRIPTION = "decompose task graph"
+const BOOTSTRAP_READ_ONLY_TOOLS = new Set(["read", "glob"])
+const bootstrapInFlight = new Map<string, number>()
 
 function bootstrapPrompt(originalDescription: string, originalPrompt: string): string {
   return `You are Tony's task-graph decomposition subagent. This is ONLY the bootstrap planning step of a new execution session.
@@ -95,6 +97,29 @@ function validateExecutionOrder(
     throw new KernelBlockedError("[Tony Kernel] Invalid execution order")
   }
   return order
+}
+
+function beginBootstrap(directory: string): void {
+  bootstrapInFlight.set(directory, (bootstrapInFlight.get(directory) ?? 0) + 1)
+}
+
+function endBootstrap(directory: string): void {
+  const remaining = (bootstrapInFlight.get(directory) ?? 1) - 1
+  if (remaining <= 0) bootstrapInFlight.delete(directory)
+  else bootstrapInFlight.set(directory, remaining)
+}
+
+function isBootstrapInFlight(directory: string): boolean {
+  return (bootstrapInFlight.get(directory) ?? 0) > 0
+}
+
+function assertBootstrapToolAllowed(directory: string, tool: string): void {
+  if (!isBootstrapInFlight(directory)) return
+  if (!BOOTSTRAP_READ_ONLY_TOOLS.has(tool.toLowerCase())) {
+    throw new KernelBlockedError(
+      `[Tony Kernel] Bootstrap is strictly atomic and read-only; tool '${tool}' is not allowed until decomposition completes`,
+    )
+  }
 }
 
 async function authorizeExecution(
@@ -225,9 +250,16 @@ async function taskExecuteBeforeHook(
 ): Promise<void> {
   const details = { tool: input.tool, sessionID: input.sessionID, callID: input.callID }
   debugLog("tool.execute.before hook received", details)
+
+  // Once bootstrap delegation starts, the whole runtime boundary is locked to
+  // repository reads. This is a Kernel invariant, not merely a prompt rule:
+  // nested task/skill/shell/write/edit calls cannot escape the bootstrap phase.
+  assertBootstrapToolAllowed(directory, input.tool)
+
   if (input.tool.toLowerCase() !== "task") return
   debugLog("tool.execute.before", { ...details, args: output.args })
   debugLog("authorizeExecution started", details)
+  let bootstrapStarted = false
   try {
     let provided = await provider.getContext(input)
     if (provided.kind !== "available" && provided.reason === "SDD state unavailable") {
@@ -246,8 +278,10 @@ async function taskExecuteBeforeHook(
       // without a canonical TaskSet.
       output.args.description = BOOTSTRAP_DESCRIPTION
       output.args.prompt = bootstrapPrompt(originalDescription, originalPrompt)
-      output.args.subagent_type = "general"
+      output.args.subagent_type = "explore"
       output.args.command = BOOTSTRAP_COMMAND
+      beginBootstrap(directory)
+      bootstrapStarted = true
 
       provided = await provider.getContext(input)
       debugLog("bootstrap initialization succeeded", {
@@ -266,6 +300,7 @@ async function taskExecuteBeforeHook(
     observations.start({ projectId: directory, sessionId: input.sessionID, callId: input.callID, taskId: order.task_id, phase: order.phase })
     debugLog("observations.start succeeded", { ...details, taskId: order.task_id, phase: order.phase })
   } catch (error) {
+    if (bootstrapStarted) endBootstrap(directory)
     debugLog("authorizeExecution failed", { ...details, error: error instanceof Error ? error.message : String(error), errorName: error instanceof Error ? error.name : typeof error })
     throw error
   }
@@ -279,6 +314,7 @@ async function taskExecuteAfterHook(
   debugLog: ReturnType<typeof createDebugLogger>,
 ): Promise<void> {
   if (input.tool.toLowerCase() !== "task") return
+  let bootstrapStarted = false
   try {
     const result = normalizeResult(output)
     const finished = resultIndicatesFailure(result.metadata)
@@ -295,14 +331,17 @@ async function taskExecuteAfterHook(
 
     if (finished.status !== "succeeded") return
 
+    bootstrapStarted = finished.taskId === "__tony_bootstrap_decompose__"
     debugLog("task completion started", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId })
-    const version = finished.taskId === "__tony_bootstrap_decompose__"
+    const version = bootstrapStarted
       ? await completeBootstrap(directory, input.sessionID, result.output)
       : await completeSuccessfulTask(directory, input.sessionID, finished.taskId, result)
     debugLog("task completion succeeded", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId, version })
   } catch (error) {
     debugLog("task completion/observation failed", { callID: input.callID, error: error instanceof Error ? error.message : String(error), errorName: error instanceof Error ? error.name : typeof error })
     throw error
+  } finally {
+    if (bootstrapStarted) endBootstrap(directory)
   }
 }
 
