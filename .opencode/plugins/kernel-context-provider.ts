@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
+import { join } from "node:path"
 import type { KernelBoundaryRequest } from "./kernel-boundary-protocol"
 
 const execFileAsync = promisify(execFile)
@@ -11,6 +12,7 @@ export type KernelContextProviderResult =
 export type KernelContextProviderOptions = {
   pythonCommand?: string
   contextScript?: string
+  dbPath?: string
   timeoutMs?: number
 }
 
@@ -76,6 +78,10 @@ export function createKernelContextProvider(
     options.contextScript ??
     process.env.TONYMEM_TASKSET_CONTEXT_SCRIPT ??
     `${projectDirectory}/kernel/task_set_context.py`
+  const dbPath =
+    options.dbPath ??
+    process.env.LOCAL_MEMORY_DB ??
+    join(projectDirectory, "local-memory", "memory.db")
   const timeoutMs = options.timeoutMs ?? 3000
 
   return {
@@ -88,7 +94,16 @@ export function createKernelContextProvider(
         const stdout = (
           await execFileAsync(
             pythonCommand,
-            [contextScript, "--get", "--project", projectDirectory, "--session-id", input.sessionID],
+            [
+              contextScript,
+              "--get",
+              "--project",
+              projectDirectory,
+              "--session-id",
+              input.sessionID,
+              "--db-path",
+              dbPath,
+            ],
             { cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024 },
           )
         ).stdout
