@@ -88,10 +88,6 @@ export function createKernelContextProvider(
 
   return {
     async getContext(input: { sessionID: string; tool: string }): Promise<KernelContextProviderResult> {
-      if (input.tool.toLowerCase() !== "task") {
-        return { kind: "unavailable", reason: "Kernel context requested for non-Task tool" }
-      }
-
       const childEnv = { ...process.env }
       delete childEnv.LOCAL_MEMORY_DB
       debugLog?.("context provider invoking", {

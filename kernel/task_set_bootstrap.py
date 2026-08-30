@@ -84,7 +84,9 @@ def _parse_tasks(raw: str) -> list[dict]:
         dependencies = item.get("dependencies")
         if not isinstance(dependencies, list) or not all(isinstance(dep, str) for dep in dependencies):
             raise TaskSetPersistenceError("Every decomposed task needs a string dependencies array")
-        files = item.get("files", ())
+        files = item.get("files")
+        if files is None:
+            files = ()
         if not isinstance(files, list) or not all(isinstance(path, str) for path in files):
             raise TaskSetPersistenceError("Task files must be a string array")
         task_id = item["id"].strip()

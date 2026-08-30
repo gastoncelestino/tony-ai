@@ -36,6 +36,7 @@ const ROOT_COORDINATION_BLOCKED_TOOLS = new Set([
   "edit",
   "apply_patch",
   "skill",
+  "todowrite",
 ])
 const bootstrapInFlight = new Map<string, number>()
 const rootSessionByDirectory = new Map<string, string>()
