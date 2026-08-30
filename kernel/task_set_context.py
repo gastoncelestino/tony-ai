@@ -6,7 +6,15 @@ import argparse
 import json
 import sys
 
-from .task_set_persistence import TaskSetPersistence, TaskSetPersistenceError
+# The OpenCode adapter invokes this module as a file path (``python3 path``),
+# not with ``python -m``. Make the repository root importable in that mode so
+# the package-relative imports used by the Kernel remain valid.
+if __package__ in (None, ""):
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from kernel.task_set_persistence import TaskSetPersistence, TaskSetPersistenceError
 
 
 def main() -> int:
