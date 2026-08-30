@@ -11,6 +11,8 @@
  * observation layer is intentionally in-memory; persistence in TonyMem is a
  * separate increment so observation semantics stay independently testable.
  */
+import { appendFileSync } from "node:fs"
+import { join } from "node:path"
 import type { Plugin } from "@opencode-ai/plugin"
 import { adaptTaskExecutionContext } from "./kernel-boundary-adapter"
 import { createExecutionObservationStore } from "./execution-observation"
@@ -112,6 +114,24 @@ function resultIndicatesFailure(metadata: unknown): boolean {
   return value.status === "error" || value.error === true || value.failed === true
 }
 
+function createDebugLogger(directory: string) {
+  const logPath = join(directory, ".opencode", "tony-kernel-debug.log")
+
+  return (event: string, details: Record<string, unknown> = {}) => {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      event,
+      ...details,
+    }
+
+    try {
+      appendFileSync(logPath, `${JSON.stringify(entry)}\n`, "utf8")
+    } catch (error) {
+      console.error("[TONY DEBUG] unable to write debug log", { logPath, error })
+    }
+  }
+}
+
 async function taskExecuteBeforeHook(
   input: {
     tool: string
@@ -124,27 +144,40 @@ async function taskExecuteBeforeHook(
   provider: ReturnType<typeof createKernelContextProvider>,
   observations: ReturnType<typeof createExecutionObservationStore>,
   directory: string,
+  debugLog: ReturnType<typeof createDebugLogger>,
 ): Promise<void> {
-  console.error("[TONY DEBUG] tool.execute.before hook received", {
+  const details = {
     tool: input.tool,
     sessionID: input.sessionID,
     callID: input.callID,
-  })
+  }
+
+  console.error("[TONY DEBUG] tool.execute.before hook received", details)
+  debugLog("tool.execute.before hook received", details)
 
   if (input.tool !== "Task") return
 
-  console.error("[TONY DEBUG] tool.execute.before", {
-    tool: input.tool,
-    sessionID: input.sessionID,
-    callID: input.callID,
-  })
+  console.error("[TONY DEBUG] tool.execute.before", details)
+  debugLog("tool.execute.before", details)
 
   const order = await authorizeExecution(executionRequest(input, output.args), provider)
+
+  debugLog("execution authorization succeeded", {
+    ...details,
+    taskId: order.task_id,
+    phase: order.phase,
+  })
 
   observations.start({
     projectId: directory,
     sessionId: input.sessionID,
     callId: input.callID,
+    taskId: order.task_id,
+    phase: order.phase,
+  })
+
+  debugLog("execution observation started", {
+    ...details,
     taskId: order.task_id,
     phase: order.phase,
   })
@@ -158,6 +191,7 @@ function taskExecuteAfterHook(
   },
   output: unknown,
   observations: ReturnType<typeof createExecutionObservationStore>,
+  debugLog: ReturnType<typeof createDebugLogger>,
 ): void {
   if (input.tool !== "Task") return
 
@@ -167,12 +201,15 @@ function taskExecuteAfterHook(
       ? observations.fail(input.callID, result)
       : observations.succeed(input.callID, result)
 
-    console.error("[TONY DEBUG] tool.execute.after", {
+    const details = {
       tool: input.tool,
       sessionID: input.sessionID,
       callID: input.callID,
       status: finished.status,
-    })
+    }
+
+    console.error("[TONY DEBUG] tool.execute.after", details)
+    debugLog("tool.execute.after", details)
   } catch (error) {
     // OpenCode's normal tool.execute.after hook is a successful-result
     // surface. A tool exception may never reach this hook. Therefore we do
@@ -182,19 +219,28 @@ function taskExecuteAfterHook(
       callID: input.callID,
       error,
     })
+    debugLog("execution observation unavailable", {
+      callID: input.callID,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 }
 
 const TonyKernelPlugin: Plugin = async ({ directory }) => {
   const provider = createKernelContextProvider(directory)
   const observations = createExecutionObservationStore()
+  const debugLog = createDebugLogger(directory)
+
+  debugLog("plugin loaded", {
+    message: "Kernel execution boundary is active and fail-closed",
+  })
   console.log("[tony-kernel] Plugin loaded; Kernel execution boundary is active and fail-closed")
 
   return {
     "tool.execute.before": (input, output) =>
-      taskExecuteBeforeHook(input, output, provider, observations, directory),
+      taskExecuteBeforeHook(input, output, provider, observations, directory, debugLog),
     "tool.execute.after": (input, output) =>
-      taskExecuteAfterHook(input, output, observations),
+      taskExecuteAfterHook(input, output, observations, debugLog),
   }
 }
 
