@@ -71,7 +71,7 @@ async function authorizeExecution(
   input: ExecutionRequest,
   provider: ReturnType<typeof createKernelContextProvider>,
 ): Promise<KernelExecutionOrder> {
-  if (input.tool !== "Task") {
+  if (input.tool.toLowerCase() !== "task") {
     throw new KernelUnavailableError(
       "[Tony Kernel] Execution authorization is not implemented for this runtime boundary",
     )
