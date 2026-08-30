@@ -16,6 +16,13 @@ class TaskSetBootstrapParsingTests(unittest.TestCase):
         )
         self.assertEqual(tasks[0]["description"], "Inspect one")
 
+    def test_accepts_json_code_fence(self):
+        tasks = _parse_tasks(
+            '<task_result>```json\n{"tasks":[{"id":"one","description":"Inspect one","phase":"explore","dependencies":[],"files":[]}]}'
+            '\n```</task_result>'
+        )
+        self.assertEqual(tasks[0]["id"], "one")
+
     def test_accepts_single_file_path_for_compatibility(self):
         tasks = _parse_tasks(
             '<task_result>{"tasks":[{"id":"one","description":"Inspect one","phase":"explore","dependencies":[],"files":"kernel/state.py"}]}</task_result>'
