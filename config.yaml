@@ -33,8 +33,12 @@ models:
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
-      --temp 0
-      --top-k 1
+      --temp 0.6 
+      --top-p 0.95
+      --top-k 20
+      --min-p 0.0
+      --repeat-penalty 1.0
+      --presence-penalty 0.0
     ttl: 600
     
   deepseek-r1-8b:
@@ -56,6 +60,25 @@ models:
       --min-p 0.05
       --repeat-penalty 1.0
       --log-verbosity 3
+    ttl: 600
+    
+  qwen-3.8-9b:
+    aliases:
+      - "qwen-3.8-9b"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/qwen3.8-9b-q6_k.gguf
+      --ctx-size 32768
+      --n-gpu-layers 99
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --parallel 1
+      --temp 0.6 
+      --top-p 0.95
+      --top-k 20
+      --min-p 0.0
+      --repeat-penalty 1.0
+      --presence-penalty 0.0
     ttl: 600
 
   nomic-embed-text:

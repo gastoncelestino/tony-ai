@@ -30,6 +30,14 @@
                         "output": 8192
                     },
                     "ttl": 600
+                },
+                "qwen-3.8-9b": {
+                    "name": "Qwen 3.8 9B",
+                    "limit": {
+                        "context": 32768,
+                        "output": 8192
+                    },
+                    "ttl": 600
                 }
             }
         }
