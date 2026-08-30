@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 
 if __package__ in (None, ""):
@@ -50,6 +51,11 @@ def _extract_task_result(raw: str) -> str:
         value = value.split(opening, 1)[1].strip()
         if closing in value:
             value = value.split(closing, 1)[0].strip()
+
+    fence = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", value, re.IGNORECASE)
+    if fence:
+        value = fence.group(1).strip()
+
     return value
 
 
