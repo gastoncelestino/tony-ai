@@ -45,7 +45,20 @@ def prepare(*, project_id: str, session_id: str, db_path: str | None = None) -> 
     )
 
 
+def _extract_task_result(raw: str) -> str:
+    """Accept the normal wrapper and the truncated wrapper seen in runtimes."""
+    value = raw.strip()
+    opening = "<task_result>"
+    closing = "</task_result>"
+    if opening in value:
+        value = value.split(opening, 1)[1].strip()
+        if closing in value:
+            value = value.split(closing, 1)[0].strip()
+    return value
+
+
 def _parse_tasks(raw: str) -> list[dict]:
+    raw = _extract_task_result(raw)
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
