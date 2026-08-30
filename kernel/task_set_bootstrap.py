@@ -54,21 +54,31 @@ def _parse_tasks(raw: str) -> list[dict]:
         raise TaskSetPersistenceError("Decomposition result must contain a tasks array")
 
     tasks: list[dict] = []
+    descriptions: set[str] = set()
     for item in payload["tasks"]:
         if not isinstance(item, dict):
             raise TaskSetPersistenceError("Every decomposed task must be an object")
         required = ("id", "description", "phase", "dependencies")
         if any(not isinstance(item.get(field), str) for field in required[:3]):
             raise TaskSetPersistenceError("Every decomposed task needs id, description, and phase")
+        description = item["description"].strip()
+        if not description:
+            raise TaskSetPersistenceError("Every decomposed task needs a non-empty description")
+        if description in descriptions:
+            raise TaskSetPersistenceError(f"Task descriptions must be unique: {description}")
+        descriptions.add(description)
         dependencies = item.get("dependencies")
         if not isinstance(dependencies, list) or not all(isinstance(dep, str) for dep in dependencies):
             raise TaskSetPersistenceError("Every decomposed task needs a string dependencies array")
+        files = item.get("files", ())
+        if not isinstance(files, list) or not all(isinstance(path, str) for path in files):
+            raise TaskSetPersistenceError("Task files must be a string array")
         task = {
-            "id": item["id"],
-            "description": item["description"],
-            "phase": item["phase"],
+            "id": item["id"].strip(),
+            "description": description,
+            "phase": item["phase"].strip(),
             "dependencies": tuple(dependencies),
-            "files": tuple(item.get("files", ())) if isinstance(item.get("files", ()), list) else (),
+            "files": tuple(files),
         }
         tasks.append(task)
     if not tasks:
