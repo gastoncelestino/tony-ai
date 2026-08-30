@@ -14,6 +14,7 @@ export type KernelContextProviderOptions = {
   contextScript?: string
   dbPath?: string
   timeoutMs?: number
+  debugLog?: (event: string, details?: Record<string, unknown>) => void
 }
 
 type CanonicalContext = {
@@ -83,6 +84,7 @@ export function createKernelContextProvider(
     process.env.LOCAL_MEMORY_DB ??
     join(projectDirectory, "local-memory", "memory.db")
   const timeoutMs = options.timeoutMs ?? 3000
+  const debugLog = options.debugLog
 
   return {
     async getContext(input: { sessionID: string; tool: string }): Promise<KernelContextProviderResult> {
@@ -90,25 +92,49 @@ export function createKernelContextProvider(
         return { kind: "unavailable", reason: "Kernel context requested for non-Task tool" }
       }
 
+      const childEnv = { ...process.env }
+      delete childEnv.LOCAL_MEMORY_DB
+      debugLog?.("context provider invoking", {
+        sessionID: input.sessionID,
+        tool: input.tool,
+        pythonCommand,
+        contextScript,
+        dbPath,
+        projectDirectory,
+        cwd: projectDirectory,
+        localMemoryDb: process.env.LOCAL_MEMORY_DB ?? null,
+      })
+
       try {
-        const stdout = (
-          await execFileAsync(
-            pythonCommand,
-            [
-              contextScript,
-              "--get",
-              "--project",
-              projectDirectory,
-              "--session-id",
-              input.sessionID,
-              "--db-path",
-              dbPath,
-            ],
-            { cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024 },
-          )
-        ).stdout
-        return parseCanonicalContext(stdout)
-      } catch {
+        const result = await execFileAsync(
+          pythonCommand,
+          [
+            contextScript,
+            "--get",
+            "--project",
+            projectDirectory,
+            "--session-id",
+            input.sessionID,
+            "--db-path",
+            dbPath,
+          ],
+          { cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024, env: childEnv },
+        )
+        debugLog?.("context provider succeeded", {
+          sessionID: input.sessionID,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        })
+        return parseCanonicalContext(result.stdout)
+      } catch (error) {
+        const childError = error as { message?: unknown; stdout?: unknown; stderr?: unknown; code?: unknown }
+        debugLog?.("context provider failed", {
+          sessionID: input.sessionID,
+          error: childError.message ?? String(error),
+          code: childError.code ?? null,
+          stdout: typeof childError.stdout === "string" ? childError.stdout : null,
+          stderr: typeof childError.stderr === "string" ? childError.stderr : null,
+        })
         return { kind: "unavailable", reason: "Canonical TaskSet context provider unavailable" }
       }
     },
