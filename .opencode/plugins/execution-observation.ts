@@ -22,12 +22,20 @@ export type ExecutionObservationStore = {
   fail: (callId: string, result: ExecutionResultObservation, finishedAt?: string) => ExecutionObservation
   incomplete: (callId: string, finishedAt?: string) => ExecutionObservation
   get: (callId: string) => ExecutionObservation | undefined
+  hasRunningSession: (sessionId: string) => boolean
 }
 
 export function createExecutionObservationStore(now: () => string = currentTime): ExecutionObservationStore {
   const running = new Map<string, ExecutionObservation>()
 
   const get = (callId: string) => running.get(callId)
+
+  function hasRunningSession(sessionId: string): boolean {
+    for (const observation of running.values()) {
+      if (observation.sessionId === sessionId) return true
+    }
+    return false
+  }
 
   function finish(
     callId: string,
@@ -73,6 +81,7 @@ export function createExecutionObservationStore(now: () => string = currentTime)
       return finish(callId, "incomplete", finishedAt)
     },
     get,
+    hasRunningSession,
   }
 }
 

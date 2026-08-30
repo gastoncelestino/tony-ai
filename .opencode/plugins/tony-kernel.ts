@@ -121,6 +121,19 @@ function isBootstrapInFlight(directory: string): boolean {
   return (bootstrapInFlight.get(directory) ?? 0) > 0
 }
 
+function registerRootSession(
+  directory: string,
+  sessionID: string,
+  observations: ReturnType<typeof createExecutionObservationStore>,
+): void {
+  // OpenCode's hook identity is the root session for both the orchestrator and
+  // its delegated agents. An active execution observation is the only reliable
+  // signal that the current tool call belongs to a delegated agent.
+  if (!observations.hasRunningSession(sessionID)) {
+    rootSessionByDirectory.set(directory, sessionID)
+  }
+}
+
 function assertBootstrapToolAllowed(directory: string, tool: string): void {
   if (!isBootstrapInFlight(directory)) return
   if (!BOOTSTRAP_READ_ONLY_TOOLS.has(tool.toLowerCase())) {
@@ -130,18 +143,15 @@ function assertBootstrapToolAllowed(directory: string, tool: string): void {
   }
 }
 
-async function assertRootSessionDelegates(
+function assertRootSessionDelegates(
   directory: string,
   sessionID: string,
   tool: string,
-  provider: ReturnType<typeof createKernelContextProvider>,
-): Promise<void> {
+  observations: ReturnType<typeof createExecutionObservationStore>,
+): void {
   if (inputToolIsTask(tool) || rootSessionByDirectory.get(directory) !== sessionID) return
   if (!ROOT_COORDINATION_BLOCKED_TOOLS.has(tool.toLowerCase())) return
-
-  const provided = await provider.getContext({ sessionID, tool, arguments: {} })
-  if (provided.kind !== "available") return
-  if (["completed", "archived", "cancelled"].includes(provided.context.status)) return
+  if (observations.hasRunningSession(sessionID)) return
 
   throw new KernelBlockedError(
     `[Tony Kernel] Work tool '${tool}' is blocked in the orchestrator session; delegate the ready TaskSet task with task() instead`,
@@ -258,8 +268,9 @@ async function taskExecuteBeforeHook(
   const details = { tool: input.tool, sessionID: input.sessionID, callID: input.callID }
   debugLog("tool.execute.before hook received", details)
 
+  registerRootSession(directory, input.sessionID, observations)
   assertBootstrapToolAllowed(directory, input.tool)
-  await assertRootSessionDelegates(directory, input.sessionID, input.tool, provider)
+  assertRootSessionDelegates(directory, input.sessionID, input.tool, observations)
 
   if (input.tool.toLowerCase() !== "task") return
   debugLog("tool.execute.before", { ...details, args: output.args })

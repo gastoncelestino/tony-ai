@@ -52,6 +52,32 @@ test("parser blocks incomplete canonical context", () => {
   });
 });
 
+test("provider does not load TaskSet context for non-Task tools", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "tony-kernel-provider-"));
+  const script = join(directory, "context.sh");
+  const marker = join(directory, "called.txt");
+
+  writeFileSync(
+    script,
+    `#!/bin/sh\nprintf '%s' called > "${marker}"\nprintf '%s\\n' '${JSON.stringify({ available: true, state: context })}'\n`,
+  );
+  chmodSync(script, 0o755);
+
+  try {
+    const provider = createKernelContextProvider(directory, { pythonCommand: script });
+    await expect(
+      provider.getContext({ sessionID: "session-1", tool: "read" }),
+    ).resolves.toEqual({
+      kind: "unavailable",
+      reason: "Kernel context requested for non-Task tool",
+    });
+
+    expect(() => readFileSync(marker, "utf8")).toThrow();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("provider invokes the context script with the project-local database path", async () => {
   const directory = mkdtempSync(join(tmpdir(), "tony-kernel-provider-"));
   const script = join(directory, "context.sh");

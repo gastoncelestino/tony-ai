@@ -21,6 +21,8 @@ describe("execution observation", () => {
     expect(attempt.status).toBe("running")
     expect(attempt.callId).toBe("call-1")
     expect(attempt.result).toBeUndefined()
+    expect(observations.hasRunningSession("session")).toBe(true)
+    expect(observations.hasRunningSession("other-session")).toBe(false)
   })
 
   test("completed after transitions the same callID to succeeded with Result", () => {
@@ -39,6 +41,7 @@ describe("execution observation", () => {
     expect(finished.result).toEqual(result)
     expect(finished.finishedAt).toBe("2026-08-29T10:00:01.000Z")
     expect(observations.get("call-1")).toBeUndefined()
+    expect(observations.hasRunningSession("session")).toBe(false)
   })
 
   test("error after transitions the same callID to failed with an error Result", () => {
@@ -89,5 +92,6 @@ describe("execution observation", () => {
 
     expect(incomplete.status).toBe("incomplete")
     expect(incomplete.result).toBeUndefined()
+    expect(observations.hasRunningSession("session")).toBe(false)
   })
 })
