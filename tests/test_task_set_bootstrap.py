@@ -23,6 +23,32 @@ class TaskSetBootstrapParsingTests(unittest.TestCase):
         )
         self.assertEqual(tasks[0]["id"], "one")
 
+    def test_accepts_json_with_prose_around_it(self):
+        tasks = _parse_tasks(
+            'Here is the decomposition:\n'
+            '{"tasks":[{"id":"one","description":"Inspect one","phase":"explore","dependencies":[],"files":[]}]}'
+            '\nThat is all.'
+        )
+        self.assertEqual(tasks[0]["id"], "one")
+
+    def test_preserves_real_dependency_chain(self):
+        tasks = _parse_tasks(
+            '{"tasks":['
+            '{"id":"explore","description":"Explore architecture","phase":"explore","dependencies":[],"files":[]},'
+            '{"id":"analyze","description":"Analyze kernel flow","phase":"explore","dependencies":["explore"],"files":[]},'
+            '{"id":"report","description":"Write final report","phase":"archive","dependencies":["analyze"],"files":[]}'
+            ']}'
+        )
+        self.assertEqual(tasks[1]["dependencies"], ("explore",))
+        self.assertEqual(tasks[2]["dependencies"], ("analyze",))
+
+    def test_rejects_unknown_dependency(self):
+        with self.assertRaises(ValueError):
+            _parse_tasks(
+                '{"tasks":[{"id":"one","description":"Inspect one","phase":"explore",'
+                '"dependencies":["missing"],"files":[]}]}'
+            )
+
     def test_accepts_single_file_path_for_compatibility(self):
         tasks = _parse_tasks(
             '<task_result>{"tasks":[{"id":"one","description":"Inspect one","phase":"explore","dependencies":[],"files":"kernel/state.py"}]}</task_result>'

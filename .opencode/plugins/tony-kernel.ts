@@ -40,6 +40,21 @@ const ROOT_COORDINATION_BLOCKED_TOOLS = new Set([
 ])
 const bootstrapInFlight = new Map<string, number>()
 const rootSessionByDirectory = new Map<string, string>()
+const originalPromptBySession = new Map<string, string>()
+
+function sessionKey(directory: string, sessionID: string): string {
+  return `${directory}\u0000${sessionID}`
+}
+
+function extractUserPrompt(parts: unknown[]): string {
+  return parts
+    .filter((part): part is { type?: string; text?: string } => Boolean(part && typeof part === "object"))
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text!.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim()
+}
 
 function bootstrapPrompt(originalDescription: string, originalPrompt: string): string {
   return `You are Tony's task-graph decomposition subagent. This is ONLY the bootstrap planning step of a new execution session.
@@ -280,8 +295,14 @@ async function taskExecuteBeforeHook(
     let provided = await provider.getContext(input)
     if (provided.kind !== "available" && provided.reason === "SDD state unavailable") {
       const originalDescription = typeof output.args.description === "string" ? output.args.description.trim() : ""
-      const originalPrompt = typeof output.args.prompt === "string" ? output.args.prompt.trim() : ""
-      debugLog("bootstrap initialization started", { ...details, originalDescription, originalCommand: output.args.command })
+      const delegatedPrompt = typeof output.args.prompt === "string" ? output.args.prompt.trim() : ""
+      const originalPrompt = originalPromptBySession.get(sessionKey(directory, input.sessionID)) ?? delegatedPrompt
+      debugLog("bootstrap initialization started", {
+        ...details,
+        originalDescription,
+        originalPromptLength: originalPrompt.length,
+        originalCommand: output.args.command,
+      })
       await prepareBootstrap(directory, input.sessionID)
       output.args.description = BOOTSTRAP_DESCRIPTION
       output.args.prompt = bootstrapPrompt(originalDescription, originalPrompt)
@@ -338,7 +359,10 @@ async function taskExecuteAfterHook(
     debugLog("task completion/observation failed", { callID: input.callID, error: error instanceof Error ? error.message : String(error), errorName: error instanceof Error ? error.name : typeof error })
     throw error
   } finally {
-    if (bootstrapStarted) endBootstrap(directory)
+    if (bootstrapStarted) {
+      originalPromptBySession.delete(sessionKey(directory, input.sessionID))
+      endBootstrap(directory)
+    }
   }
 }
 
@@ -349,6 +373,10 @@ const TonyKernelPlugin: Plugin = async ({ directory }) => {
   debugLog("plugin loaded", { message: "Kernel execution boundary is active and fail-closed" })
   console.log("[tony-kernel] Plugin loaded; Kernel execution boundary is active and fail-closed")
   return {
+    "chat.message": async (input, output) => {
+      const prompt = extractUserPrompt(output.parts)
+      if (prompt) originalPromptBySession.set(sessionKey(directory, input.sessionID), prompt)
+    },
     "tool.execute.before": (input, output) => taskExecuteBeforeHook(input, output, provider, observations, directory, debugLog),
     "tool.execute.after": (input, output) => taskExecuteAfterHook(input, output, observations, directory, debugLog),
   }

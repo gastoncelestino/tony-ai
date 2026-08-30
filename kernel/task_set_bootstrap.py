@@ -44,6 +44,12 @@ def prepare(*, project_id: str, session_id: str, db_path: str | None = None) -> 
 
 
 def _extract_task_result(raw: str) -> str:
+    """Extract the first valid TaskSet JSON object from model output.
+
+    The bootstrap contract asks for strict JSON, but local models may still
+    wrap it in prose, Markdown fences, or incomplete XML tags. We keep the
+    persisted contract strict while tolerating those transport-level wrappers.
+    """
     value = raw.strip()
     opening = "<task_result>"
     closing = "</task_result>"
@@ -55,6 +61,17 @@ def _extract_task_result(raw: str) -> str:
     fence = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", value, re.IGNORECASE)
     if fence:
         value = fence.group(1).strip()
+
+    decoder = json.JSONDecoder()
+    candidates = [value]
+    candidates.extend(value[index:] for index, character in enumerate(value) if character == "{")
+    for candidate in candidates:
+        try:
+            payload, end = decoder.raw_decode(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("tasks"), list):
+            return candidate[:end].strip()
 
     return value
 
@@ -114,6 +131,13 @@ def _parse_tasks(raw: str) -> list[dict]:
         tasks.append(task)
     if not tasks:
         raise TaskSetPersistenceError("Decomposition produced no tasks")
+    task_ids = {task["id"] for task in tasks}
+    for task in tasks:
+        unknown = set(task["dependencies"]) - task_ids
+        if unknown:
+            raise TaskSetPersistenceError(
+                f"Task {task['id']} has unknown dependencies: {', '.join(sorted(unknown))}"
+            )
     return tasks
 
 
