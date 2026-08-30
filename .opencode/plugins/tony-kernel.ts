@@ -157,7 +157,10 @@ async function taskExecuteBeforeHook(
 
   if (input.tool.toLowerCase() !== "task") return
 
-  debugLog("tool.execute.before", details)
+  debugLog("tool.execute.before", {
+    ...details,
+    args: output.args,
+  })
   debugLog("authorizeExecution started", details)
 
   let order: KernelExecutionOrder
