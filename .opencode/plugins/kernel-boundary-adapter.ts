@@ -46,7 +46,7 @@ export function adaptTaskExecutionContext(
   input: { sessionID: string; tool: string },
   context: unknown,
 ): AdapterResult {
-  if (input.tool !== "Task") return { kind: "ignored" }
+  if (input.tool.toLowerCase() !== "task") return { kind: "ignored" }
 
   if (!isKernelContext(context)) {
     return {
