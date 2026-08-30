@@ -43,6 +43,24 @@ def test_boundary_authorizes_requested_task_by_id():
     assert result["execution_order"]["task_id"] == "explore-architecture"
 
 
+def test_boundary_accepts_reformulated_task_reference():
+    result = resolve_boundary(
+        {
+            "phase": "explore",
+            "status": "pending",
+            "tasks": [
+                {"id": "validate-chain", "description": "Validate chain", "phase": "explore", "dependencies": []},
+                {"id": "final-report", "description": "Final report", "phase": "explore", "dependencies": ["validate-chain"]},
+            ],
+            "completed": [],
+            "requested_description": "validate-dependency-chain",
+        }
+    )
+
+    assert result["allowed"] is True
+    assert result["execution_order"]["task_id"] == "validate-chain"
+
+
 def test_boundary_blocks_requested_task_until_dependencies_complete():
     result = resolve_boundary(
         {

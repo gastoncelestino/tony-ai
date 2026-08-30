@@ -3,11 +3,32 @@ from __future__ import annotations
 
 import json
 import sys
+import re
 from typing import Mapping, Sequence
 
 from kernel.execution_order import resolve_execution
 from kernel.state import KernelState
 from kernel.task_set import TaskSet
+
+
+def _reference_tokens(value: object) -> tuple[str, ...]:
+    return tuple(token for token in re.split(r"[^a-z0-9]+", str(value).lower()) if token)
+
+
+def _matches_requested_task(task: Mapping[str, object], requested: str) -> bool:
+    if str(task.get("id", "")) == requested or str(task.get("description", "")) == requested:
+        return True
+    task_tokens = _reference_tokens(task.get("id", ""))
+    requested_tokens = _reference_tokens(requested)
+    if not task_tokens or len(task_tokens) > len(requested_tokens):
+        return False
+    position = 0
+    for token in requested_tokens:
+        if token == task_tokens[position]:
+            position += 1
+            if position == len(task_tokens):
+                return True
+    return False
 
 
 def resolve_boundary(request: Mapping[str, object]) -> dict:
@@ -34,17 +55,14 @@ def resolve_boundary(request: Mapping[str, object]) -> dict:
                 task
                 for task in task_set.ready_tasks()
                 if task.get("phase") == phase
-                and (
-                    str(task.get("id", "")) == requested_description
-                    or str(task.get("description", "")) == requested_description
-                )
+                and _matches_requested_task(task, requested_description)
             ]
             if not matches:
                 return _blocked(
                     f"Requested task is not ready in phase {phase}: {requested_description}"
                 )
             if len(matches) > 1:
-                return _blocked(f"Multiple ready tasks match description: {requested_description}")
+                return _blocked(f"Multiple ready tasks match ID or description: {requested_description}")
             state = KernelState(phase, status, matches[0])
         else:
             state = KernelState(phase, status).select_next_task(task_set)
