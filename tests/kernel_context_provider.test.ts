@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   createKernelContextProvider,
-  parsePersistedState,
+  parseCanonicalContext,
 } from "../.opencode/plugins/kernel-context-provider";
 
 const context = {
@@ -19,48 +22,70 @@ const context = {
   completed: [],
 };
 
-test("provider returns available only for complete persisted state", async () => {
-  const provider = createKernelContextProvider("/project", {
-    readState: async () => ({ available: true, state: context }),
+test("parser returns available only for complete canonical context", () => {
+  expect(parseCanonicalContext(JSON.stringify({ available: true, state: context }))).toEqual({
+    kind: "available",
+    context,
   });
-
-  await expect(
-    provider.getContext({ sessionID: "session-1", tool: "Task" }),
-  ).resolves.toEqual({ kind: "available", context });
 });
 
-test("provider blocks when persisted state is unavailable", async () => {
-  const provider = createKernelContextProvider("/project", {
-    readState: async () => ({ available: false, reason: "SDD state unavailable" }),
-  });
-
-  await expect(
-    provider.getContext({ sessionID: "session-1", tool: "Task" }),
-  ).resolves.toEqual({
+test("parser preserves unavailable state without inventing defaults", () => {
+  expect(
+    parseCanonicalContext(JSON.stringify({ available: false, reason: "SDD state unavailable" })),
+  ).toEqual({
     kind: "unavailable",
     reason: "SDD state unavailable",
   });
 });
 
-test("provider blocks incomplete persisted state instead of inventing defaults", async () => {
-  const provider = createKernelContextProvider("/project", {
-    readState: async () => ({
-      available: true,
-      state: { phase: "apply", status: "pending", tasks: [], completed: "invalid" },
-    }),
-  });
-
-  await expect(
-    provider.getContext({ sessionID: "session-1", tool: "Task" }),
-  ).resolves.toEqual({
+test("parser blocks incomplete canonical context", () => {
+  expect(
+    parseCanonicalContext(
+      JSON.stringify({
+        available: true,
+        state: { phase: "apply", status: "pending", tasks: [], completed: "invalid" },
+      }),
+    ),
+  ).toEqual({
     kind: "unavailable",
-    reason: "TonyMem SDD state is incomplete",
+    reason: "Canonical TaskSet context is incomplete",
   });
 });
 
-test("provider blocks malformed helper output", () => {
-  expect(parsePersistedState("not json")).toEqual({
-    kind: "unavailable",
-    reason: "Invalid TonyMem SDD state response",
-  });
+test("provider invokes the context script with the project-local database path", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "tony-kernel-provider-"));
+  const script = join(directory, "context.sh");
+  const argsFile = join(directory, "args.txt");
+  const dbPath = join(directory, "local-memory", "memory.db");
+
+  writeFileSync(
+    script,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > "${argsFile}"\nprintf '%s\\n' '${JSON.stringify({ available: true, state: context })}'\n`,
+  );
+  chmodSync(script, 0o755);
+
+  try {
+    const provider = createKernelContextProvider(directory, {
+      pythonCommand: script,
+      contextScript: "context-script.py",
+      dbPath,
+    });
+
+    await expect(
+      provider.getContext({ sessionID: "session-1", tool: "Task" }),
+    ).resolves.toEqual({ kind: "available", context });
+
+    const args = readFileSync(argsFile, "utf8").trim().split("\n");
+    expect(args).toEqual([
+      "--get",
+      "--project",
+      directory,
+      "--session-id",
+      "session-1",
+      "--db-path",
+      dbPath,
+    ]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
