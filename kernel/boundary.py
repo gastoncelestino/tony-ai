@@ -20,6 +20,8 @@ def resolve_boundary(request: Mapping[str, object]) -> dict:
 
     if not phase:
         return _blocked("Missing required phase")
+    if status == "failed":
+        return _blocked("Kernel execution is halted because the current TaskSet is failed; start a new execution session")
     if not isinstance(tasks, Sequence) or isinstance(tasks, (str, bytes)):
         return _blocked("tasks must be a sequence")
     if not isinstance(completed, Sequence) or isinstance(completed, (str, bytes)):

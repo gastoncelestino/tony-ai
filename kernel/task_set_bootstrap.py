@@ -113,13 +113,26 @@ def complete(
     current, persisted = loaded
     if current.get(BOOTSTRAP_TASK_ID) is None:
         raise TaskSetPersistenceError("Bootstrap task is not present")
-    tasks = _parse_tasks(decomposition)
-    if any(task["id"] == BOOTSTRAP_TASK_ID for task in tasks):
-        raise TaskSetPersistenceError("Decomposition task ID is reserved")
-    task_set = TaskSet(tuple(tasks))
-    first_phase = str(task_set.tasks[0].get("phase", ""))
-    if not first_phase:
-        raise TaskSetPersistenceError("First decomposed task has no phase")
+    try:
+        tasks = _parse_tasks(decomposition)
+        if any(task["id"] == BOOTSTRAP_TASK_ID for task in tasks):
+            raise TaskSetPersistenceError("Decomposition task ID is reserved")
+        task_set = TaskSet(tuple(tasks))
+        first_phase = str(task_set.tasks[0].get("phase", ""))
+        if not first_phase:
+            raise TaskSetPersistenceError("First decomposed task has no phase")
+    except (TaskSetPersistenceError, TypeError, ValueError) as exc:
+        persistence.save(
+            project_id=project_id,
+            session_id=session_id,
+            change_id=persisted["change_id"],
+            phase=BOOTSTRAP_PHASE,
+            status="failed",
+            task_set=current,
+            expected_version=persisted["version"],
+        )
+        raise exc
+
     saved = persistence.save(
         project_id=project_id,
         session_id=session_id,
