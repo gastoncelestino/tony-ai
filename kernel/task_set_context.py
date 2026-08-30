@@ -29,7 +29,7 @@ def main() -> int:
         parser.error("only --get is available")
 
     try:
-        loaded = TaskSetPersistence(args.db_path).load(
+        loaded = TaskSetPersistence(args.db_path).load_for_context(
             project_id=args.project,
             session_id=args.session_id,
         )
