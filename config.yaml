@@ -14,46 +14,12 @@ models:
       --model /home/tony/.tony-ai/models/qwen3-coder-30B.q4_k_m.gguf
       --ctx-size 32768
       --n-gpu-layers 99
-      --n-cpu-moe 24
+      --n-cpu-moe 30
       --cache-type-k q8_0
       --cache-type-v q8_0
-      --spec-type ngram-mod
-      --spec-ngram-mod-n-match 24
-      --spec-ngram-mod-n-min 48
-      --spec-ngram-mod-n-max 64
-    ttl: 600
-
-  omnicoder-9b:
-    aliases:
-      - "omnicoder:9b"
-    cmd: |
-      ${llamaServerBase}
-      --model /home/tony/.tony-ai/models/omnicoder-2-9b.q5_k_m.gguf
-      --ctx-size 16384
-      --n-gpu-layers 99
-      --cache-type-k q8_0
-      --cache-type-v q8_0
-      --temp 0.3
-      --top-p 0.95
-      --top-k 20
-      --spec-type ngram-mod
-      --spec-ngram-mod-n-match 16
-      --spec-ngram-mod-n-min 24
-      --spec-ngram-mod-n-max 48
-    ttl: 600
-
-  deepseek-r1-14b:
-    aliases:
-      - "deepseek-r1:14b"
-    cmd: |
-      ${llamaServerBase}
-      --model /home/tony/.tony-ai/models/deepseek-r1-14b.q4_k_m.gguf
-      --ctx-size 16384
-      --n-gpu-layers 99
-      --cache-type-k q8_0
-      --cache-type-v q8_0
-      --temp 0.6
-      --top-p 0.95
+      --parallel 1
+      --temp 0
+      --top-k 1
     ttl: 600
 
   ornith-1.5-9b:
@@ -62,19 +28,34 @@ models:
     cmd: |
       ${llamaServerBase}
       --model /home/tony/.tony-ai/models/ornith-1.5-9b-q5_k_m.gguf
-      --ctx-size 8192
+      --ctx-size 131072
       --n-gpu-layers 99
       --cache-type-k q8_0
       --cache-type-v q8_0
-      --temp 0.6
+      --parallel 1
+      --temp 0
+      --top-k 1
+    ttl: 600
+    
+  deepseek-r1-8b:
+    aliases:
+      - "deepseek-r1:8b"
+    cmd: |
+      ${llamaServerBase}
+      --model /home/tony/.tony-ai/models/deepseek-r1-8b.q5_k_m.gguf
+      --ctx-size 32768
+      --n-gpu-layers 99
+      --cache-type-k q8_0
+      --cache-type-v q8_0
+      --parallel 1
+      --jinja
+      --reasoning-budget 4096
+      --n-predict 8192
+      --temp 0.60
       --top-p 0.95
-      --top-k 20
-      --min-p 0.0
+      --min-p 0.05
       --repeat-penalty 1.0
-      --spec-type ngram-mod
-      --spec-ngram-mod-n-match 16
-      --spec-ngram-mod-n-min 24
-      --spec-ngram-mod-n-max 48
+      --log-verbosity 3
     ttl: 600
 
   nomic-embed-text:
