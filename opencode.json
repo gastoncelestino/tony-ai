@@ -42,5 +42,13 @@
             }
         }
     },
-    "model": "llamaswap/qwen3-coder:30b"
+    "model": "llamaswap/qwen3-coder:30b",
+    "agent": {
+        "build": {
+            "permission": {
+                "*": "deny",
+                "task": "allow"
+            }
+        }
+    }
 }
