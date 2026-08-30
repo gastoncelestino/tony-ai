@@ -71,7 +71,7 @@ async function authorizeExecution(
   input: ExecutionRequest,
   provider: ReturnType<typeof createKernelContextProvider>,
 ): Promise<KernelExecutionOrder> {
-  if (input.tool.toLowerCase() !== "task") {
+  if (input.tool !== "Task") {
     throw new KernelUnavailableError(
       "[Tony Kernel] Execution authorization is not implemented for this runtime boundary",
     )
@@ -160,27 +160,77 @@ async function taskExecuteBeforeHook(
   console.error("[TONY DEBUG] tool.execute.before", details)
   debugLog("tool.execute.before", details)
 
-  const order = await authorizeExecution(executionRequest(input, output.args), provider)
+  debugLog("authorizeExecution started", details)
+  console.error("[TONY DEBUG] authorizeExecution started", details)
 
-  debugLog("execution authorization succeeded", {
+  let order: KernelExecutionOrder
+  try {
+    order = await authorizeExecution(executionRequest(input, output.args), provider)
+    debugLog("authorizeExecution succeeded", {
+      ...details,
+      taskId: order.task_id,
+      phase: order.phase,
+    })
+    console.error("[TONY DEBUG] authorizeExecution succeeded", {
+      ...details,
+      taskId: order.task_id,
+      phase: order.phase,
+    })
+  } catch (error) {
+    debugLog("authorizeExecution failed", {
+      ...details,
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : typeof error,
+    })
+    console.error("[TONY DEBUG] authorizeExecution failed", {
+      ...details,
+      error,
+    })
+    throw error
+  }
+
+  debugLog("observations.start started", {
+    ...details,
+    taskId: order.task_id,
+    phase: order.phase,
+  })
+  console.error("[TONY DEBUG] observations.start started", {
     ...details,
     taskId: order.task_id,
     phase: order.phase,
   })
 
-  observations.start({
-    projectId: directory,
-    sessionId: input.sessionID,
-    callId: input.callID,
-    taskId: order.task_id,
-    phase: order.phase,
-  })
+  try {
+    observations.start({
+      projectId: directory,
+      sessionId: input.sessionID,
+      callId: input.callID,
+      taskId: order.task_id,
+      phase: order.phase,
+    })
 
-  debugLog("execution observation started", {
-    ...details,
-    taskId: order.task_id,
-    phase: order.phase,
-  })
+    debugLog("observations.start succeeded", {
+      ...details,
+      taskId: order.task_id,
+      phase: order.phase,
+    })
+    console.error("[TONY DEBUG] observations.start succeeded", {
+      ...details,
+      taskId: order.task_id,
+      phase: order.phase,
+    })
+  } catch (error) {
+    debugLog("observations.start failed", {
+      ...details,
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : typeof error,
+    })
+    console.error("[TONY DEBUG] observations.start failed", {
+      ...details,
+      error,
+    })
+    throw error
+  }
 }
 
 function taskExecuteAfterHook(
