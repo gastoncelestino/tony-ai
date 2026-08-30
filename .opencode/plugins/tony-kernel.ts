@@ -7,18 +7,23 @@
  * transport errors, blocked decisions, or invalid execution orders all fail
  * closed.
  *
- * Execution observations are correlated with OpenCode's callID. The first
- * observation layer is intentionally in-memory; persistence in TonyMem is a
- * separate increment so observation semantics stay independently testable.
+ * Execution observations are correlated with OpenCode's callID. Successful
+ * task execution is reconciled back into the canonical TaskSet through the
+ * explicit Python completion boundary; failed/incomplete observations never
+ * unlock dependent tasks.
  */
 import { appendFileSync } from "node:fs"
 import { join } from "node:path"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import type { Plugin } from "@opencode-ai/plugin"
 import { adaptTaskExecutionContext } from "./kernel-boundary-adapter"
 import { createExecutionObservationStore } from "./execution-observation"
 import { createKernelContextProvider } from "./kernel-context-provider"
 import { callKernelBoundary } from "./kernel-boundary-transport"
 import type { KernelBoundaryRequest, KernelBoundaryResponse, KernelExecutionOrder } from "./kernel-boundary-protocol"
+
+const execFileAsync = promisify(execFile)
 
 class KernelBlockedError extends Error {
   constructor(message: string) {
@@ -44,11 +49,7 @@ function executionRequest(
   input: { sessionID: string; tool: string },
   args: Record<string, unknown>,
 ): ExecutionRequest {
-  return {
-    sessionID: input.sessionID,
-    tool: input.tool,
-    arguments: args,
-  }
+  return { sessionID: input.sessionID, tool: input.tool, arguments: args }
 }
 
 function validateExecutionOrder(
@@ -56,14 +57,11 @@ function validateExecutionOrder(
   response: KernelBoundaryResponse,
 ): KernelExecutionOrder {
   if (!response.allowed) throw new KernelBlockedError(response.reason)
-
   const order = response.execution_order
   const task = request.tasks.find((candidate) => candidate.id === order.task_id)
-
   if (!task || task.phase !== order.phase || task.description !== order.description) {
     throw new KernelBlockedError("[Tony Kernel] Invalid execution order")
   }
-
   return order
 }
 
@@ -72,23 +70,13 @@ async function authorizeExecution(
   provider: ReturnType<typeof createKernelContextProvider>,
 ): Promise<KernelExecutionOrder> {
   if (input.tool.toLowerCase() !== "task") {
-    throw new KernelUnavailableError(
-      "[Tony Kernel] Execution authorization is not implemented for this runtime boundary",
-    )
+    throw new KernelUnavailableError("[Tony Kernel] Execution authorization is not implemented for this runtime boundary")
   }
-
   const provided = await provider.getContext(input)
-  if (provided.kind !== "available") {
-    throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
-  }
-
+  if (provided.kind !== "available") throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
   const adapted = adaptTaskExecutionContext(input, provided.context)
-  if (adapted.kind !== "ready") {
-    throw new KernelUnavailableError(`[Tony Kernel] ${adapted.reason}`)
-  }
-
-  const response = await callKernelBoundary(adapted.request)
-  return validateExecutionOrder(adapted.request, response)
+  if (adapted.kind !== "ready") throw new KernelUnavailableError(`[Tony Kernel] ${adapted.reason}`)
+  return validateExecutionOrder(adapted.request, await callKernelBoundary(adapted.request))
 }
 
 function normalizeResult(value: unknown): { title: string; output: string; metadata: unknown } {
@@ -100,12 +88,7 @@ function normalizeResult(value: unknown): { title: string; output: string; metad
       metadata: result.metadata ?? {},
     }
   }
-
-  return {
-    title: "Task",
-    output: typeof value === "string" ? value : JSON.stringify(value),
-    metadata: {},
-  }
+  return { title: "Task", output: typeof value === "string" ? value : JSON.stringify(value), metadata: {} }
 }
 
 function resultIndicatesFailure(metadata: unknown): boolean {
@@ -116,112 +99,76 @@ function resultIndicatesFailure(metadata: unknown): boolean {
 
 function createDebugLogger(directory: string) {
   const logPath = join(directory, ".opencode", "tony-kernel-debug.log")
-
   return (event: string, details: Record<string, unknown> = {}) => {
-    const entry = {
-      timestamp: new Date().toISOString(),
-      event,
-      ...details,
-    }
-
     try {
-      appendFileSync(logPath, `${JSON.stringify(entry)}\n`, "utf8")
+      appendFileSync(logPath, `${JSON.stringify({ timestamp: new Date().toISOString(), event, ...details })}\n`, "utf8")
     } catch (error) {
-      // Debug logging must never change execution semantics.
       console.error("[TONY DEBUG] unable to write debug log", { logPath, error })
     }
   }
 }
 
+async function completeSuccessfulTask(
+  directory: string,
+  sessionID: string,
+  taskId: string,
+  result: { title: string; output: string; metadata: unknown },
+): Promise<string> {
+  const pythonCommand = process.env.TONYMEM_PYTHON ?? "python3"
+  const completionScript = process.env.TONYMEM_TASKSET_COMPLETION_SCRIPT ?? `${directory}/kernel/task_completion.py`
+  const dbPath = process.env.LOCAL_MEMORY_DB ?? join(directory, "local-memory", "memory.db")
+  const childEnv = { ...process.env }
+  delete childEnv.LOCAL_MEMORY_DB
+  const evidence = JSON.stringify([{ kind: "opencode-task-result", title: result.title, output: result.output, metadata: result.metadata }])
+
+  const completed = await execFileAsync(
+    pythonCommand,
+    [completionScript, "--complete", "--project", directory, "--session-id", sessionID, "--task-id", taskId, "--evidence", evidence, "--db-path", dbPath],
+    { cwd: directory, timeout: 3000, maxBuffer: 1024 * 1024, env: childEnv },
+  )
+
+  let payload: { ok?: boolean; result?: { version?: number }; reason?: string }
+  try {
+    payload = JSON.parse(completed.stdout) as typeof payload
+  } catch {
+    throw new Error("Invalid TaskSet completion response")
+  }
+  if (payload.ok !== true) throw new Error(payload.reason ?? "TaskSet completion failed")
+  return typeof payload.result?.version === "number" ? String(payload.result.version) : "unknown"
+}
+
 async function taskExecuteBeforeHook(
-  input: {
-    tool: string
-    sessionID: string
-    callID: string
-  },
-  output: {
-    args: Record<string, unknown>
-  },
+  input: { tool: string; sessionID: string; callID: string },
+  output: { args: Record<string, unknown> },
   provider: ReturnType<typeof createKernelContextProvider>,
   observations: ReturnType<typeof createExecutionObservationStore>,
   directory: string,
   debugLog: ReturnType<typeof createDebugLogger>,
 ): Promise<void> {
-  const details = {
-    tool: input.tool,
-    sessionID: input.sessionID,
-    callID: input.callID,
-  }
-
+  const details = { tool: input.tool, sessionID: input.sessionID, callID: input.callID }
   debugLog("tool.execute.before hook received", details)
-
   if (input.tool.toLowerCase() !== "task") return
-
-  debugLog("tool.execute.before", {
-    ...details,
-    args: output.args,
-  })
+  debugLog("tool.execute.before", { ...details, args: output.args })
   debugLog("authorizeExecution started", details)
-
-  let order: KernelExecutionOrder
   try {
-    order = await authorizeExecution(executionRequest(input, output.args), provider)
-    debugLog("authorizeExecution succeeded", {
-      ...details,
-      taskId: order.task_id,
-      phase: order.phase,
-    })
+    const order = await authorizeExecution(executionRequest(input, output.args), provider)
+    debugLog("authorizeExecution succeeded", { ...details, taskId: order.task_id, phase: order.phase })
+    observations.start({ projectId: directory, sessionId: input.sessionID, callId: input.callID, taskId: order.task_id, phase: order.phase })
+    debugLog("observations.start succeeded", { ...details, taskId: order.task_id, phase: order.phase })
   } catch (error) {
-    debugLog("authorizeExecution failed", {
-      ...details,
-      error: error instanceof Error ? error.message : String(error),
-      errorName: error instanceof Error ? error.name : typeof error,
-    })
-    throw error
-  }
-
-  debugLog("observations.start started", {
-    ...details,
-    taskId: order.task_id,
-    phase: order.phase,
-  })
-
-  try {
-    observations.start({
-      projectId: directory,
-      sessionId: input.sessionID,
-      callId: input.callID,
-      taskId: order.task_id,
-      phase: order.phase,
-    })
-
-    debugLog("observations.start succeeded", {
-      ...details,
-      taskId: order.task_id,
-      phase: order.phase,
-    })
-  } catch (error) {
-    debugLog("observations.start failed", {
-      ...details,
-      error: error instanceof Error ? error.message : String(error),
-      errorName: error instanceof Error ? error.name : typeof error,
-    })
+    debugLog("authorizeExecution failed", { ...details, error: error instanceof Error ? error.message : String(error), errorName: error instanceof Error ? error.name : typeof error })
     throw error
   }
 }
 
-function taskExecuteAfterHook(
-  input: {
-    tool: string
-    sessionID: string
-    callID: string
-  },
+async function taskExecuteAfterHook(
+  input: { tool: string; sessionID: string; callID: string },
   output: unknown,
   observations: ReturnType<typeof createExecutionObservationStore>,
+  directory: string,
   debugLog: ReturnType<typeof createDebugLogger>,
-): void {
+): Promise<void> {
   if (input.tool.toLowerCase() !== "task") return
-
   try {
     const result = normalizeResult(output)
     const finished = resultIndicatesFailure(result.metadata)
@@ -232,17 +179,27 @@ function taskExecuteAfterHook(
       tool: input.tool,
       sessionID: input.sessionID,
       callID: input.callID,
+      taskId: finished.taskId,
       status: finished.status,
     })
+
+    if (finished.status !== "succeeded") return
+
+    debugLog("task completion started", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId })
+    try {
+      const version = await completeSuccessfulTask(directory, input.sessionID, finished.taskId, result)
+      debugLog("task completion succeeded", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId, version })
+    } catch (error) {
+      debugLog("task completion failed", {
+        sessionID: input.sessionID,
+        callID: input.callID,
+        taskId: finished.taskId,
+        error: error instanceof Error ? error.message : String(error),
+        errorName: error instanceof Error ? error.name : typeof error,
+      })
+    }
   } catch (error) {
-    // OpenCode's normal tool.execute.after hook is a successful-result
-    // surface. A tool exception may never reach this hook. Therefore we do
-    // not invent a failed Result here; the still-running observation remains
-    // eligible to be classified as incomplete by a later reconciliation step.
-    debugLog("execution observation unavailable", {
-      callID: input.callID,
-      error: error instanceof Error ? error.message : String(error),
-    })
+    debugLog("execution observation unavailable", { callID: input.callID, error: error instanceof Error ? error.message : String(error) })
   }
 }
 
@@ -250,17 +207,11 @@ const TonyKernelPlugin: Plugin = async ({ directory }) => {
   const debugLog = createDebugLogger(directory)
   const provider = createKernelContextProvider(directory, { debugLog })
   const observations = createExecutionObservationStore()
-
-  debugLog("plugin loaded", {
-    message: "Kernel execution boundary is active and fail-closed",
-  })
+  debugLog("plugin loaded", { message: "Kernel execution boundary is active and fail-closed" })
   console.log("[tony-kernel] Plugin loaded; Kernel execution boundary is active and fail-closed")
-
   return {
-    "tool.execute.before": (input, output) =>
-      taskExecuteBeforeHook(input, output, provider, observations, directory, debugLog),
-    "tool.execute.after": (input, output) =>
-      taskExecuteAfterHook(input, output, observations, debugLog),
+    "tool.execute.before": (input, output) => taskExecuteBeforeHook(input, output, provider, observations, directory, debugLog),
+    "tool.execute.after": (input, output) => taskExecuteAfterHook(input, output, observations, directory, debugLog),
   }
 }
 
