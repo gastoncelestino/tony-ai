@@ -7,10 +7,10 @@
  * transport errors, blocked decisions, or invalid execution orders all fail
  * closed.
  *
- * Execution observations are correlated with OpenCode's callID. Successful
- * task execution is reconciled back into the canonical TaskSet through the
- * explicit Python completion boundary; failed/incomplete observations never
- * unlock dependent tasks.
+ * The first task in a new session is a tightly-scoped bootstrap delegation:
+ * the subagent returns a machine-readable TaskSet, after which all execution
+ * is authorized against that canonical graph. Successful task execution is
+ * reconciled back into the TaskSet; failed/incomplete tasks never unlock work.
  */
 import { appendFileSync } from "node:fs"
 import { join } from "node:path"
@@ -24,6 +24,8 @@ import { callKernelBoundary } from "./kernel-boundary-transport"
 import type { KernelBoundaryRequest, KernelBoundaryResponse, KernelExecutionOrder } from "./kernel-boundary-protocol"
 
 const execFileAsync = promisify(execFile)
+const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
+const BOOTSTRAP_DESCRIPTION = "decompose task graph"
 
 class KernelBlockedError extends Error {
   constructor(message: string) {
@@ -108,31 +110,77 @@ function createDebugLogger(directory: string) {
   }
 }
 
+async function runPython(
+  directory: string,
+  script: string,
+  args: string[],
+): Promise<{ ok?: boolean; result?: Record<string, unknown>; reason?: string }> {
+  const pythonCommand = process.env.TONYMEM_PYTHON ?? "python3"
+  const dbPath = process.env.LOCAL_MEMORY_DB ?? join(directory, "local-memory", "memory.db")
+  const childEnv = { ...process.env }
+  delete childEnv.LOCAL_MEMORY_DB
+  const completed = await execFileAsync(
+    pythonCommand,
+    [script, ...args, "--db-path", dbPath],
+    { cwd: directory, timeout: 5000, maxBuffer: 1024 * 1024, env: childEnv },
+  )
+  try {
+    return JSON.parse(completed.stdout) as { ok?: boolean; result?: Record<string, unknown>; reason?: string }
+  } catch {
+    throw new Error("Invalid Tony Kernel Python response")
+  }
+}
+
+async function prepareBootstrap(directory: string, sessionID: string): Promise<void> {
+  const script = process.env.TONYMEM_TASKSET_BOOTSTRAP_SCRIPT ?? `${directory}/kernel/task_set_bootstrap.py`
+  const payload = await runPython(directory, script, ["--prepare", "--project", directory, "--session-id", sessionID])
+  if (payload.ok !== true) throw new KernelUnavailableError(payload.reason ?? "Unable to initialize SDD bootstrap state")
+}
+
+function extractTaskResult(output: string): string {
+  const match = output.match(/<task_result>\s*([\s\S]*?)\s*<\/task_result>/)
+  return (match?.[1] ?? output).trim()
+}
+
+async function completeBootstrap(
+  directory: string,
+  sessionID: string,
+  output: string,
+): Promise<string> {
+  const script = process.env.TONYMEM_TASKSET_BOOTSTRAP_SCRIPT ?? `${directory}/kernel/task_set_bootstrap.py`
+  const decomposition = extractTaskResult(output)
+  const payload = await runPython(directory, script, [
+    "--complete",
+    "--project",
+    directory,
+    "--session-id",
+    sessionID,
+    "--decomposition",
+    decomposition,
+  ])
+  if (payload.ok !== true) throw new Error(payload.reason ?? "TaskSet bootstrap completion failed")
+  return typeof payload.result?.version === "number" ? String(payload.result.version) : "unknown"
+}
+
 async function completeSuccessfulTask(
   directory: string,
   sessionID: string,
   taskId: string,
   result: { title: string; output: string; metadata: unknown },
 ): Promise<string> {
-  const pythonCommand = process.env.TONYMEM_PYTHON ?? "python3"
-  const completionScript = process.env.TONYMEM_TASKSET_COMPLETION_SCRIPT ?? `${directory}/kernel/task_completion.py`
-  const dbPath = process.env.LOCAL_MEMORY_DB ?? join(directory, "local-memory", "memory.db")
-  const childEnv = { ...process.env }
-  delete childEnv.LOCAL_MEMORY_DB
+  const script = process.env.TONYMEM_TASKSET_COMPLETION_SCRIPT ?? `${directory}/kernel/task_completion.py`
   const evidence = JSON.stringify([{ kind: "opencode-task-result", title: result.title, output: result.output, metadata: result.metadata }])
-
-  const completed = await execFileAsync(
-    pythonCommand,
-    [completionScript, "--complete", "--project", directory, "--session-id", sessionID, "--task-id", taskId, "--evidence", evidence, "--db-path", dbPath],
-    { cwd: directory, timeout: 3000, maxBuffer: 1024 * 1024, env: childEnv },
-  )
-
-  let payload: { ok?: boolean; result?: { version?: number }; reason?: string }
-  try {
-    payload = JSON.parse(completed.stdout) as typeof payload
-  } catch {
-    throw new Error("Invalid TaskSet completion response")
-  }
+  const payload = await runPython(directory, script, [
+    "--complete",
+    "--project",
+    directory,
+    "--session-id",
+    sessionID,
+    "--task-id",
+    taskId,
+    "--evidence",
+    evidence,
+  ])
   if (payload.ok !== true) throw new Error(payload.reason ?? "TaskSet completion failed")
   return typeof payload.result?.version === "number" ? String(payload.result.version) : "unknown"
 }
@@ -151,7 +199,23 @@ async function taskExecuteBeforeHook(
   debugLog("tool.execute.before", { ...details, args: output.args })
   debugLog("authorizeExecution started", details)
   try {
-    const order = await authorizeExecution(executionRequest(input, output.args), provider)
+    let provided = await provider.getContext(input)
+    if (
+      provided.kind !== "available" &&
+      provided.reason === "SDD state unavailable" &&
+      output.args.command === BOOTSTRAP_COMMAND &&
+      output.args.description === BOOTSTRAP_DESCRIPTION
+    ) {
+      debugLog("bootstrap initialization started", { ...details })
+      await prepareBootstrap(directory, input.sessionID)
+      provided = await provider.getContext(input)
+      debugLog("bootstrap initialization succeeded", { ...details })
+    }
+    if (provided.kind !== "available") throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
+    const request = executionRequest(input, output.args)
+    const adapted = adaptTaskExecutionContext(request, provided.context)
+    if (adapted.kind !== "ready") throw new KernelUnavailableError(`[Tony Kernel] ${adapted.reason}`)
+    const order = validateExecutionOrder(adapted.request, await callKernelBoundary(adapted.request))
     debugLog("authorizeExecution succeeded", { ...details, taskId: order.task_id, phase: order.phase })
     observations.start({ projectId: directory, sessionId: input.sessionID, callId: input.callID, taskId: order.task_id, phase: order.phase })
     debugLog("observations.start succeeded", { ...details, taskId: order.task_id, phase: order.phase })
@@ -186,20 +250,13 @@ async function taskExecuteAfterHook(
     if (finished.status !== "succeeded") return
 
     debugLog("task completion started", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId })
-    try {
-      const version = await completeSuccessfulTask(directory, input.sessionID, finished.taskId, result)
-      debugLog("task completion succeeded", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId, version })
-    } catch (error) {
-      debugLog("task completion failed", {
-        sessionID: input.sessionID,
-        callID: input.callID,
-        taskId: finished.taskId,
-        error: error instanceof Error ? error.message : String(error),
-        errorName: error instanceof Error ? error.name : typeof error,
-      })
-    }
+    const version = finished.taskId === "__tony_bootstrap_decompose__"
+      ? await completeBootstrap(directory, input.sessionID, result.output)
+      : await completeSuccessfulTask(directory, input.sessionID, finished.taskId, result)
+    debugLog("task completion succeeded", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId, version })
   } catch (error) {
-    debugLog("execution observation unavailable", { callID: input.callID, error: error instanceof Error ? error.message : String(error) })
+    debugLog("task completion/observation failed", { callID: input.callID, error: error instanceof Error ? error.message : String(error), errorName: error instanceof Error ? error.name : typeof error })
+    throw error
   }
 }
 

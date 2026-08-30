@@ -10,6 +10,7 @@ export type KernelBoundaryRequest = {
   status: string
   tasks: KernelTask[]
   completed: string[]
+  requested_description?: string
 }
 
 export type KernelExecutionOrder = {

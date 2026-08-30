@@ -30,13 +30,17 @@ def complete_task(
         raise TaskSetPersistenceError("SDD state unavailable")
 
     task_set, persisted = loaded
-    pending_state = KernelState(persisted["phase"], "pending").select_next_task(task_set)
-    selected = pending_state.get_next_task()
-    if selected is None or selected.get("id") != task_id:
+    selected = task_set.get(task_id)
+    if selected is None:
+        raise TaskSetPersistenceError(f"Authorized task does not exist: {task_id}")
+    if selected.get("phase") != persisted["phase"]:
         raise TaskSetPersistenceError(
-            f"Authorized task does not match current ready task: {task_id}"
+            f"Authorized task belongs to phase {selected.get('phase')}, current phase is {persisted['phase']}"
         )
+    if selected not in task_set.ready_tasks():
+        raise TaskSetPersistenceError(f"Authorized task is no longer ready: {task_id}")
 
+    pending_state = KernelState(persisted["phase"], "pending", selected)
     context = TaskExecutionContext(
         project_id=project_id,
         session_id=persisted["session_id"],

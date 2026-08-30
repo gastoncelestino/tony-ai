@@ -10,6 +10,7 @@ export type KernelBoundaryRequest = {
   status: string
   tasks: KernelTask[]
   completed: string[]
+  requested_description?: string
 }
 
 type AdapterResult =
@@ -29,7 +30,7 @@ function isTask(value: unknown): value is KernelTask {
   )
 }
 
-function isKernelContext(value: unknown): value is KernelBoundaryRequest {
+function isKernelContext(value: unknown): value is Omit<KernelBoundaryRequest, "requested_description"> {
   if (!value || typeof value !== "object") return false
   const context = value as Record<string, unknown>
   return (
@@ -43,7 +44,7 @@ function isKernelContext(value: unknown): value is KernelBoundaryRequest {
 }
 
 export function adaptTaskExecutionContext(
-  input: { sessionID: string; tool: string },
+  input: { sessionID: string; tool: string; arguments: Record<string, unknown> },
   context: unknown,
 ): AdapterResult {
   if (input.tool.toLowerCase() !== "task") return { kind: "ignored" }
@@ -55,8 +56,16 @@ export function adaptTaskExecutionContext(
     }
   }
 
+  const description = input.arguments.description
+  if (typeof description !== "string" || !description.trim()) {
+    return { kind: "unavailable", reason: "Task description is required for Kernel authorization" }
+  }
+
   return {
     kind: "ready",
-    request: context,
+    request: {
+      ...context,
+      requested_description: description.trim(),
+    },
   }
 }

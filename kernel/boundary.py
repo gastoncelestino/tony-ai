@@ -16,6 +16,7 @@ def resolve_boundary(request: Mapping[str, object]) -> dict:
     status = str(request.get("status", ""))
     tasks = request.get("tasks", ())
     completed = request.get("completed", ())
+    requested_description = str(request.get("requested_description", "")).strip()
 
     if not phase:
         return _blocked("Missing required phase")
@@ -26,7 +27,21 @@ def resolve_boundary(request: Mapping[str, object]) -> dict:
 
     try:
         task_set = TaskSet(tuple(tasks), tuple(str(task_id) for task_id in completed))
-        state = KernelState(phase, status).select_next_task(task_set)
+        if requested_description:
+            matches = [
+                task
+                for task in task_set.ready_tasks()
+                if task.get("phase") == phase and str(task.get("description", "")) == requested_description
+            ]
+            if not matches:
+                return _blocked(
+                    f"Requested task is not ready in phase {phase}: {requested_description}"
+                )
+            if len(matches) > 1:
+                return _blocked(f"Multiple ready tasks match description: {requested_description}")
+            state = KernelState(phase, status, matches[0])
+        else:
+            state = KernelState(phase, status).select_next_task(task_set)
         if state.get_next_task() is not None and state.current_status == "pending":
             state = state.start_task()
         return resolve_execution(state)
