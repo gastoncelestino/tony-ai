@@ -26,21 +26,32 @@ import type { KernelBoundaryRequest, KernelBoundaryResponse, KernelExecutionOrde
 const execFileAsync = promisify(execFile)
 const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
 const BOOTSTRAP_DESCRIPTION = "decompose task graph"
-const BOOTSTRAP_PROMPT = `You are Tony's task-graph decomposition subagent. This is the bootstrap step of a new execution session.
 
-Do not perform the requested work yourself and do not write project files. Your only job is to inspect enough project context to decompose the user's overall objective into a useful executable TaskSet for other subagents.
+function bootstrapPrompt(originalDescription: string, originalPrompt: string): string {
+  return `You are Tony's task-graph decomposition subagent. This is the bootstrap step of a new execution session.
+
+Do not perform the requested work yourself and do not write project files. Your only job is to inspect enough project context to decompose the objective below into a useful executable TaskSet for other subagents.
+
+ORIGINAL TASK DESCRIPTION:
+${originalDescription || "(not provided)"}
+
+ORIGINAL TASK PROMPT / OBJECTIVE:
+${originalPrompt || "(not provided)"}
 
 Return ONLY valid JSON wrapped in <task_result> tags, with this exact top-level shape:
 <task_result>{"tasks":[{"id":"unique-id","description":"unique executable task description","phase":"phase-name","dependencies":["other-task-id"],"files":["optional/path"]}]}</task_result>
 
 Rules:
+- The task list must not be empty. If the objective is broad, decompose it into several genuinely atomic tasks.
 - Create multiple genuinely atomic tasks when the objective contains independent work.
 - Each task must be small enough for one delegated subagent to execute without requiring the orchestrator to repeat its investigation.
 - Use dependencies only when a task truly requires another task's result.
 - Prefer parallel independent tasks over one large serial chain.
 - Descriptions must be unique, concrete, and directly actionable.
+- Every task must represent work required by the original objective; do not invent unrelated work.
 - Do not include the reserved bootstrap task.
 - Do not add commentary before or after the JSON.`
+}
 
 class KernelBlockedError extends Error {
   constructor(message: string) {
@@ -216,9 +227,11 @@ async function taskExecuteBeforeHook(
   try {
     let provided = await provider.getContext(input)
     if (provided.kind !== "available" && provided.reason === "SDD state unavailable") {
+      const originalDescription = typeof output.args.description === "string" ? output.args.description.trim() : ""
+      const originalPrompt = typeof output.args.prompt === "string" ? output.args.prompt.trim() : ""
       debugLog("bootstrap initialization started", {
         ...details,
-        originalDescription: output.args.description,
+        originalDescription,
         originalCommand: output.args.command,
       })
       await prepareBootstrap(directory, input.sessionID)
@@ -228,7 +241,7 @@ async function taskExecuteBeforeHook(
       // delegation itself; the original call must not be allowed to execute
       // without a canonical TaskSet.
       output.args.description = BOOTSTRAP_DESCRIPTION
-      output.args.prompt = BOOTSTRAP_PROMPT
+      output.args.prompt = bootstrapPrompt(originalDescription, originalPrompt)
       output.args.subagent_type = "explore"
       output.args.command = BOOTSTRAP_COMMAND
 
