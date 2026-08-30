@@ -71,11 +71,12 @@ Return ONLY valid JSON wrapped in <task_result> tags, with this exact top-level 
 <task_result>{"tasks":[{"id":"unique-id","description":"unique executable task description","phase":"phase-name","dependencies":["other-task-id"],"files":["optional/path"]}]}</task_result>
 
 Decomposition rules:
-- The task list MUST contain at least 2 tasks for any non-trivial objective and normally 3-8 tasks.
+- The task list MUST contain at least 2 tasks for any non-trivial objective and normally 8-20 tasks when the objective has several numbered requirements.
+- Treat every user-written numbered step as a candidate objective, not as an atomic task. Split it whenever it contains multiple inspections, decisions, deliverables, validations, or independent tool actions.
 - Every task must be genuinely atomic: one bounded action with one clear result that a single delegated subagent can complete without further decomposition.
 - Do not create umbrella tasks such as "analyze architecture", "implement feature", "document system", or "validate everything". Split those into concrete file/component-level actions.
 - Each task description must say what to inspect, change, test, or produce, not merely name a topic.
-- Prefer independent tasks in parallel. Add dependencies only when the output of one task is actually required by another.
+- Prefer independent tasks in parallel. Add dependencies only when the output of one task is actually required by another. Preserve real dependencies from the objective, but never make every task depend on a large umbrella task.
 - Keep each task small enough to finish in one focused delegation; if a task would require several unrelated tool calls or multiple phases of work, split it.
 - Every task must be directly required by the original objective. Do not invent unrelated cleanup, documentation, tests, or refactors unless the objective requires them.
 - Include relevant file paths when they are known from inspection, but do not modify those files during bootstrap.

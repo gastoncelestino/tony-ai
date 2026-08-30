@@ -33,7 +33,11 @@ def resolve_boundary(request: Mapping[str, object]) -> dict:
             matches = [
                 task
                 for task in task_set.ready_tasks()
-                if task.get("phase") == phase and str(task.get("description", "")) == requested_description
+                if task.get("phase") == phase
+                and (
+                    str(task.get("id", "")) == requested_description
+                    or str(task.get("description", "")) == requested_description
+                )
             ]
             if not matches:
                 return _blocked(
