@@ -71,7 +71,7 @@ async function authorizeExecution(
   input: ExecutionRequest,
   provider: ReturnType<typeof createKernelContextProvider>,
 ): Promise<KernelExecutionOrder> {
-  if (input.tool !== "Task") {
+  if (input.tool.toLowerCase() !== "task") {
     throw new KernelUnavailableError(
       "[Tony Kernel] Execution authorization is not implemented for this runtime boundary",
     )
@@ -155,7 +155,7 @@ async function taskExecuteBeforeHook(
   console.error("[TONY DEBUG] tool.execute.before hook received", details)
   debugLog("tool.execute.before hook received", details)
 
-  if (input.tool !== "Task") return
+  if (input.tool.toLowerCase() !== "task") return
 
   console.error("[TONY DEBUG] tool.execute.before", details)
   debugLog("tool.execute.before", details)
@@ -193,7 +193,7 @@ function taskExecuteAfterHook(
   observations: ReturnType<typeof createExecutionObservationStore>,
   debugLog: ReturnType<typeof createDebugLogger>,
 ): void {
-  if (input.tool !== "Task") return
+  if (input.tool.toLowerCase() !== "task") return
 
   try {
     const result = normalizeResult(output)
