@@ -247,9 +247,9 @@ function taskExecuteAfterHook(
 }
 
 const TonyKernelPlugin: Plugin = async ({ directory }) => {
-  const provider = createKernelContextProvider(directory)
-  const observations = createExecutionObservationStore()
   const debugLog = createDebugLogger(directory)
+  const provider = createKernelContextProvider(directory, { debugLog })
+  const observations = createExecutionObservationStore()
 
   debugLog("plugin loaded", {
     message: "Kernel execution boundary is active and fail-closed",
