@@ -88,3 +88,42 @@ class TaskSetPersistence:
         if state is None:
             return None
         return self._validate_state(state), state
+
+    def load_for_context(
+        self, *, project_id: str, session_id: str
+    ) -> tuple[TaskSet, dict[str, Any]] | None:
+        """Load session state, falling back to the project's active SDD state.
+
+        OpenCode may issue a Task execution from a session different from the
+        session that created the current SDD/TaskSet state. The workflow state
+        is project-scoped for execution authorization, while session_id is
+        still used as the preferred exact lookup and correlation key.
+        """
+        exact = self.load(project_id=project_id, session_id=session_id)
+        if exact is not None:
+            return exact
+
+        module = self._store_module()
+        try:
+            conn = module.connect(self.db_path)
+            try:
+                module.init_sdd_state(conn)
+                row = conn.execute(
+                    "SELECT project_id, session_id, change_id, phase, status, tasks_json, "
+                    "completed_json, version, updated_at "
+                    "FROM sdd_state WHERE project_id=? "
+                    "AND status NOT IN ('completed', 'archived', 'cancelled') "
+                    "ORDER BY updated_at DESC, version DESC LIMIT 1",
+                    (project_id,),
+                ).fetchone()
+            finally:
+                conn.close()
+
+            if row is None:
+                return None
+
+            state = module._row_to_state(row)
+        except Exception as exc:
+            raise TaskSetPersistenceError(f"Failed to read active project TaskSet: {exc}") from exc
+
+        return self._validate_state(state), state
