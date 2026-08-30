@@ -127,6 +127,7 @@ function createDebugLogger(directory: string) {
     try {
       appendFileSync(logPath, `${JSON.stringify(entry)}\n`, "utf8")
     } catch (error) {
+      // Debug logging must never change execution semantics.
       console.error("[TONY DEBUG] unable to write debug log", { logPath, error })
     }
   }
@@ -152,26 +153,17 @@ async function taskExecuteBeforeHook(
     callID: input.callID,
   }
 
-  console.error("[TONY DEBUG] tool.execute.before hook received", details)
   debugLog("tool.execute.before hook received", details)
 
   if (input.tool.toLowerCase() !== "task") return
 
-  console.error("[TONY DEBUG] tool.execute.before", details)
   debugLog("tool.execute.before", details)
-
   debugLog("authorizeExecution started", details)
-  console.error("[TONY DEBUG] authorizeExecution started", details)
 
   let order: KernelExecutionOrder
   try {
     order = await authorizeExecution(executionRequest(input, output.args), provider)
     debugLog("authorizeExecution succeeded", {
-      ...details,
-      taskId: order.task_id,
-      phase: order.phase,
-    })
-    console.error("[TONY DEBUG] authorizeExecution succeeded", {
       ...details,
       taskId: order.task_id,
       phase: order.phase,
@@ -182,19 +174,10 @@ async function taskExecuteBeforeHook(
       error: error instanceof Error ? error.message : String(error),
       errorName: error instanceof Error ? error.name : typeof error,
     })
-    console.error("[TONY DEBUG] authorizeExecution failed", {
-      ...details,
-      error,
-    })
     throw error
   }
 
   debugLog("observations.start started", {
-    ...details,
-    taskId: order.task_id,
-    phase: order.phase,
-  })
-  console.error("[TONY DEBUG] observations.start started", {
     ...details,
     taskId: order.task_id,
     phase: order.phase,
@@ -214,20 +197,11 @@ async function taskExecuteBeforeHook(
       taskId: order.task_id,
       phase: order.phase,
     })
-    console.error("[TONY DEBUG] observations.start succeeded", {
-      ...details,
-      taskId: order.task_id,
-      phase: order.phase,
-    })
   } catch (error) {
     debugLog("observations.start failed", {
       ...details,
       error: error instanceof Error ? error.message : String(error),
       errorName: error instanceof Error ? error.name : typeof error,
-    })
-    console.error("[TONY DEBUG] observations.start failed", {
-      ...details,
-      error,
     })
     throw error
   }
@@ -251,24 +225,17 @@ function taskExecuteAfterHook(
       ? observations.fail(input.callID, result)
       : observations.succeed(input.callID, result)
 
-    const details = {
+    debugLog("tool.execute.after", {
       tool: input.tool,
       sessionID: input.sessionID,
       callID: input.callID,
       status: finished.status,
-    }
-
-    console.error("[TONY DEBUG] tool.execute.after", details)
-    debugLog("tool.execute.after", details)
+    })
   } catch (error) {
     // OpenCode's normal tool.execute.after hook is a successful-result
     // surface. A tool exception may never reach this hook. Therefore we do
     // not invent a failed Result here; the still-running observation remains
     // eligible to be classified as incomplete by a later reconciliation step.
-    console.error("[TONY DEBUG] execution observation unavailable", {
-      callID: input.callID,
-      error,
-    })
     debugLog("execution observation unavailable", {
       callID: input.callID,
       error: error instanceof Error ? error.message : String(error),
