@@ -28,9 +28,9 @@ const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
 const BOOTSTRAP_DESCRIPTION = "decompose task graph"
 
 function bootstrapPrompt(originalDescription: string, originalPrompt: string): string {
-  return `You are Tony's task-graph decomposition subagent. This is the bootstrap step of a new execution session.
+  return `You are Tony's task-graph decomposition subagent. This is ONLY the bootstrap planning step of a new execution session.
 
-Do not perform the requested work yourself and do not write project files. Your only job is to inspect enough project context to decompose the objective below into a useful executable TaskSet for other subagents.
+Your ONLY output is a machine-readable TaskSet. Do NOT perform the requested work, implement anything, modify files, create files, or create temporary files. Do not use bash, shell commands, write/edit tools, or skills. If repository inspection is necessary, use read/glob only. Never ask for permission to write anything.
 
 ORIGINAL TASK DESCRIPTION:
 ${originalDescription || "(not provided)"}
@@ -41,16 +41,20 @@ ${originalPrompt || "(not provided)"}
 Return ONLY valid JSON wrapped in <task_result> tags, with this exact top-level shape:
 <task_result>{"tasks":[{"id":"unique-id","description":"unique executable task description","phase":"phase-name","dependencies":["other-task-id"],"files":["optional/path"]}]}</task_result>
 
-Rules:
-- The task list must not be empty. If the objective is broad, decompose it into several genuinely atomic tasks.
-- Create multiple genuinely atomic tasks when the objective contains independent work.
-- Each task must be small enough for one delegated subagent to execute without requiring the orchestrator to repeat its investigation.
-- Use dependencies only when a task truly requires another task's result.
-- Prefer parallel independent tasks over one large serial chain.
-- Descriptions must be unique, concrete, and directly actionable.
-- Every task must represent work required by the original objective; do not invent unrelated work.
+Decomposition rules:
+- The task list MUST contain at least 2 tasks for any non-trivial objective and normally 3-8 tasks.
+- Every task must be genuinely atomic: one bounded action with one clear result that a single delegated subagent can complete without further decomposition.
+- Do not create umbrella tasks such as "analyze architecture", "implement feature", "document system", or "validate everything". Split those into concrete file/component-level actions.
+- Each task description must say what to inspect, change, test, or produce, not merely name a topic.
+- Prefer independent tasks in parallel. Add dependencies only when the output of one task is actually required by another.
+- Keep each task small enough to finish in one focused delegation; if a task would require several unrelated tool calls or multiple phases of work, split it.
+- Every task must be directly required by the original objective. Do not invent unrelated cleanup, documentation, tests, or refactors unless the objective requires them.
+- Include relevant file paths when they are known from inspection, but do not modify those files during bootstrap.
+- Use a concrete phase name appropriate to the work (for example exploration, implementation, testing).
+- IDs must be unique, stable, lowercase, and descriptive.
 - Do not include the reserved bootstrap task.
-- Do not add commentary before or after the JSON.`
+- Do not return an empty tasks array.
+- Do not add commentary, markdown fences, explanations, or prose before or after the JSON.`
 }
 
 class KernelBlockedError extends Error {
@@ -242,7 +246,7 @@ async function taskExecuteBeforeHook(
       // without a canonical TaskSet.
       output.args.description = BOOTSTRAP_DESCRIPTION
       output.args.prompt = bootstrapPrompt(originalDescription, originalPrompt)
-      output.args.subagent_type = "explore"
+      output.args.subagent_type = "general"
       output.args.command = BOOTSTRAP_COMMAND
 
       provided = await provider.getContext(input)
@@ -250,6 +254,7 @@ async function taskExecuteBeforeHook(
         ...details,
         delegatedDescription: output.args.description,
         delegatedCommand: output.args.command,
+        delegatedSubagentType: output.args.subagent_type,
       })
     }
     if (provided.kind !== "available") throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
