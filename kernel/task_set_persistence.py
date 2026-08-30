@@ -52,30 +52,10 @@ class TaskSetPersistence:
             raise TaskSetPersistenceError(f"Invalid persisted TaskSet: {exc}") from exc
         return task_set
 
-    def save(
-        self,
-        *,
-        project_id: str,
-        session_id: str,
-        change_id: str,
-        phase: str,
-        status: str,
-        task_set: TaskSet,
-        expected_version: int | None = None,
-    ) -> dict[str, Any]:
+    def save(self, *, project_id: str, session_id: str, change_id: str, phase: str, status: str, task_set: TaskSet, expected_version: int | None = None) -> dict[str, Any]:
         module = self._store_module()
         try:
-            return module.record_sdd_state(
-                project_id=project_id,
-                session_id=session_id,
-                change_id=change_id,
-                phase=phase,
-                status=status,
-                tasks=list(task_set.tasks),
-                completed=list(task_set.completed),
-                expected_version=expected_version,
-                db_path=self.db_path,
-            )
+            return module.record_sdd_state(project_id=project_id, session_id=session_id, change_id=change_id, phase=phase, status=status, tasks=list(task_set.tasks), completed=list(task_set.completed), expected_version=expected_version, db_path=self.db_path)
         except Exception as exc:
             raise TaskSetPersistenceError(f"Failed to persist TaskSet: {exc}") from exc
 
@@ -89,16 +69,8 @@ class TaskSetPersistence:
             return None
         return self._validate_state(state), state
 
-    def load_for_context(
-        self, *, project_id: str, session_id: str
-    ) -> tuple[TaskSet, dict[str, Any]] | None:
-        """Load session state, falling back to the project's active SDD state.
-
-        OpenCode may issue a Task execution from a session different from the
-        session that created the current SDD/TaskSet state. The workflow state
-        is project-scoped for execution authorization, while session_id is
-        still used as the preferred exact lookup and correlation key.
-        """
+    def load_for_context(self, *, project_id: str, session_id: str) -> tuple[TaskSet, dict[str, Any]] | None:
+        """Load exact session state, then the project's active non-terminal state."""
         exact = self.load(project_id=project_id, session_id=session_id)
         if exact is not None:
             return exact
@@ -112,18 +84,15 @@ class TaskSetPersistence:
                     "SELECT project_id, session_id, change_id, phase, status, tasks_json, "
                     "completed_json, version, updated_at "
                     "FROM sdd_state WHERE project_id=? "
-                    "AND status NOT IN ('completed', 'archived', 'cancelled') "
+                    "AND status NOT IN ('completed', 'archived', 'cancelled', 'failed') "
                     "ORDER BY updated_at DESC, version DESC LIMIT 1",
                     (project_id,),
                 ).fetchone()
             finally:
                 conn.close()
-
             if row is None:
                 return None
-
             state = module._row_to_state(row)
         except Exception as exc:
             raise TaskSetPersistenceError(f"Failed to read active project TaskSet: {exc}") from exc
-
         return self._validate_state(state), state

@@ -17,23 +17,20 @@ from kernel.task_set_persistence import TaskSetPersistence, TaskSetPersistenceEr
 BOOTSTRAP_TASK_ID = "__tony_bootstrap_decompose__"
 BOOTSTRAP_DESCRIPTION = "decompose task graph"
 BOOTSTRAP_PHASE = "bootstrap"
+CANONICAL_PHASES = {"explore", "propose", "spec", "design", "tasks", "apply", "verify", "archive"}
 
 
 def prepare(*, project_id: str, session_id: str, db_path: str | None = None) -> dict:
     persistence = TaskSetPersistence(db_path)
     if persistence.load(project_id=project_id, session_id=session_id) is not None:
         raise TaskSetPersistenceError("SDD state already exists")
-    task_set = TaskSet(
-        (
-            {
-                "id": BOOTSTRAP_TASK_ID,
-                "description": BOOTSTRAP_DESCRIPTION,
-                "phase": BOOTSTRAP_PHASE,
-                "dependencies": (),
-                "files": (),
-            },
-        )
-    )
+    task_set = TaskSet(({
+        "id": BOOTSTRAP_TASK_ID,
+        "description": BOOTSTRAP_DESCRIPTION,
+        "phase": BOOTSTRAP_PHASE,
+        "dependencies": (),
+        "files": (),
+    },))
     return persistence.save(
         project_id=project_id,
         session_id=session_id,
@@ -46,7 +43,6 @@ def prepare(*, project_id: str, session_id: str, db_path: str | None = None) -> 
 
 
 def _extract_task_result(raw: str) -> str:
-    """Accept the normal wrapper and the truncated wrapper seen in runtimes."""
     value = raw.strip()
     opening = "<task_result>"
     closing = "</task_result>"
@@ -80,16 +76,24 @@ def _parse_tasks(raw: str) -> list[dict]:
         if description in descriptions:
             raise TaskSetPersistenceError(f"Task descriptions must be unique: {description}")
         descriptions.add(description)
+        phase = item["phase"].strip()
+        if phase not in CANONICAL_PHASES:
+            raise TaskSetPersistenceError(
+                f"Invalid task phase '{phase}'; use one of: {', '.join(sorted(CANONICAL_PHASES))}"
+            )
         dependencies = item.get("dependencies")
         if not isinstance(dependencies, list) or not all(isinstance(dep, str) for dep in dependencies):
             raise TaskSetPersistenceError("Every decomposed task needs a string dependencies array")
         files = item.get("files", ())
         if not isinstance(files, list) or not all(isinstance(path, str) for path in files):
             raise TaskSetPersistenceError("Task files must be a string array")
+        task_id = item["id"].strip()
+        if not task_id:
+            raise TaskSetPersistenceError("Every decomposed task needs a non-empty id")
         task = {
-            "id": item["id"].strip(),
+            "id": task_id,
             "description": description,
-            "phase": item["phase"].strip(),
+            "phase": phase,
             "dependencies": tuple(dependencies),
             "files": tuple(files),
         }
@@ -99,13 +103,7 @@ def _parse_tasks(raw: str) -> list[dict]:
     return tasks
 
 
-def complete(
-    *,
-    project_id: str,
-    session_id: str,
-    decomposition: str,
-    db_path: str | None = None,
-) -> dict:
+def complete(*, project_id: str, session_id: str, decomposition: str, db_path: str | None = None) -> dict:
     persistence = TaskSetPersistence(db_path)
     loaded = persistence.load(project_id=project_id, session_id=session_id)
     if loaded is None:
@@ -142,11 +140,7 @@ def complete(
         task_set=task_set,
         expected_version=persisted["version"],
     )
-    return {
-        "version": saved["version"],
-        "phase": saved["phase"],
-        "tasks": [task["id"] for task in task_set.tasks],
-    }
+    return {"version": saved["version"], "phase": saved["phase"], "tasks": [task["id"] for task in task_set.tasks]}
 
 
 def main() -> int:
@@ -166,12 +160,7 @@ def main() -> int:
         else:
             if args.decomposition is None:
                 parser.error("--decomposition is required with --complete")
-            result = complete(
-                project_id=args.project,
-                session_id=args.session_id,
-                decomposition=args.decomposition,
-                db_path=args.db_path,
-            )
+            result = complete(project_id=args.project, session_id=args.session_id, decomposition=args.decomposition, db_path=args.db_path)
         print(json.dumps({"ok": True, "result": result}, ensure_ascii=False))
         return 0
     except (TaskSetPersistenceError, KeyError, TypeError, ValueError) as exc:

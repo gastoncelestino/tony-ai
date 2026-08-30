@@ -27,7 +27,18 @@ const execFileAsync = promisify(execFile)
 const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
 const BOOTSTRAP_DESCRIPTION = "decompose task graph"
 const BOOTSTRAP_READ_ONLY_TOOLS = new Set(["read", "glob"])
+const ROOT_COORDINATION_BLOCKED_TOOLS = new Set([
+  "read",
+  "glob",
+  "grep",
+  "bash",
+  "write",
+  "edit",
+  "apply_patch",
+  "skill",
+])
 const bootstrapInFlight = new Map<string, number>()
+const rootSessionByDirectory = new Map<string, string>()
 
 function bootstrapPrompt(originalDescription: string, originalPrompt: string): string {
   return `You are Tony's task-graph decomposition subagent. This is ONLY the bootstrap planning step of a new execution session.
@@ -52,7 +63,8 @@ Decomposition rules:
 - Keep each task small enough to finish in one focused delegation; if a task would require several unrelated tool calls or multiple phases of work, split it.
 - Every task must be directly required by the original objective. Do not invent unrelated cleanup, documentation, tests, or refactors unless the objective requires them.
 - Include relevant file paths when they are known from inspection, but do not modify those files during bootstrap.
-- Use a concrete phase name appropriate to the work (for example exploration, implementation, testing).
+- The phase field MUST use one of these canonical Kernel phases: explore, propose, spec, design, tasks, apply, verify, archive.
+- For repository examination use phase "explore"; do not invent variants such as "exploration".
 - IDs must be unique, stable, lowercase, and descriptive.
 - Do not include the reserved bootstrap task.
 - Do not return an empty tasks array.
@@ -79,17 +91,11 @@ interface ExecutionRequest {
   arguments: Record<string, unknown>
 }
 
-function executionRequest(
-  input: { sessionID: string; tool: string },
-  args: Record<string, unknown>,
-): ExecutionRequest {
+function executionRequest(input: { sessionID: string; tool: string }, args: Record<string, unknown>): ExecutionRequest {
   return { sessionID: input.sessionID, tool: input.tool, arguments: args }
 }
 
-function validateExecutionOrder(
-  request: KernelBoundaryRequest,
-  response: KernelBoundaryResponse,
-): KernelExecutionOrder {
+function validateExecutionOrder(request: KernelBoundaryRequest, response: KernelBoundaryResponse): KernelExecutionOrder {
   if (!response.allowed) throw new KernelBlockedError(response.reason)
   const order = response.execution_order
   const task = request.tasks.find((candidate) => candidate.id === order.task_id)
@@ -99,8 +105,9 @@ function validateExecutionOrder(
   return order
 }
 
-function beginBootstrap(directory: string): void {
+function beginBootstrap(directory: string, sessionID: string): void {
   bootstrapInFlight.set(directory, (bootstrapInFlight.get(directory) ?? 0) + 1)
+  rootSessionByDirectory.set(directory, sessionID)
 }
 
 function endBootstrap(directory: string): void {
@@ -122,18 +129,56 @@ function assertBootstrapToolAllowed(directory: string, tool: string): void {
   }
 }
 
-async function authorizeExecution(
-  input: ExecutionRequest,
+async function assertRootSessionDelegates(
+  directory: string,
+  sessionID: string,
+  tool: string,
   provider: ReturnType<typeof createKernelContextProvider>,
-): Promise<KernelExecutionOrder> {
-  if (input.tool.toLowerCase() !== "task") {
-    throw new KernelUnavailableError("[Tony Kernel] Execution authorization is not implemented for this runtime boundary")
+): Promise<void> {
+  if (inputToolIsTask(tool) || rootSessionByDirectory.get(directory) !== sessionID) return
+  if (!ROOT_COORDINATION_BLOCKED_TOOLS.has(tool.toLowerCase())) return
+
+  const provided = await provider.getContext({ sessionID, tool, arguments: {} })
+  if (provided.kind !== "available") return
+  if (["completed", "archived", "cancelled"].includes(provided.context.status)) return
+
+  throw new KernelBlockedError(
+    `[Tony Kernel] Work tool '${tool}' is blocked in the orchestrator session; delegate the ready TaskSet task with task() instead`,
+  )
+}
+
+function inputToolIsTask(tool: string): boolean {
+  return tool.toLowerCase() === "task"
+}
+
+async function runPython(
+  directory: string,
+  script: string,
+  args: string[],
+): Promise<{ ok?: boolean; result?: Record<string, unknown>; reason?: string }> {
+  const pythonCommand = process.env.TONYMEM_PYTHON ?? "python3"
+  const dbPath = process.env.LOCAL_MEMORY_DB ?? join(directory, "local-memory", "memory.db")
+  const childEnv = { ...process.env }
+  delete childEnv.LOCAL_MEMORY_DB
+
+  try {
+    const completed = await execFileAsync(
+      pythonCommand,
+      [script, ...args, "--db-path", dbPath],
+      { cwd: directory, timeout: 5000, maxBuffer: 1024 * 1024, env: childEnv },
+    )
+    return JSON.parse(completed.stdout) as { ok?: boolean; result?: Record<string, unknown>; reason?: string }
+  } catch (error) {
+    const stdout = error && typeof error === "object" && "stdout" in error ? String((error as { stdout?: unknown }).stdout ?? "") : ""
+    if (stdout.trim()) {
+      try {
+        return JSON.parse(stdout) as { ok?: boolean; result?: Record<string, unknown>; reason?: string }
+      } catch {
+        // Fall through and preserve the subprocess failure below.
+      }
+    }
+    throw error
   }
-  const provided = await provider.getContext(input)
-  if (provided.kind !== "available") throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
-  const adapted = adaptTaskExecutionContext(input, provided.context)
-  if (adapted.kind !== "ready") throw new KernelUnavailableError(`[Tony Kernel] ${adapted.reason}`)
-  return validateExecutionOrder(adapted.request, await callKernelBoundary(adapted.request))
 }
 
 function normalizeResult(value: unknown): { title: string; output: string; metadata: unknown } {
@@ -165,27 +210,6 @@ function createDebugLogger(directory: string) {
   }
 }
 
-async function runPython(
-  directory: string,
-  script: string,
-  args: string[],
-): Promise<{ ok?: boolean; result?: Record<string, unknown>; reason?: string }> {
-  const pythonCommand = process.env.TONYMEM_PYTHON ?? "python3"
-  const dbPath = process.env.LOCAL_MEMORY_DB ?? join(directory, "local-memory", "memory.db")
-  const childEnv = { ...process.env }
-  delete childEnv.LOCAL_MEMORY_DB
-  const completed = await execFileAsync(
-    pythonCommand,
-    [script, ...args, "--db-path", dbPath],
-    { cwd: directory, timeout: 5000, maxBuffer: 1024 * 1024, env: childEnv },
-  )
-  try {
-    return JSON.parse(completed.stdout) as { ok?: boolean; result?: Record<string, unknown>; reason?: string }
-  } catch {
-    throw new Error("Invalid Tony Kernel Python response")
-  }
-}
-
 async function prepareBootstrap(directory: string, sessionID: string): Promise<void> {
   const script = process.env.TONYMEM_TASKSET_BOOTSTRAP_SCRIPT ?? `${directory}/kernel/task_set_bootstrap.py`
   const payload = await runPython(directory, script, ["--prepare", "--project", directory, "--session-id", sessionID])
@@ -197,21 +221,11 @@ function extractTaskResult(output: string): string {
   return (match?.[1] ?? output).trim()
 }
 
-async function completeBootstrap(
-  directory: string,
-  sessionID: string,
-  output: string,
-): Promise<string> {
+async function completeBootstrap(directory: string, sessionID: string, output: string): Promise<string> {
   const script = process.env.TONYMEM_TASKSET_BOOTSTRAP_SCRIPT ?? `${directory}/kernel/task_set_bootstrap.py`
   const decomposition = extractTaskResult(output)
   const payload = await runPython(directory, script, [
-    "--complete",
-    "--project",
-    directory,
-    "--session-id",
-    sessionID,
-    "--decomposition",
-    decomposition,
+    "--complete", "--project", directory, "--session-id", sessionID, "--decomposition", decomposition,
   ])
   if (payload.ok !== true) throw new Error(payload.reason ?? "TaskSet bootstrap completion failed")
   return typeof payload.result?.version === "number" ? String(payload.result.version) : "unknown"
@@ -226,15 +240,7 @@ async function completeSuccessfulTask(
   const script = process.env.TONYMEM_TASKSET_COMPLETION_SCRIPT ?? `${directory}/kernel/task_completion.py`
   const evidence = JSON.stringify([{ kind: "opencode-task-result", title: result.title, output: result.output, metadata: result.metadata }])
   const payload = await runPython(directory, script, [
-    "--complete",
-    "--project",
-    directory,
-    "--session-id",
-    sessionID,
-    "--task-id",
-    taskId,
-    "--evidence",
-    evidence,
+    "--complete", "--project", directory, "--session-id", sessionID, "--task-id", taskId, "--evidence", evidence,
   ])
   if (payload.ok !== true) throw new Error(payload.reason ?? "TaskSet completion failed")
   return typeof payload.result?.version === "number" ? String(payload.result.version) : "unknown"
@@ -251,10 +257,8 @@ async function taskExecuteBeforeHook(
   const details = { tool: input.tool, sessionID: input.sessionID, callID: input.callID }
   debugLog("tool.execute.before hook received", details)
 
-  // Once bootstrap delegation starts, the whole runtime boundary is locked to
-  // repository reads. This is a Kernel invariant, not merely a prompt rule:
-  // nested task/skill/shell/write/edit calls cannot escape the bootstrap phase.
   assertBootstrapToolAllowed(directory, input.tool)
+  await assertRootSessionDelegates(directory, input.sessionID, input.tool, provider)
 
   if (input.tool.toLowerCase() !== "task") return
   debugLog("tool.execute.before", { ...details, args: output.args })
@@ -265,24 +269,14 @@ async function taskExecuteBeforeHook(
     if (provided.kind !== "available" && provided.reason === "SDD state unavailable") {
       const originalDescription = typeof output.args.description === "string" ? output.args.description.trim() : ""
       const originalPrompt = typeof output.args.prompt === "string" ? output.args.prompt.trim() : ""
-      debugLog("bootstrap initialization started", {
-        ...details,
-        originalDescription,
-        originalCommand: output.args.command,
-      })
+      debugLog("bootstrap initialization started", { ...details, originalDescription, originalCommand: output.args.command })
       await prepareBootstrap(directory, input.sessionID)
-
-      // OpenCode's before-hook contract gives us a mutable args object. Mutate
-      // it in place so the very first task() call becomes the bootstrap
-      // delegation itself; the original call must not be allowed to execute
-      // without a canonical TaskSet.
       output.args.description = BOOTSTRAP_DESCRIPTION
       output.args.prompt = bootstrapPrompt(originalDescription, originalPrompt)
       output.args.subagent_type = "explore"
       output.args.command = BOOTSTRAP_COMMAND
-      beginBootstrap(directory)
+      beginBootstrap(directory, input.sessionID)
       bootstrapStarted = true
-
       provided = await provider.getContext(input)
       debugLog("bootstrap initialization succeeded", {
         ...details,
@@ -320,17 +314,8 @@ async function taskExecuteAfterHook(
     const finished = resultIndicatesFailure(result.metadata)
       ? observations.fail(input.callID, result)
       : observations.succeed(input.callID, result)
-
-    debugLog("tool.execute.after", {
-      tool: input.tool,
-      sessionID: input.sessionID,
-      callID: input.callID,
-      taskId: finished.taskId,
-      status: finished.status,
-    })
-
+    debugLog("tool.execute.after", { tool: input.tool, sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId, status: finished.status })
     if (finished.status !== "succeeded") return
-
     bootstrapStarted = finished.taskId === "__tony_bootstrap_decompose__"
     debugLog("task completion started", { sessionID: input.sessionID, callID: input.callID, taskId: finished.taskId })
     const version = bootstrapStarted
