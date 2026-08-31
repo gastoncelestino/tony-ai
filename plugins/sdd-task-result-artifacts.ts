@@ -1,15 +1,11 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { appendFileSync } from "node:fs"
-import path from "node:path"
 
-const DEBUG_LOG_PATH = process.env.TONY_DEBUG_LOG ?? path.join(process.cwd(), "tony-debug.log")
+const DEBUG_LOG_PATH = process.platform === "win32" ? "NUL" : "/dev/null"
 function debugLog(message: string, details?: Record<string, unknown>) {
   try {
     const suffix = details ? ` ${JSON.stringify(details)}` : ""
-    appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] [SDD_ARTIFACTS] ${message}${suffix}\n`, "utf8")
-  } catch (err) {
-    console.error("[sdd-task-result-artifacts] debug log failed:", err)
-  }
+    require("node:fs").appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] [SDD_ARTIFACTS] ${message}${suffix}\n`, "utf8")
+  } catch {}
 }
 
 const TASK_RESULT = /^<task id="[^"\r\n]+" state="completed">\n<task_result>\n([\s\S]*?)\n<\/task_result>\n<\/task>$/
