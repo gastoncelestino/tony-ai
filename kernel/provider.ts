@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { join } from "node:path"
-import { isKernelContext, type KernelContext, type KernelBoundaryRequest } from "./protocol"
+import { isKernelContext, type KernelContext } from "./protocol"
 
 const execFileAsync = promisify(execFile)
 
@@ -29,7 +29,8 @@ export function createKernelContextProvider(projectDirectory: string, options: K
   return {
     async getContext(input: { sessionID: string; tool: string }): Promise<KernelContextProviderResult> {
       if (input.tool.toLowerCase() !== "task") return { kind: "unavailable", reason: "Kernel context requested for non-Task tool" }
-      const env = { ...process.env }; delete env.LOCAL_MEMORY_DB
+      const env = { ...process.env }
+      delete env.LOCAL_MEMORY_DB
       try {
         const result = await execFileAsync(pythonCommand, [contextScript, "--get", "--project", projectDirectory, "--session-id", input.sessionID, "--db-path", dbPath], {
           cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024, env,
@@ -42,5 +43,3 @@ export function createKernelContextProvider(projectDirectory: string, options: K
     },
   }
 }
-
-export type { KernelBoundaryRequest }
