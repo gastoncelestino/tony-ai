@@ -18,6 +18,7 @@ import { fileURLToPath } from "url"
 
 const PLUGIN_DIR = path.dirname(fileURLToPath(import.meta.url))
 const DB_PATH = process.env.LOCAL_MEMORY_DB ?? path.join(PLUGIN_DIR, "..", "local-memory", "memory.db")
+const DEBUG_LOG_PATH = process.env.TONY_DEBUG_LOG ?? path.join(PLUGIN_DIR, "..", "tony-debug.log")
 
 const TONYMEM_TOOLS = new Set([
   "mem_search",
@@ -32,6 +33,16 @@ const TONYMEM_TOOLS = new Set([
 ])
 
 let db: Database | null = null
+
+function debugLog(category: string, message: string, details?: Record<string, unknown>): void {
+  try {
+    const suffix = details ? ` ${JSON.stringify(details)}` : ""
+    const line = `[${new Date().toISOString()}] [${category}] ${message}${suffix}\n`
+    Bun.write(DEBUG_LOG_PATH, line, { create: true, append: true })
+  } catch (err) {
+    console.error("[tonymem] failed to write debug log:", err)
+  }
+}
 
 function getDb(): Database | null {
   if (db) return db
@@ -72,9 +83,11 @@ function getDb(): Database | null {
       END;
     `)
     db = instance
+    debugLog("TONYMEM", "database opened", { path: DB_PATH })
     return db
   } catch (err) {
     console.error("[tonymem] failed to open DB:", err)
+    debugLog("ERROR", "failed to open database", { error: String(err) })
     return null
   }
 }
@@ -128,6 +141,7 @@ function upsertObservation(opts: {
         timestamp,
         timestamp,
       )
+    debugLog("TONYMEM", "observation upserted", { project: opts.project, type: opts.type ?? "manual", title: opts.title, topicKey: opts.topicKey })
     return
   }
 
@@ -146,6 +160,7 @@ function upsertObservation(opts: {
       timestamp,
       timestamp,
     )
+  debugLog("TONYMEM", "observation inserted", { project: opts.project, type: opts.type ?? "manual", title: opts.title })
 }
 
 function extractProjectName(directory: string): string {
@@ -157,6 +172,8 @@ export const TonyMem: Plugin = async (ctx) => {
   const oldProject = ctx.directory.split("/").pop() ?? "unknown"
   const project = extractProjectName(ctx.directory)
 
+  debugLog("PLUGIN", "TonyMem initialized", { project, directory: ctx.directory })
+
   const toolCounts = new Map<string, number>()
   const lastNudgeTime = new Map<string, number>()
   const knownSessions = new Set<string>()
@@ -166,8 +183,7 @@ export const TonyMem: Plugin = async (ctx) => {
     if (!sessionId || knownSessions.has(sessionId)) return
     if (subAgentSessions.has(sessionId)) return
     knownSessions.add(sessionId)
-    // TonyMem has no sessions table. Session tracking is intentionally kept
-    // in-memory, matching the lifecycle role of the original Engram adapter.
+    debugLog("SESSION", "session ensured", { sessionID: sessionId })
   }
 
   getDb()
@@ -175,13 +191,16 @@ export const TonyMem: Plugin = async (ctx) => {
   if (oldProject !== project) {
     try {
       getDb()?.prepare("UPDATE observations SET project = ? WHERE project = ?").run(project, oldProject)
-    } catch {
-      // Memory must never break OpenCode startup.
+      debugLog("TONYMEM", "project migration checked", { from: oldProject, to: project })
+    } catch (err) {
+      debugLog("ERROR", "project migration failed", { error: String(err) })
     }
   }
 
   return {
     event: async ({ event }) => {
+      debugLog("EVENT", event.type, { properties: event.properties })
+
       if (event.type === "session.created") {
         const info = (event.properties as any)?.info
         const sessionId = info?.id
@@ -189,16 +208,20 @@ export const TonyMem: Plugin = async (ctx) => {
         const title: string = info?.title ?? ""
         const isSubAgent = !!parentID || title.endsWith(" subagent)")
 
+        debugLog("SESSION", "session.created", { sessionID: sessionId, parentID, title, isSubAgent })
+
         if (sessionId && !isSubAgent) {
           await ensureSession(sessionId)
         } else if (sessionId && isSubAgent) {
           subAgentSessions.add(sessionId)
+          debugLog("SESSION", "subagent session registered", { sessionID: sessionId, parentID })
         }
       }
 
       if (event.type === "session.deleted") {
         const info = (event.properties as any)?.info
         const sessionId = info?.id
+        debugLog("SESSION", "session.deleted", { sessionID: sessionId })
         if (sessionId) {
           toolCounts.delete(sessionId)
           knownSessions.delete(sessionId)
@@ -209,7 +232,11 @@ export const TonyMem: Plugin = async (ctx) => {
     },
 
     "chat.message": async (input, output) => {
-      if (subAgentSessions.has(input.sessionID)) return
+      debugLog("CHAT", "chat.message", { sessionID: input.sessionID, parts: output.parts.length })
+      if (subAgentSessions.has(input.sessionID)) {
+        debugLog("CHAT", "ignored subagent message", { sessionID: input.sessionID })
+        return
+      }
 
       const sessionId = input.sessionID
       const content = output.parts
@@ -224,6 +251,8 @@ export const TonyMem: Plugin = async (ctx) => {
 
       const finalContent = content || fallback
 
+      debugLog("CHAT", "message content resolved", { sessionID: sessionId, length: finalContent.length })
+
       if (finalContent.length > 10) {
         await ensureSession(sessionId)
         upsertObservation({
@@ -236,18 +265,26 @@ export const TonyMem: Plugin = async (ctx) => {
     },
 
     "tool.execute.after": async (input, output) => {
-      if (TONYMEM_TOOLS.has(input.tool.toLowerCase())) return
+      debugLog("TOOL", "tool.execute.after", { sessionID: input.sessionID, tool: input.tool, callID: input.callID })
+      if (TONYMEM_TOOLS.has(input.tool.toLowerCase())) {
+        debugLog("TOOL", "ignored TonyMem tool", { sessionID: input.sessionID, tool: input.tool, callID: input.callID })
+        return
+      }
 
       const sessionId = input.sessionID
       if (sessionId) {
         await ensureSession(sessionId)
-        toolCounts.set(sessionId, (toolCounts.get(sessionId) ?? 0) + 1)
+        const count = (toolCounts.get(sessionId) ?? 0) + 1
+        toolCounts.set(sessionId, count)
+        debugLog("TOOL", "tool count updated", { sessionID: sessionId, tool: input.tool, count })
       }
 
       if (input.tool.toLowerCase() === "task") {
         const outputText = typeof output === "string"
           ? output
           : JSON.stringify(output ?? "")
+
+        debugLog("TASK", "Task result received", { sessionID: sessionId, callID: input.callID, length: outputText.length })
 
         if (outputText.length > 10 && sessionId && !subAgentSessions.has(sessionId)) {
           upsertObservation({
@@ -261,13 +298,11 @@ export const TonyMem: Plugin = async (ctx) => {
     },
 
     "experimental.chat.system.transform": async (_input, _output) => {
-      // Intentionally empty in the lifecycle baseline. No memory instructions
-      // are injected into model context. Kernel will own policy later.
+      debugLog("LIFECYCLE", "experimental.chat.system.transform")
     },
 
     "experimental.session.compacting": async (_input, _output) => {
-      // Lifecycle hook intentionally preserved as a no-op baseline.
-      // Context recovery/persistence will be added incrementally later.
+      debugLog("LIFECYCLE", "experimental.session.compacting")
     },
   }
 }
