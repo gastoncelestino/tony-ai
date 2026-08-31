@@ -10,9 +10,21 @@ export type Locale = "es" | "en";
 const translations = {
   es: {
     subagents: "Subagentes",
+    context: "Contexto",
+    available: "Disponibles",
+    used: "Usado",
+    input: "Entrada",
+    output: "Salida",
+    spent: "",
   },
   en: {
     subagents: "Subagents",
+    context: "Context",
+    available: "available",
+    used: "used",
+    input: "Input",
+    output: "Output",
+    spent: "spent",
   },
 } as const;
 
@@ -24,8 +36,13 @@ let _cachedLocale: Locale | null = null;
 /**
  * Detects the system locale using Intl.DateTimeFormat.
  * Falls back to English if the system locale is not supported.
+ * An explicit OPENCODE_SUBAGENT_STATUSLINE_LOCALE env var always wins,
+ * since LANG/LC_ALL are frequently unset or wrong under WSL/containers.
  */
 export function detectSystemLocale(): Locale {
+  const forced = process.env.OPENCODE_SUBAGENT_STATUSLINE_LOCALE?.toLowerCase();
+  if (forced === "es" || forced === "en") return forced;
+
   // Check common environment variables as first fallback
   const envLang =
     process.env.LANG ??
@@ -36,7 +53,7 @@ export function detectSystemLocale(): Locale {
   const lang = envLang.toLowerCase();
 
   if (lang.startsWith("es")) return "es";
-  return "en"; // default fallback
+  return "es";
 }
 
 /**

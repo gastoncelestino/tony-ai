@@ -37,9 +37,11 @@ import {
 import { readOpenCodeLogFileIfSmall } from "./logs.js";
 import {
   byPriority,
+  formatContextUsageLines,
   formatDuration,
   renderStatusLine,
   visibleSubagentWorkItems,
+  type ContextUsageSnapshot,
 } from "./render.js";
 import {
   canSafelyCloseNoTargetPersistedCandidate,
@@ -1878,6 +1880,70 @@ function SidebarSubagents(props: {
   );
 }
 
+function resolveSessionContextSnapshot(
+  api: TuiPluginApi,
+  sessionID: string | undefined,
+): ContextUsageSnapshot | undefined {
+  if (!sessionID) return undefined;
+
+  const session = api.state.session.get(sessionID);
+  if (!session?.tokens) return undefined;
+
+  const { input, output, reasoning, cache } = session.tokens;
+  const totalTokens = input + output + reasoning + cache.read + cache.write;
+
+  let contextLimit: number | undefined;
+  const providerID = session.model?.providerID;
+  const modelID = session.model?.id;
+  if (providerID && modelID) {
+    const provider = api.state.provider.find((entry) => entry.id === providerID);
+    contextLimit = provider?.models[modelID]?.limit.context;
+  }
+
+  let contextTokens: number | undefined;
+  const messages = api.state.session.messages(sessionID);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role === "assistant") {
+      contextTokens = message.tokens.input + message.tokens.cache.read;
+      break;
+    }
+  }
+
+  return {
+    totalTokens,
+    contextTokens,
+    contextLimit,
+    inputTokens: input,
+    outputTokens: output,
+    cost: session.cost ?? 0,
+  };
+}
+
+function SidebarContextUsage(props: {
+  api: TuiPluginApi;
+  sessionID: string;
+  theme: TuiThemeCurrent;
+}) {
+  const snapshot = createMemo(() =>
+    resolveSessionContextSnapshot(props.api, props.sessionID),
+  );
+  const lines = createMemo(() => {
+    const value = snapshot();
+    return value ? formatContextUsageLines(value) : [];
+  });
+
+  return (
+    <Show when={snapshot()}>
+      <box paddingLeft={0} paddingRight={1} flexDirection="column">
+        <For each={lines()}>
+          {(line) => <text fg={props.theme.textMuted}>{line}</text>}
+        </For>
+      </box>
+    </Show>
+  );
+}
+
 function HomeBottomStatus(props: {
   state: () => StatuslineState;
   theme: TuiThemeCurrent;
@@ -3123,25 +3189,32 @@ function initializeTui(api: TuiPluginApi, disposeRoot: () => void): void {
           };
         })();
         return (
-          <Show when={subagentsSectionEnabled()}>
-            <SidebarSubagents
+          <>
+            <Show when={subagentsSectionEnabled()}>
+              <SidebarSubagents
+                api={api}
+                sessionID={sessionID}
+                state={state}
+                nowMs={nowMs}
+                expanded={subagentsExpanded}
+                onToggleExpanded={() =>
+                  setSubagentsExpandedPreference(!subagentsExpanded())
+                }
+                onSetExpanded={setSubagentsExpandedSilently}
+                onReturnFocus={focusActivePrompt}
+                onToggleListFocus={toggleSidebarListFocus}
+                onNavigateToChild={rememberSidebarChildNavigation}
+                sidebarWidth={() => resolveSidebarWidth(ctx)}
+                theme={ctx.theme.current}
+                restoreFromChild={restoreFromChild}
+              />
+            </Show>
+            <SidebarContextUsage
               api={api}
               sessionID={sessionID}
-              state={state}
-              nowMs={nowMs}
-              expanded={subagentsExpanded}
-              onToggleExpanded={() =>
-                setSubagentsExpandedPreference(!subagentsExpanded())
-              }
-              onSetExpanded={setSubagentsExpandedSilently}
-              onReturnFocus={focusActivePrompt}
-              onToggleListFocus={toggleSidebarListFocus}
-              onNavigateToChild={rememberSidebarChildNavigation}
-              sidebarWidth={() => resolveSidebarWidth(ctx)}
               theme={ctx.theme.current}
-              restoreFromChild={restoreFromChild}
             />
-          </Show>
+          </>
         );
       },
       home_bottom(ctx: HomeBottomContext) {

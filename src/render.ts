@@ -4,6 +4,7 @@ import {
   correlateSubagentWorkItems,
   mergeProxyMetadataWithRealExecution,
 } from "./subagent-classification.js";
+import { t } from "./i18n.js";
 
 const ansi = {
   reset: "\u001B[0m",
@@ -73,12 +74,24 @@ function formatTokenCount(total: number): string {
 function formatCompactTokenCount(total: number): string {
   const value = Math.max(0, total);
   if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M ctx`;
+    return `${(value / 1_000_000).toFixed(1)}M`;
   }
   if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}k ctx`;
+    return `${(value / 1_000).toFixed(1)}k`;
   }
-  return `${Math.round(value)} ctx`;
+  return `${Math.round(value)}`;
+}
+
+/** Same compact k/M rounding as formatCompactTokenCount, without the " ctx" suffix. */
+function formatCompactNumber(total: number): string {
+  const value = Math.max(0, total);
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}k`;
+  }
+  return `${Math.round(value)}`;
 }
 
 function formatCompactPercentUsed(percent: number): string {
@@ -113,7 +126,7 @@ export function formatContextDetails(
 export function formatContext(child: ChildSessionState): string {
   const details = formatContextDetails(child);
   if (!details) return "";
-  return `ctx ${details}`;
+  return `${details}`;
 }
 
 export function formatContextCompact(child: ChildSessionState): string {
@@ -208,23 +221,108 @@ export function visibleSubagentWorkItems(
   });
 }
 
-export function renderStatusLine(state: StatuslineState): string {
-  const children = visibleSubagentWorkItems(Object.values(state.children)).sort(
-    byPriority,
+const BLOCK_FULL = "\u2588"; // █ Full Block (U+2588)
+const BLOCK_LIGHT = "\u2591"; // ░ Light Shade (U+2591)
+
+/**
+ * Renders a `[███░░░░░░░]`-style progress bar for context/token usage.
+ */
+export function renderBlockBar(percent: number, width = 10): string {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+  const filled = Math.round((clamped / 100) * width);
+  const safeFilled = Math.max(0, Math.min(width, filled));
+  return `[${BLOCK_FULL.repeat(safeFilled)}${BLOCK_LIGHT.repeat(width - safeFilled)}]`;
+}
+
+export interface ContextUsageSnapshot {
+  /** Cumulative tokens billed across the whole session (input+output+reasoning+cache). */
+  totalTokens: number;
+  /** Tokens currently occupying the model's context window, when known. */
+  contextTokens?: number;
+  /** The active model's context window size, when known. */
+  contextLimit?: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Cumulative session cost in USD. */
+  cost: number;
+}
+
+/**
+ * Formats a multi-line context/cost usage panel, e.g.:
+ *
+ *   Contexto
+ *
+ *   3.2k / 32.8k (29k disponibles)
+ *   [██░░░░░░░░] 10% usado
+ *   Entrada: 104 | Salida: 90
+ *   $0.00 gastados
+ */
+export function formatContextUsageLines(snapshot: ContextUsageSnapshot): string[] {
+  const contextTokens = snapshot.contextTokens ?? snapshot.totalTokens;
+  const hasLimit =
+    typeof snapshot.contextLimit === "number" && snapshot.contextLimit > 0;
+
+  const lines: string[] = [t("context")];
+
+  if (hasLimit) {
+    const limit = snapshot.contextLimit as number;
+    const percent = (contextTokens / limit) * 100;
+    const available = Math.max(0, limit - contextTokens);
+    
+    lines.push(
+      `${formatCompactNumber(contextTokens)} / ${formatCompactNumber(limit)} (${formatCompactNumber(available)} ${t("available")})`,
+    );
+    lines.push(`${renderBlockBar(percent)} ${formatCompactPercentUsed(percent)} ${t("used")}`);
+  } else {
+    lines.push(formatCompactNumber(contextTokens));
+  }
+
+  lines.push(
+    `${t("input")}: ${formatNumber(snapshot.inputTokens)} | ${t("output")}: ${formatNumber(snapshot.outputTokens)}`,
   );
+
+  return lines;
+}
+
+export function renderStatusLine(state: StatuslineState): string {
+  const children = visibleSubagentWorkItems(Object.values(state.children)).sort(byPriority);
   const counts = countRetainedSubagentStatuses({ children: state.children });
   const totalExecuted = formatNumber(state.totalExecuted ?? 0);
   const colorOn = colorsEnabled();
 
   const aggregate = `↳ ${counts.running} running · ${counts.done} done · ${counts.error} error · Σ ${totalExecuted} total`;
-  if (children.length === 0) return aggregate;
 
+  // SIEMPRE mostrar contexto, incluso sin children
+  if (children.length === 0) {
+    const fakeChild: ChildSessionState = {
+      tokens: state.contextUsage ?? {},
+      title: "",
+      elapsedMs: 0,
+      color: "yellow",
+      status: "done",
+      id: "context-only",
+      startedAt: "",
+      updatedAt: "",
+    };
+
+    const ctx = formatContextForStatusline(fakeChild);
+    const painted = paint(ctx, ansi.white, colorOn);
+
+    return `${aggregate} · ${painted}`;
+  }
+
+  // Caso normal: hay children
   const details = children
     .map((child) => {
-      const context = formatContext(child);
-      const label = [child.title, formatDuration(child.elapsedMs), context]
+      const ctx = formatContextForStatusline(child);
+      const label = [
+        child.title,
+        formatDuration(child.elapsedMs),
+        paint(ctx, ansi.white, colorOn),
+      ]
         .filter((part) => part.length > 0)
         .join(" ");
+
       return paint(label, childColor(child), colorOn);
     })
     .join(paint(" · ", ansi.gray, colorOn));
