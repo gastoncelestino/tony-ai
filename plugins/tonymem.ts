@@ -13,6 +13,7 @@
 
 import type { Plugin } from "@opencode-ai/plugin"
 import { Database } from "bun:sqlite"
+import { appendFileSync } from "node:fs"
 import path from "path"
 import { fileURLToPath } from "url"
 
@@ -38,7 +39,7 @@ function debugLog(category: string, message: string, details?: Record<string, un
   try {
     const suffix = details ? ` ${JSON.stringify(details)}` : ""
     const line = `[${new Date().toISOString()}] [${category}] ${message}${suffix}\n`
-    Bun.write(DEBUG_LOG_PATH, line, { create: true, append: true })
+    appendFileSync(DEBUG_LOG_PATH, line, "utf8")
   } catch (err) {
     console.error("[tonymem] failed to write debug log:", err)
   }
