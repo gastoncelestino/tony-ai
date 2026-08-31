@@ -17,18 +17,16 @@ export type ExecutionAuthorizationInput = { directory: string; sessionID: string
 export type ExecutionAuthorization = { allowed: true; reason: string; order: KernelExecutionOrder } | { allowed: false; reason: string }
 
 const originalPromptBySession = new Map<string, string>()
-const bootstrapInFlight = new Map<string, number>()
+const bootstrapSessions = new Set<string>()
 const sessionKey = (directory: string, sessionID: string) => `${directory}\0${sessionID}`
-const isBootstrapInFlight = (directory: string) => (bootstrapInFlight.get(directory) ?? 0) > 0
-const beginBootstrap = (directory: string) => bootstrapInFlight.set(directory, (bootstrapInFlight.get(directory) ?? 0) + 1)
-function endBootstrap(directory: string) {
-  const remaining = (bootstrapInFlight.get(directory) ?? 1) - 1
-  if (remaining <= 0) bootstrapInFlight.delete(directory); else bootstrapInFlight.set(directory, remaining)
+
+export function rememberPrompt(directory: string, sessionID: string, prompt: string) {
+  if (prompt.trim()) originalPromptBySession.set(sessionKey(directory, sessionID), prompt.trim())
 }
 
-export function rememberPrompt(directory: string, sessionID: string, prompt: string) { if (prompt.trim()) originalPromptBySession.set(sessionKey(directory, sessionID), prompt.trim()) }
 export function assertBootstrapToolAllowed(directory: string, tool: string) {
-  if (isBootstrapInFlight(directory) && !BOOTSTRAP_READ_ONLY_TOOLS.has(tool.toLowerCase())) {
+  if (bootstrapSessions.size === 0) return
+  if (!BOOTSTRAP_READ_ONLY_TOOLS.has(tool.toLowerCase())) {
     throw new KernelBlockedError(`[Tony Kernel] Bootstrap is strictly atomic and read-only; tool '${tool}' is not allowed until decomposition completes`)
   }
 }
@@ -53,7 +51,8 @@ The phase field MUST use one of: explore, propose, spec, design, tasks, apply, v
 async function runPython(directory: string, script: string, args: string[]) {
   const python = process.env.TONYMEM_PYTHON ?? "python3"
   const dbPath = process.env.LOCAL_MEMORY_DB ?? join(directory, "local-memory", "memory.db")
-  const env = { ...process.env }; delete env.LOCAL_MEMORY_DB
+  const env = { ...process.env }
+  delete env.LOCAL_MEMORY_DB
   try {
     const result = await execFileAsync(python, [script, ...args, "--db-path", dbPath], { cwd: directory, timeout: 5000, maxBuffer: 1024 * 1024, env })
     return JSON.parse(result.stdout) as { ok?: boolean; result?: Record<string, unknown>; reason?: string }
@@ -69,15 +68,18 @@ async function prepareBootstrap(directory: string, sessionID: string) {
   const result = await runPython(directory, script, ["--prepare", "--project", directory, "--session-id", sessionID])
   if (result.ok !== true) throw new KernelUnavailableError(result.reason ?? "Unable to initialize SDD bootstrap state")
 }
+
 export function extractTaskResult(output: string) { return (output.match(/<task_result>\s*([\s\S]*?)\s*<\/task_result>/)?.[1] ?? output).trim() }
+
 export async function completeBootstrap(directory: string, sessionID: string, output: string) {
   const script = process.env.TONYMEM_TASKSET_BOOTSTRAP_SCRIPT ?? `${directory}/kernel/task_set_bootstrap.py`
   const result = await runPython(directory, script, ["--complete", "--project", directory, "--session-id", sessionID, "--decomposition", extractTaskResult(output)])
   if (result.ok !== true) throw new Error(result.reason ?? "TaskSet bootstrap completion failed")
 }
-export async function completeSuccessfulTask(directory: string, sessionID: string, taskId: string, result: unknown) {
+
+export async function completeSuccessfulTask(directory: string, sessionID: string, taskId: string, result: { title: string; output: string; metadata: unknown }) {
   const script = process.env.TONYMEM_TASKSET_COMPLETION_SCRIPT ?? `${directory}/kernel/task_completion.py`
-  const evidence = JSON.stringify([{ kind: "opencode-task-result", title: "Task", output: typeof result === "string" ? result : JSON.stringify(result), metadata: {} }])
+  const evidence = JSON.stringify([{ kind: "opencode-task-result", title: result.title, output: result.output, metadata: result.metadata }])
   const payload = await runPython(directory, script, ["--complete", "--project", directory, "--session-id", sessionID, "--task-id", taskId, "--evidence", evidence])
   if (payload.ok !== true) throw new Error(payload.reason ?? "TaskSet completion failed")
 }
@@ -89,16 +91,19 @@ function validateOrder(request: KernelBoundaryRequest, order: KernelExecutionOrd
 }
 
 export async function authorizeExecution(input: ExecutionAuthorizationInput): Promise<ExecutionAuthorization> {
-  if (input.tool.toLowerCase() !== "task") return { allowed: true, reason: "not_task", order: { task_id: input.callID, description: "", phase: "", files: [] } }
+  if (input.tool.toLowerCase() !== "task") return { allowed: true, reason: "not_task", order: { task_id: input.callID, description: "", phase: "explore", files: [] } }
   const provider = createKernelContextProvider(input.directory)
   let provided = await provider.getContext(input)
-  if (provided.kind !== "available" && provided.reason === "SDD state unavailable") {
+  if (provided.kind !== "available" && provided.reason.startsWith("SDD state unavailable")) {
     const description = typeof input.args.description === "string" ? input.args.description.trim() : ""
     const prompt = originalPromptBySession.get(sessionKey(input.directory, input.sessionID)) ?? (typeof input.args.prompt === "string" ? input.args.prompt.trim() : "")
     await prepareBootstrap(input.directory, input.sessionID)
-    input.args.description = BOOTSTRAP_DESCRIPTION; input.args.prompt = bootstrapPrompt(description, prompt)
-    input.args.subagent_type = "explore"; input.args.command = BOOTSTRAP_COMMAND
-    beginBootstrap(input.directory); provided = await provider.getContext(input)
+    input.args.description = BOOTSTRAP_DESCRIPTION
+    input.args.prompt = bootstrapPrompt(description, prompt)
+    input.args.subagent_type = "explore"
+    input.args.command = BOOTSTRAP_COMMAND
+    bootstrapSessions.add(sessionKey(input.directory, input.sessionID))
+    provided = await provider.getContext(input)
   }
   if (provided.kind !== "available") throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
   const adapted = adaptTaskExecutionContext({ tool: input.tool, arguments: input.args }, provided.context)
@@ -108,5 +113,9 @@ export async function authorizeExecution(input: ExecutionAuthorizationInput): Pr
   return { allowed: true, reason: response.reason, order: validateOrder(adapted.request, response.execution_order) }
 }
 
-export function finishBootstrap(directory: string, sessionID: string) { originalPromptBySession.delete(sessionKey(directory, sessionID)); endBootstrap(directory) }
-export function bootstrapStarted(directory: string) { return isBootstrapInFlight(directory) }
+export function finishBootstrap(directory: string, sessionID: string) {
+  originalPromptBySession.delete(sessionKey(directory, sessionID))
+  bootstrapSessions.delete(sessionKey(directory, sessionID))
+}
+
+export function bootstrapStarted(directory: string, sessionID: string) { return bootstrapSessions.has(sessionKey(directory, sessionID)) }
