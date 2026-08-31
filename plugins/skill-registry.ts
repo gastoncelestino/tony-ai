@@ -9,14 +9,24 @@
 
 import type { Plugin } from "@opencode-ai/plugin"
 import { execFile } from "child_process"
-import { access } from "fs/promises"
+import { access, appendFile } from "fs/promises"
 import { homedir } from "os"
 import { join, parse } from "path"
 import { promisify } from "util"
 
 const execFileAsync = promisify(execFile)
+const appendFileAsync = promisify(appendFile)
+const DEBUG_LOG_PATH = process.env.TONY_DEBUG_LOG ?? join(process.cwd(), "tony-debug.log")
 
-// Mirrors the CLI guard's markers (.git, .atl, and ProjectSkillDirs in internal/skillregistry/registry.go); a Go parity test pins this list.
+async function debugLog(message: string, details?: Record<string, unknown>) {
+  try {
+    const suffix = details ? ` ${JSON.stringify(details)}` : ""
+    await appendFileAsync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] [SKILL_REGISTRY] ${message}${suffix}\n`, "utf8")
+  } catch (err) {
+    console.error("[skill-registry] debug log failed:", err)
+  }
+}
+
 const PROJECT_MARKERS = [".git", ".atl", "skills", ".opencode/skills", ".claude/skills", ".gemini/skills", ".cursor/skills", ".github/skills", ".codex/skills", ".qwen/skills", ".kiro/skills", ".openclaw/skills", ".pi/skills", ".agent/skills", ".agents/skills", ".atl/skills", ".hermes/skills"]
 
 async function pathExists(path: string): Promise<boolean> {
@@ -28,13 +38,6 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-/**
- * OpenCode started in a brand-new non-project directory can resolve the
- * working directory to "/", the user's home directory, or a markerless
- * scratch folder. Refreshing there would initialize a stray .atl registry
- * (or fail loudly on a read-only root) at every startup. The CLI refuses
- * those locations too; this guard skips the spawn entirely.
- */
 async function isProjectRoot(cwd: string): Promise<boolean> {
   if (!cwd) return false
   if (cwd === parse(cwd).root) return false
@@ -44,31 +47,36 @@ async function isProjectRoot(cwd: string): Promise<boolean> {
 }
 
 export const SkillRegistryPlugin: Plugin = async (input) => {
+  await debugLog("plugin initialized", { directory: input.directory, worktree: input.worktree })
+
   async function refreshSkillRegistry() {
     const cwd = input.worktree || input.directory || process.cwd()
+    await debugLog("refresh started", { cwd })
 
     if (!(await isProjectRoot(cwd))) {
-      // Startup hooks must not scream: a non-project directory is a normal
-      // situation, not an error.
+      await debugLog("refresh skipped: not a project root", { cwd })
       console.info("[skill-registry] skipping refresh: not a project root:", cwd)
       return
     }
 
     try {
-      await execFileAsync(
+      await debugLog("executing gentle-ai skill-registry refresh", { cwd })
+      const result = await execFileAsync(
         "gentle-ai",
         ["skill-registry", "refresh", "--quiet", "--no-gitignore", "--cwd", cwd],
         { timeout: 30_000 },
       )
+      await debugLog("skill registry refresh completed", { cwd, stdoutLength: result.stdout?.length ?? 0, stderrLength: result.stderr?.length ?? 0 })
     } catch (err) {
+      await debugLog("skill registry refresh failed", { cwd, error: String(err) })
       console.error("[skill-registry] refresh failed:", err)
     }
   }
 
-  // Don't await — keep OpenCode startup responsive. The command is
-  // fingerprint-cached, so normal startup stays cheap.
-  refreshSkillRegistry().catch((err) => {
+  await debugLog("refresh scheduled")
+  refreshSkillRegistry().catch(async (err) => {
     console.error("[skill-registry] unexpected refresh error:", err)
+    await debugLog("unexpected refresh error", { error: String(err) })
   })
 
   return {}
