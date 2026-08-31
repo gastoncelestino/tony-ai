@@ -25,8 +25,8 @@ export function rememberPrompt(directory: string, sessionID: string, prompt: str
 }
 
 export function assertBootstrapToolAllowed(directory: string, tool: string) {
-  if (bootstrapSessions.size === 0) return
-  if (!BOOTSTRAP_READ_ONLY_TOOLS.has(tool.toLowerCase())) {
+  const active = [...bootstrapSessions].some((key) => key.startsWith(`${directory}\0`))
+  if (active && !BOOTSTRAP_READ_ONLY_TOOLS.has(tool.toLowerCase())) {
     throw new KernelBlockedError(`[Tony Kernel] Bootstrap is strictly atomic and read-only; tool '${tool}' is not allowed until decomposition completes`)
   }
 }
@@ -95,15 +95,18 @@ export async function authorizeExecution(input: ExecutionAuthorizationInput): Pr
   const provider = createKernelContextProvider(input.directory)
   let provided = await provider.getContext(input)
   if (provided.kind !== "available" && provided.reason.startsWith("SDD state unavailable")) {
+    const key = sessionKey(input.directory, input.sessionID)
     const description = typeof input.args.description === "string" ? input.args.description.trim() : ""
-    const prompt = originalPromptBySession.get(sessionKey(input.directory, input.sessionID)) ?? (typeof input.args.prompt === "string" ? input.args.prompt.trim() : "")
+    const prompt = originalPromptBySession.get(key) ?? (typeof input.args.prompt === "string" ? input.args.prompt.trim() : "")
     await prepareBootstrap(input.directory, input.sessionID)
     input.args.description = BOOTSTRAP_DESCRIPTION
     input.args.prompt = bootstrapPrompt(description, prompt)
     input.args.subagent_type = "explore"
     input.args.command = BOOTSTRAP_COMMAND
-    bootstrapSessions.add(sessionKey(input.directory, input.sessionID))
-    provided = await provider.getContext(input)
+    bootstrapSessions.add(key)
+    try { provided = await provider.getContext(input) }
+    catch (error) { bootstrapSessions.delete(key); throw error }
+    if (provided.kind !== "available") bootstrapSessions.delete(key)
   }
   if (provided.kind !== "available") throw new KernelUnavailableError(`[Tony Kernel] ${provided.reason}`)
   const adapted = adaptTaskExecutionContext({ tool: input.tool, arguments: input.args }, provided.context)
@@ -114,8 +117,9 @@ export async function authorizeExecution(input: ExecutionAuthorizationInput): Pr
 }
 
 export function finishBootstrap(directory: string, sessionID: string) {
-  originalPromptBySession.delete(sessionKey(directory, sessionID))
-  bootstrapSessions.delete(sessionKey(directory, sessionID))
+  const key = sessionKey(directory, sessionID)
+  originalPromptBySession.delete(key)
+  bootstrapSessions.delete(key)
 }
 
 export function bootstrapStarted(directory: string, sessionID: string) { return bootstrapSessions.has(sessionKey(directory, sessionID)) }
