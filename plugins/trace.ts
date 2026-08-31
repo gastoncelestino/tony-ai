@@ -87,10 +87,12 @@ export const TonyTrace: Plugin = async ({ directory }) => {
 
       try {
         const decision = await authorizeExecution({ directory, sessionID: input.sessionID, callID: input.callID, tool, args })
-        phases.get(input.callID)!.phase = decision.order.phase || phases.get(input.callID)!.phase
-        phases.get(input.callID)!.taskID = decision.order.task_id || taskID
-        emit("KERNEL_DECISION", { sessionID: input.sessionID, callID: input.callID, taskID: phases.get(input.callID)!.taskID, decision: "ALLOW", allowed: true, reason: decision.reason })
-        observations.start({ projectId: directory, sessionId: input.sessionID, callId: input.callID, taskId: phases.get(input.callID)!.taskID, phase: phases.get(input.callID)!.phase })
+        const phase = phases.get(input.callID)
+        if (!phase) throw new KernelBlockedError("[Tony Kernel] Execution phase disappeared during authorization")
+        phase.phase = decision.order.phase || phase.phase
+        phase.taskID = decision.order.task_id || taskID
+        emit("KERNEL_DECISION", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, decision: "ALLOW", allowed: true, reason: decision.reason })
+        observations.start({ projectId: directory, sessionId: input.sessionID, callId: input.callID, taskId: phase.taskID, phase: phase.phase })
       } catch (error) {
         emit("KERNEL_DECISION", { sessionID: input.sessionID, callID: input.callID, taskID, decision: "BLOCK", allowed: false, reason: error instanceof Error ? error.message : String(error) })
         closePhase(input.callID, "blocked", "")
@@ -110,9 +112,13 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         emit("TASK_COMPLETE", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, status: observation.status })
         closePhase(input.callID, observation.status, result.output, childSessionID)
         if (observation.status === "succeeded") {
-          if (bootstrapStarted(directory)) await completeBootstrap(directory, input.sessionID, result.output)
-          else await completeSuccessfulTask(directory, input.sessionID, phase.taskID, result)
-          if (bootstrapStarted(directory)) finishBootstrap(directory, input.sessionID)
+          const isBootstrap = bootstrapStarted(directory, input.sessionID)
+          try {
+            if (isBootstrap) await completeBootstrap(directory, input.sessionID, result.output)
+            else await completeSuccessfulTask(directory, input.sessionID, phase.taskID, result)
+          } finally {
+            if (isBootstrap) finishBootstrap(directory, input.sessionID)
+          }
         }
         return
       }
