@@ -1,0 +1,9 @@
+# Tony-AI Python dev/test dependencies
+# Incluye tree-sitter porque el code-index lo usa como chunker obligatorio.
+# Instalar con: python3 -m pip install -r requirements-dev.txt
+
+pytest==9.1.1
+coverage==7.15.4
+pytest-cov==7.1.0
+tree-sitter==0.26.0
+tree-sitter-language-pack==1.15.8
