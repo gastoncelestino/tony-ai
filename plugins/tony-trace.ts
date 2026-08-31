@@ -10,6 +10,10 @@ const PHASES = new Set([
   "sdd-init", "sdd-explore", "sdd-propose", "sdd-spec", "sdd-design",
   "sdd-tasks", "sdd-apply", "sdd-verify", "sdd-archive", "sdd-onboard",
 ])
+const REQUIRED_TASK_TRACE = [
+  "TASK_CREATE", "MODEL_DECISION", "TOOL_REQUEST", "KERNEL_INTERCEPT", "KERNEL_DECISION",
+  "TOOL_EXECUTE_START", "TOOL_EXECUTE_END", "TOOL_RESULT", "TASK_COMPLETE", "PHASE_ENTER", "PHASE_EXIT",
+] as const
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined
@@ -24,6 +28,16 @@ function tokensOf(value: any): TokenSnapshot | undefined {
     reasoning: Number(t.reasoning ?? 0),
     cacheRead: Number(t.cache?.read ?? 0),
     cacheWrite: Number(t.cache?.write ?? 0),
+  }
+}
+
+function tokenDelta(previous: TokenSnapshot | undefined, current: TokenSnapshot): TokenSnapshot {
+  return {
+    input: Math.max(0, current.input - (previous?.input ?? 0)),
+    output: Math.max(0, current.output - (previous?.output ?? 0)),
+    reasoning: Math.max(0, current.reasoning - (previous?.reasoning ?? 0)),
+    cacheRead: Math.max(0, current.cacheRead - (previous?.cacheRead ?? 0)),
+    cacheWrite: Math.max(0, current.cacheWrite - (previous?.cacheWrite ?? 0)),
   }
 }
 
@@ -59,26 +73,32 @@ export const TonyTrace: Plugin = async ({ directory }) => {
   const childSessionPhase = new Map<string, string>()
   const tokenByMessage = new Map<string, TokenSnapshot>()
   const sessionTokens = new Map<string, TokenSnapshot>()
-  const validated = new Map<string, Set<string>>()
+  const taskEvents = new Map<string, Set<string>>()
 
   const emit = (event: string, details: Record<string, unknown> = {}) => {
     const record: TraceEvent = { ts: new Date().toISOString(), event, ...details }
+    const callID = asString(details.callID)
+    if (callID) {
+      const events = taskEvents.get(callID) ?? new Set<string>()
+      events.add(event)
+      taskEvents.set(callID, events)
+    }
     try { appendFileSync(logPath, safeJson(record) + "\n", "utf8") } catch (error) { console.error("[TONY TRACE] write failed", error) }
   }
 
-  // Public bridge for the Tony Kernel. The kernel can emit the two boundary
-  // events without coupling its implementation to this plugin.
+  // Public bridge for the Tony Kernel. The Kernel emits KERNEL_INTERCEPT and
+  // KERNEL_DECISION without depending on this plugin's implementation.
   const runtime = globalThis as typeof globalThis & {
     __tonyTraceEmit?: (event: string, details?: Record<string, unknown>) => void
   }
   runtime.__tonyTraceEmit = emit
 
-  const closePhase = (callID: string, status: string, result?: unknown) => {
+  const closePhase = (callID: string, status: string, result: unknown, childSessionID?: string) => {
     const phase = phases.get(callID)
     if (!phase) return
-    const child = [...childSessionPhase.entries()].find(([, p]) => p === phase.phase)
-    const sessionID = child?.[0]
+    const sessionID = childSessionID ?? [...childSessionPhase.entries()].find(([, p]) => p === phase.phase)?.[0]
     const tokens = sessionID ? sessionTokens.get(sessionID) : undefined
+
     emit("PHASE_EXIT", {
       phase: phase.phase,
       taskID: phase.taskID,
@@ -89,7 +109,18 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       tokens: tokens ?? zeroTokens(),
       resultLength: typeof result === "string" ? result.length : undefined,
     })
+
+    const observed = taskEvents.get(callID) ?? new Set<string>()
+    const missing = REQUIRED_TASK_TRACE.filter((name) => !observed.has(name))
+    if (missing.length === 0) {
+      emit("TRACE_VALID", { callID, taskID: phase.taskID, phase: phase.phase, events: REQUIRED_TASK_TRACE.length })
+    } else {
+      emit("TRACE_INVALID", { callID, taskID: phase.taskID, phase: phase.phase, missing })
+    }
+
     phases.delete(callID)
+    taskPhaseByCall.delete(callID)
+    taskEvents.delete(callID)
   }
 
   return {
@@ -99,8 +130,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       if (event.type === "session.created") {
         const info = p.info ?? {}
         const sessionID = asString(info.id)
-        if (!sessionID) return
-        if (!info.parentID) emit("RUN_START", { sessionID })
+        if (sessionID && !info.parentID) emit("RUN_START", { sessionID })
         return
       }
 
@@ -111,10 +141,11 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         const messageID = asString(info.id)
         if (!sessionID || !messageID) return
 
-        const t = tokensOf(info)
-        if (t) {
-          tokenByMessage.set(messageID, t)
-          sessionTokens.set(sessionID, addTokens(sessionTokens.get(sessionID) ?? zeroTokens(), t))
+        const current = tokensOf(info)
+        if (current) {
+          const delta = tokenDelta(tokenByMessage.get(messageID), current)
+          tokenByMessage.set(messageID, current)
+          sessionTokens.set(sessionID, addTokens(sessionTokens.get(sessionID) ?? zeroTokens(), delta))
         }
 
         if (info.time?.completed) {
@@ -124,7 +155,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
             action: info.finish === "tool-calls" ? "tool-calls" : "respond",
             model: `${info.providerID ?? "?"}/${info.modelID ?? "?"}`,
             finish: info.finish,
-            tokens: t,
+            tokens: current,
           })
         }
         return
@@ -133,18 +164,15 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       if (event.type === "message.part.updated") {
         const part: any = p.part
         if (!part) return
-        if (part.type === "tool") {
-          const state = part.state ?? {}
-          if (state.status === "pending") {
-            emit("MODEL_DECISION", {
-              sessionID: part.sessionID,
-              messageID: part.messageID,
-              callID: part.callID,
-              action: "tool",
-              tool: part.tool,
-              inputKeys: argKeys(state.input),
-            })
-          }
+        if (part.type === "tool" && part.state?.status === "pending") {
+          emit("MODEL_DECISION", {
+            sessionID: part.sessionID,
+            messageID: part.messageID,
+            callID: part.callID,
+            action: "tool",
+            tool: part.tool,
+            inputKeys: argKeys(part.state.input),
+          })
         }
         if (part.type === "step-finish") {
           emit("STEP_FINISH", {
@@ -176,7 +204,6 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       }
       if (event.type === "session.deleted") {
         emit("RUN_END", { sessionID: p.info?.id ?? p.sessionID })
-        return
       }
     },
 
@@ -212,6 +239,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
           agent: subagent,
         })
         emit("PHASE_ENTER", {
+          sessionID: input.sessionID,
           phase: phaseName,
           taskID: taskID ?? input.callID,
           callID: input.callID,
@@ -244,13 +272,15 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       })
 
       if (phase) {
-        closePhase(input.callID, metadata?.status === "error" ? "error" : "completed", text)
+        const phaseInfo = phases.get(input.callID)
+        const status = metadata?.status === "error" ? "error" : "completed"
         emit("TASK_COMPLETE", {
           sessionID: input.sessionID,
           callID: input.callID,
-          taskID: phases.get(input.callID)?.taskID ?? input.callID,
-          status: metadata?.status === "error" ? "error" : "completed",
+          taskID: phaseInfo?.taskID ?? input.callID,
+          status,
         })
+        closePhase(input.callID, status, text, childSessionID)
       }
     },
   }
