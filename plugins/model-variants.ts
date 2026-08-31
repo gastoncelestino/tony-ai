@@ -15,6 +15,17 @@ import { homedir } from "os"
 import path from "path"
 
 const MODEL_VARIANTS_CACHE_FILE = "model-variants.json"
+const DEBUG_LOG_PATH = process.env.TONY_DEBUG_LOG ?? path.join(process.cwd(), "tony-debug.log")
+
+function debugLog(message: string, details?: Record<string, unknown>) {
+  try {
+    const suffix = details ? ` ${JSON.stringify(details)}` : ""
+    const line = `[${new Date().toISOString()}] [MODEL_VARIANTS] ${message}${suffix}\n`
+    Bun.write(DEBUG_LOG_PATH, line, { create: true, append: true })
+  } catch (err) {
+    console.error("[model-variants] debug log failed:", err)
+  }
+}
 
 function isIgnorableFileRace(err: unknown) {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "ENOENT"
@@ -31,47 +42,58 @@ async function removeOwnTempFile(tmpPath: string) {
 }
 
 export const ModelVariantsPlugin: Plugin = async (input) => {
+  debugLog("plugin initialized", { directory: input.directory, worktree: input.worktree })
+
   async function refreshVariantsCache() {
     let tmpPath: string | undefined
     try {
+      debugLog("provider.list starting")
       const result = await input.client.provider.list()
       const data = (result as any).data ?? result
       const providerList: any[] = data?.all ?? data?.providers ?? (Array.isArray(data) ? data : [])
+      debugLog("provider.list completed", { providers: providerList.length })
 
       const variants: Record<string, Record<string, string[]>> = {}
+      let modelCount = 0
+      let variantModelCount = 0
       for (const prov of providerList) {
         for (const [modelId, model] of Object.entries(prov.models ?? {})) {
+          modelCount++
           const m = model as any
           if (m.variants && Object.keys(m.variants).length > 0) {
+            variantModelCount++
             variants[prov.id] = variants[prov.id] || {}
             variants[prov.id][modelId] = Object.keys(m.variants).sort()
           }
         }
       }
+      debugLog("variants extracted", { modelCount, variantModelCount })
 
       const cacheDir = path.join(homedir(), ".gentle-ai", "cache")
       await mkdir(cacheDir, { recursive: true })
 
-      // Always write through a per-invocation tmp file before renaming, so
-      // readers never see partial JSON and concurrent plugin loads do not
-      // race over the same tmp path. See issues #766 and #786.
       const finalPath = path.join(cacheDir, MODEL_VARIANTS_CACHE_FILE)
       tmpPath = path.join(cacheDir, `${MODEL_VARIANTS_CACHE_FILE}.${randomBytes(3).toString("hex")}.tmp`)
+      debugLog("writing cache", { finalPath, tmpPath })
       await writeFile(tmpPath, JSON.stringify(variants, null, 2))
       await rename(tmpPath, finalPath)
       tmpPath = undefined
+      debugLog("cache refresh completed", { finalPath })
     } catch (err) {
       console.error("[model-variants] cache refresh failed:", err)
+      debugLog("cache refresh failed", { error: String(err) })
     } finally {
       if (tmpPath) {
         await removeOwnTempFile(tmpPath)
+        debugLog("temp cache removed", { tmpPath })
       }
     }
   }
 
-  // Don't await — server isn't ready during plugin init. Fire and forget.
+  debugLog("refresh scheduled")
   refreshVariantsCache().catch((err) => {
     console.error("[model-variants] unexpected refresh error:", err)
+    debugLog("unexpected refresh error", { error: String(err) })
   })
 
   return {}
