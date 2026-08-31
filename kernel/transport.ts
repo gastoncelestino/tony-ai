@@ -11,14 +11,14 @@ export async function callKernelBoundary(request: KernelBoundaryRequest, options
     let settled = false
     let stdout = ""
     let stderr = ""
-    const timer = setTimeout(() => { child.kill(); finish(blocked("Kernel boundary transport timed out")) }, timeoutMs)
+    const child = spawn(command, args, { cwd: options.cwd, stdio: ["pipe", "pipe", "pipe"] })
     const finish = (response: KernelBoundaryResponse) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       resolve(response)
     }
-    const child = spawn(command, args, { cwd: options.cwd, stdio: ["pipe", "pipe", "pipe"] })
+    const timer = setTimeout(() => { child.kill(); finish(blocked("Kernel boundary transport timed out")) }, timeoutMs)
     child.stdout.setEncoding("utf8")
     child.stderr.setEncoding("utf8")
     child.stdout.on("data", (chunk: string) => { stdout += chunk })
