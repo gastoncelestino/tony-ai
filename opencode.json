@@ -1,6 +1,6 @@
 {
-    "$schema": "https://opencode.ai/config.json",
-    "plugin": [
+  "$schema": "https://opencode.ai/config.json",  
+  "plugin": [
         "./plugins/tonymem.ts"
     ],
     "provider": {
@@ -46,12 +46,305 @@
         }
     },
     "model": "llamaswap/qwen3-coder:30b",
-    "agent": {
-        "build": {
-            "permission": {
-                "*": "deny",
-                "task": "allow"
-            }
+  "agent": {
+    "explore": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": false,
+        "codegraph_codegraph_explore": true,
+        "edit": false,
+        "read": true,
+        "task": false,
+        "write": false
+      }
+    },
+    "general": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "task": false,
+        "write": true
+      }
+    },
+    "gentle-orchestrator": {
+      "mode": "primary",
+      "permission": {
+        "question": "allow",
+        "task": {
+          "*": "deny",
+          "explore": "allow",
+          "general": "allow",
+          "jd-fix-agent": "allow",
+          "jd-judge-a": "allow",
+          "jd-judge-b": "allow",
+          "review-readability": "allow",
+          "review-refuter": "allow",
+          "review-reliability": "allow",
+          "review-resilience": "allow",
+          "review-risk": "allow",
+          "review-validator": "allow",
+          "sdd-apply": "allow",
+          "sdd-archive": "allow",
+          "sdd-design": "allow",
+          "sdd-explore": "allow",
+          "sdd-init": "allow",
+          "sdd-onboard": "allow",
+          "sdd-propose": "allow",
+          "sdd-spec": "allow",
+          "sdd-tasks": "allow",
+          "sdd-verify": "allow"
         }
+      },
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "question": true,
+        "read": true,
+        "task": true,
+        "write": true
+      }
+    },
+    "jd-fix-agent": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "jd-judge-a": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "*": false,
+        "bash": false,
+        "edit": false,
+        "read": true,
+        "task": false,
+        "write": false
+      }
+    },
+    "jd-judge-b": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "*": false,
+        "bash": false,
+        "edit": false,
+        "read": true,
+        "task": false,
+        "write": false
+      }
+    },
+    "review-readability": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "bash": "deny",
+        "edit": "deny"
+      },
+      "tools": {
+        "*": false,
+        "bash": false,
+        "edit": false,
+        "read": false,
+        "task": false,
+        "write": false
+      }
+    },
+    "review-refuter": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "*": false,
+        "bash": false,
+        "edit": false,
+        "read": true,
+        "task": false,
+        "write": false
+      }
+    },
+    "review-reliability": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "bash": "deny",
+        "edit": "deny"
+      },
+      "tools": {
+        "*": false,
+        "bash": false,
+        "edit": false,
+        "read": false,
+        "task": false,
+        "write": false
+      }
+    },
+    "review-resilience": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "bash": "deny",
+        "edit": "deny"
+      },
+      "tools": {
+        "*": false,
+        "bash": false,
+        "edit": false,
+        "read": false,
+        "task": false,
+        "write": false
+      }
+    },
+    "review-risk": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "bash": "deny",
+        "edit": "deny"
+      },
+      "tools": {
+        "*": false,
+        "bash": false,
+        "edit": false,
+        "read": false,
+        "task": false,
+        "write": false
+      }
+    },
+    "review-validator": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": false,
+        "read": true,
+        "task": false,
+        "write": false
+      }
+    },
+    "sdd-apply": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-archive": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-design": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-explore": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-init": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-onboard": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-propose": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-spec": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-tasks": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
+    },
+    "sdd-verify": {
+      "hidden": true,
+      "mode": "subagent",
+      "tools": {
+        "bash": true,
+        "edit": true,
+        "read": true,
+        "write": true
+      }
     }
+  },
+  "default_agent": "gentle-orchestrator",
+  "mcp": {
+    "context7": {
+      "enabled": true,
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "engram": {
+      "command": [
+        "engram",
+        "mcp",
+        "--tools=agent"
+      ],
+      "type": "local"
+    }
+  },
+  "share": "disabled"
 }
