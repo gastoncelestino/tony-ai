@@ -1,4 +1,16 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { appendFileSync } from "node:fs"
+import path from "node:path"
+
+const DEBUG_LOG_PATH = process.env.TONY_DEBUG_LOG ?? path.join(process.cwd(), "tony-debug.log")
+function debugLog(message: string, details?: Record<string, unknown>) {
+  try {
+    const suffix = details ? ` ${JSON.stringify(details)}` : ""
+    appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] [SDD_ARTIFACTS] ${message}${suffix}\n`, "utf8")
+  } catch (err) {
+    console.error("[sdd-task-result-artifacts] debug log failed:", err)
+  }
+}
 
 const TASK_RESULT = /^<task id="[^"\r\n]+" state="completed">\n<task_result>\n([\s\S]*?)\n<\/task_result>\n<\/task>$/
 const TASK_TAG = /<\/?task(?:\s|>)|<\/?task_result>/
@@ -14,17 +26,30 @@ function isSDDPhase(agent: string): boolean {
 }
 
 function taskResult(output: unknown): void {
+  debugLog("validating task result", { outputType: typeof output, outputLength: typeof output === "string" ? output.length : undefined })
   if (typeof output !== "string" || output.trim() === "") {
+    debugLog("task result invalid: empty")
     throw Object.assign(new Error("SDD phase output must not be empty"), { sddClass: "empty_result" })
   }
   const trimmed = output.trim()
   const envelope = TASK_RESULT.exec(trimmed)
   if (!envelope) {
-    if (TASK_TAG.test(trimmed)) throw Object.assign(new Error("SDD phase output contains a malformed task result envelope"), { sddClass: "malformed_result" })
+    if (TASK_TAG.test(trimmed)) {
+      debugLog("task result invalid: malformed envelope")
+      throw Object.assign(new Error("SDD phase output contains a malformed task result envelope"), { sddClass: "malformed_result" })
+    }
+    debugLog("task result accepted without task envelope")
     return
   }
-  if (envelope[1].trim() === "") throw Object.assign(new Error("SDD phase task result is empty"), { sddClass: "empty_result" })
-  if (TASK_TAG.test(envelope[1])) throw Object.assign(new Error("SDD phase task result contains a nested task envelope"), { sddClass: "malformed_result" })
+  if (envelope[1].trim() === "") {
+    debugLog("task result invalid: empty envelope payload")
+    throw Object.assign(new Error("SDD phase task result is empty"), { sddClass: "empty_result" })
+  }
+  if (TASK_TAG.test(envelope[1])) {
+    debugLog("task result invalid: nested envelope")
+    throw Object.assign(new Error("SDD phase task result contains a nested task envelope"), { sddClass: "malformed_result" })
+  }
+  debugLog("task result envelope accepted", { payloadLength: envelope[1].length })
 }
 
 function shellQuote(value: string): string {
@@ -63,10 +88,12 @@ function sddTaskFailure(phase: string, cwd: string, cause: unknown, metadata?: u
       continuation: `gentle-ai sdd-status --cwd ${shellQuote(cwd)} --json`,
     }),
   }
+  debugLog("SDD task failure created", { phase, code, taskModel, cause: String(cause) })
   return Object.assign(new Error(failure.handoff), { sddFailure: failure }) as SDDTaskFailureError
 }
 
 function sddDispatchLatched(requested: string, failure: SDDTaskFailure, cwd: string): Error {
+  debugLog("SDD dispatch latched", { requested, latchedPhase: failure.phase, latchedCode: failure.code })
   return new Error(SDD_TASK_FAILURE_PREFIX + JSON.stringify({
     schemaName: "gentle-ai.sdd-task-result-failure/v1",
     status: "blocked",
@@ -83,15 +110,23 @@ function sddDispatchLatched(requested: string, failure: SDDTaskFailure, cwd: str
 const SDDTaskResultArtifactsPlugin: Plugin = async ({ directory, worktree }) => {
   const failedSDDSessions = new Map<string, SDDTaskFailure>()
   const cwd = worktree || directory
+  debugLog("plugin initialized", { directory, worktree, cwd })
   return {
-    dispose: async () => { failedSDDSessions.clear() },
+    dispose: async () => {
+      debugLog("plugin dispose", { failedSessions: failedSDDSessions.size })
+      failedSDDSessions.clear()
+    },
     event: async ({ event }) => {
-      if (event.type === "session.deleted") failedSDDSessions.delete(event.properties.info.id)
+      if (event.type === "session.deleted") {
+        debugLog("session.deleted", { sessionID: event.properties.info.id })
+        failedSDDSessions.delete(event.properties.info.id)
+      }
     },
     "tool.execute.before": async (input, output) => {
       if (input.tool !== "task" || typeof output.args?.subagent_type !== "string") return
       const subagent = output.args.subagent_type
       if (!isSDDPhase(subagent)) return
+      debugLog("SDD Task before", { sessionID: input.sessionID, callID: input.callID, subagent })
       const failure = failedSDDSessions.get(input.sessionID)
       if (failure) throw sddDispatchLatched(subagent, failure, cwd)
     },
@@ -99,11 +134,13 @@ const SDDTaskResultArtifactsPlugin: Plugin = async ({ directory, worktree }) => 
       if (input.tool !== "task" || typeof input.args?.subagent_type !== "string") return
       const subagent = input.args.subagent_type
       if (!isSDDPhase(subagent)) return
+      debugLog("SDD Task after", { sessionID: input.sessionID, callID: input.callID, subagent, outputLength: typeof output.output === "string" ? output.output.length : undefined })
       try {
         taskResult(output.output)
       } catch (cause) {
         const failure = sddTaskFailure(subagent, cwd, cause, output.metadata)
         failedSDDSessions.set(input.sessionID, failure.sddFailure)
+        debugLog("SDD session latched", { sessionID: input.sessionID, phase: failure.sddFailure.phase, code: failure.sddFailure.code })
         throw failure
       }
     },
