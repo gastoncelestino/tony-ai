@@ -2,11 +2,8 @@
   "$schema": "https://opencode.ai/config.json",  
   "plugin": [
         "./plugins/engram.ts",
-        "./plugins/model-variants.ts",
         "./plugins/opencode-review-transport.ts",
-        "./plugins/sdd-task-result-artifacts.ts",
-        "./plugins/skill-registry.ts",
-        "./plugins/diagnostic.ts"
+        "./plugins/sdd-task-result-artifacts.ts"
     ],
     "provider": {
         "llamaswap": {
