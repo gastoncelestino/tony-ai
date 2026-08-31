@@ -1,7 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",  
   "plugin": [
-        "./plugins/tonymem.ts"
+        "./plugins/engram.ts",
+        "./plugins/model-variants.ts",
+        "./plugins/opencode-review-transport.ts",
+        "./plugins/sdd-task-result-artifacts.ts",
+        "./plugins/skill-registry.ts",
+        "./plugins/diagnostic.ts"
     ],
     "provider": {
         "llamaswap": {
