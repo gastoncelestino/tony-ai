@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { appendFileSync, mkdirSync } from "node:fs"
+import { appendFileSync } from "node:fs"
 import { join } from "node:path"
 
 type TraceEvent = Record<string, unknown> & { event: string; ts: string }
@@ -65,8 +65,7 @@ function argKeys(args: unknown): string[] {
 }
 
 export const TonyTrace: Plugin = async ({ directory }) => {
-  const logPath = join(directory, ".opencode", "tony-trace.jsonl")
-  mkdirSync(join(directory, ".opencode"), { recursive: true })
+  const logPath = join(directory, "tony-trace.jsonl")
 
   const phases = new Map<string, Phase>()
   const taskPhaseByCall = new Map<string, string>()
