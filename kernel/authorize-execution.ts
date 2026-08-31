@@ -10,6 +10,11 @@ export type AuthorizeExecutionInput = {
   subagent?: string
 }
 
+// Task delegation is currently governed by the kernel only when it targets
+// an explicit execution phase. The existing explore flow is the first
+// governed phase; other Task targets must not silently bypass the kernel.
+const GOVERNED_TASK_AGENTS = new Set(["explore"])
+
 /**
  * Kernel execution policy for delegated Task calls.
  *
@@ -26,6 +31,10 @@ export async function authorizeExecution(
 
   if (!input.subagent) {
     return { allowed: false, reason: "missing_subagent" }
+  }
+
+  if (!GOVERNED_TASK_AGENTS.has(input.subagent)) {
+    return { allowed: false, reason: "subagent_not_governed" }
   }
 
   return { allowed: true, reason: "task_delegation_authorized" }
