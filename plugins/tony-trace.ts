@@ -5,6 +5,7 @@ import { join } from "node:path"
 type TraceEvent = Record<string, unknown> & { event: string; ts: string }
 type Phase = { phase: string; taskID: string; callID: string; sessionID: string; startedAt: number }
 type TokenSnapshot = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }
+type KernelDecision = { allowed: boolean; reason: string }
 
 const PHASES = new Set([
   "sdd-init", "sdd-explore", "sdd-propose", "sdd-spec", "sdd-design",
@@ -85,13 +86,6 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     try { appendFileSync(logPath, safeJson(record) + "\n", "utf8") } catch (error) { console.error("[TONY TRACE] write failed", error) }
   }
 
-  // Public bridge for the Tony Kernel. The Kernel emits KERNEL_INTERCEPT and
-  // KERNEL_DECISION without depending on this plugin's implementation.
-  const runtime = globalThis as typeof globalThis & {
-    __tonyTraceEmit?: (event: string, details?: Record<string, unknown>) => void
-  }
-  runtime.__tonyTraceEmit = emit
-
   const closePhase = (callID: string, status: string, result: unknown, childSessionID?: string) => {
     const phase = phases.get(callID)
     if (!phase) return
@@ -120,6 +114,24 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     phases.delete(callID)
     taskPhaseByCall.delete(callID)
     taskEvents.delete(callID)
+  }
+
+  // Kernel boundary. The decision is made synchronously inside tool.execute.before,
+  // after TASK_CREATE/PHASE_ENTER and before TOOL_EXECUTE_START. A Task without a
+  // concrete subagent is rejected so an ungoverned delegation can never execute.
+  const authorizeExecution = async (input: {
+    tool: string
+    sessionID: string
+    callID: string
+    subagent?: string
+  }): Promise<KernelDecision> => {
+    if (input.tool !== "task") {
+      return { allowed: true, reason: "not_task" }
+    }
+    if (!input.subagent) {
+      return { allowed: false, reason: "missing_subagent" }
+    }
+    return { allowed: true, reason: "task_delegation_authorized" }
   }
 
   return {
@@ -221,8 +233,8 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         ...(subagent ? { subagent } : {}),
       })
 
-      if (tool === "task" && subagent) {
-        const phaseName = phase ?? subagent
+      if (tool === "task") {
+        const phaseName = phase ?? subagent ?? "task"
         taskPhaseByCall.set(input.callID, phaseName)
         phases.set(input.callID, {
           phase: phaseName,
@@ -235,7 +247,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
           sessionID: input.sessionID,
           callID: input.callID,
           taskID: taskID ?? input.callID,
-          agent: subagent,
+          ...(subagent ? { agent: subagent } : {}),
         })
         emit("PHASE_ENTER", {
           sessionID: input.sessionID,
@@ -243,6 +255,35 @@ export const TonyTrace: Plugin = async ({ directory }) => {
           taskID: taskID ?? input.callID,
           callID: input.callID,
         })
+
+        emit("KERNEL_INTERCEPT", {
+          sessionID: input.sessionID,
+          callID: input.callID,
+          tool: input.tool,
+          taskID: taskID ?? input.callID,
+          ...(subagent ? { subagent } : {}),
+        })
+
+        const decision = await authorizeExecution({
+          tool,
+          sessionID: input.sessionID,
+          callID: input.callID,
+          subagent,
+        })
+
+        emit("KERNEL_DECISION", {
+          sessionID: input.sessionID,
+          callID: input.callID,
+          taskID: taskID ?? input.callID,
+          decision: decision.allowed ? "ALLOW" : "BLOCK",
+          allowed: decision.allowed,
+          reason: decision.reason,
+        })
+
+        if (!decision.allowed) {
+          closePhase(input.callID, "blocked", "")
+          throw new Error(`Tony Kernel blocked Task ${input.callID}: ${decision.reason}`)
+        }
       }
 
       emit("TOOL_EXECUTE_START", { sessionID: input.sessionID, callID: input.callID, tool: input.tool })
