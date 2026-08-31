@@ -1,11 +1,11 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { appendFileSync } from "node:fs"
 import { join } from "node:path"
+import { authorizeExecution } from "../kernel/authorize-execution"
 
 type TraceEvent = Record<string, unknown> & { event: string; ts: string }
 type Phase = { phase: string; taskID: string; callID: string; sessionID: string; startedAt: number }
 type TokenSnapshot = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }
-type KernelDecision = { allowed: boolean; reason: string }
 
 const PHASES = new Set([
   "sdd-init", "sdd-explore", "sdd-propose", "sdd-spec", "sdd-design",
@@ -114,24 +114,6 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     phases.delete(callID)
     taskPhaseByCall.delete(callID)
     taskEvents.delete(callID)
-  }
-
-  // Kernel boundary. The decision is made synchronously inside tool.execute.before,
-  // after TASK_CREATE/PHASE_ENTER and before TOOL_EXECUTE_START. A Task without a
-  // concrete subagent is rejected so an ungoverned delegation can never execute.
-  const authorizeExecution = async (input: {
-    tool: string
-    sessionID: string
-    callID: string
-    subagent?: string
-  }): Promise<KernelDecision> => {
-    if (input.tool !== "task") {
-      return { allowed: true, reason: "not_task" }
-    }
-    if (!input.subagent) {
-      return { allowed: false, reason: "missing_subagent" }
-    }
-    return { allowed: true, reason: "task_delegation_authorized" }
   }
 
   return {
