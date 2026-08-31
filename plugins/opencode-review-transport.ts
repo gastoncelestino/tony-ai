@@ -1,5 +1,17 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { spawn } from "node:child_process"
+import { appendFileSync } from "node:fs"
+import path from "node:path"
+
+const DEBUG_LOG_PATH = process.env.TONY_DEBUG_LOG ?? path.join(process.cwd(), "tony-debug.log")
+function debugLog(message: string, details?: Record<string, unknown>) {
+  try {
+    const suffix = details ? ` ${JSON.stringify(details)}` : ""
+    appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] [REVIEW_TRANSPORT] ${message}${suffix}\n`, "utf8")
+  } catch (err) {
+    console.error("[review-transport] debug log failed:", err)
+  }
+}
 
 const REVIEW_AGENTS = new Set(["review-risk", "review-resilience", "review-readability", "review-reliability", "review-refuter", "review-validator"])
 const TRANSPORT = {
@@ -32,18 +44,6 @@ interface RelayRegistration {
   completing: boolean
 }
 
-// The relay registry is deliberately process-global so duplicate plugin
-// instances (for example one loaded from global config and one from project
-// config) share a single view of live review Task relays instead of spawning
-// duplicate Go processes for the same task.
-//
-// Owner invariant: every registration is owned by exactly one plugin instance
-// (the `owner` symbol of the instance whose before hook spawned its relay),
-// and only that owner may complete, delete, or close it. An instance that
-// observes an already-registered key at before time defers to the owner and
-// passes the task through untouched at after time. A completion for a key an
-// instance neither owns nor deferred is a protocol violation and refuses
-// loudly instead of silently dropping the completion.
 const RELAY_REGISTRY_KEY = "__gentleAiOpenCodeReviewTransportRelays" as const
 
 function reviewRelayRegistry(): Map<string, RelayRegistration> {
@@ -56,13 +56,6 @@ function taskKey(sessionID: string, callID: string): string {
   return `${sessionID}:${callID}`
 }
 
-// A refused relay must fail the Task loudly and never launch an unbound
-// child. Throwing from the before hook is the primary refusal; these two
-// projections keep the refusal authoritative even in a host runtime that
-// swallows hook errors and launches the Task anyway: the child receives only
-// this refusal prompt (never the semi-bound original), and the after hook
-// replaces the child's raw output with the typed transport refusal so an
-// unbound child's prose can never masquerade as a captured reviewer result.
 const RELAY_REFUSED_CODE = "opencode_review_transport_relay_refused"
 
 function relayRefusedReason(cause: unknown): string {
@@ -89,6 +82,7 @@ function decodeTransportFrame(line: string): TransportFrame {
 }
 
 function startRelay(cwd: string, prompt: string): Relay {
+  debugLog("starting Go review relay", { cwd, promptLength: prompt.length })
   const child = spawn(TRANSPORT.Command, ["review", "opencode-transport"], { cwd, stdio: ["pipe", "pipe", "pipe"] })
   let buffered = ""
   let closed = false
@@ -104,6 +98,7 @@ function startRelay(cwd: string, prompt: string): Relay {
   const fail = (cause: unknown) => {
     if (closed) return
     closed = true
+    debugLog("relay failed", { error: String(cause) })
     rejectPrompt(cause)
     rejectResult(cause)
   }
@@ -116,6 +111,7 @@ function startRelay(cwd: string, prompt: string): Relay {
       buffered = buffered.slice(newline + 1)
       try {
         const frame = decodeTransportFrame(line)
+        debugLog("relay frame received", { operation: frame.operation, hasNonce: !!frame.nonce, outputLength: frame.output?.length ?? 0 })
         if (frame.schema !== TRANSPORT.Schema) throw new Error("invalid Go transport schema")
         if (frame.operation === TRANSPORT.Prompt && typeof frame.nonce === "string" && frame.nonce !== "" && typeof frame.prompt === "string" && frame.prompt !== "") {
           resolvePrompt({ nonce: frame.nonce, prompt: frame.prompt })
@@ -136,6 +132,7 @@ function startRelay(cwd: string, prompt: string): Relay {
   child.on("error", fail)
   child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk))
   child.on("close", (code) => {
+    debugLog("relay process closed", { code })
     if (!closed) fail(new Error(Buffer.concat(stderr).toString("utf8").trim() || `Go review relay exited before completion (${code ?? "signal"})`))
   })
   child.stdin.write(JSON.stringify({ schema: TRANSPORT.Schema, operation: TRANSPORT.Start, prompt }) + "\n", (cause) => {
@@ -145,6 +142,7 @@ function startRelay(cwd: string, prompt: string): Relay {
     prompt: promptFrame,
     complete: async (output: unknown) => {
       const materialized = await promptFrame
+      debugLog("completing relay", { nonce: materialized.nonce, outputType: typeof output, outputLength: typeof output === "string" ? output.length : undefined })
       const completion: TransportFrame = { schema: TRANSPORT.Schema, operation: TRANSPORT.Complete, nonce: materialized.nonce }
       if (typeof output === "string") completion.output = output
       else completion.error = "opencode_task_host_output_unavailable"
@@ -152,6 +150,7 @@ function startRelay(cwd: string, prompt: string): Relay {
       return resultFrame
     },
     close: () => {
+      debugLog("closing relay")
       if (!closed) closed = true
       if (!child.killed) child.kill()
     },
@@ -161,30 +160,21 @@ function startRelay(cwd: string, prompt: string): Relay {
 const OpenCodeReviewTransportPlugin: Plugin = async ({ directory, worktree }) => {
   const owner = Symbol("gentle-ai-opencode-review-transport")
   const relays = reviewRelayRegistry()
-  // Keys this instance observed at before time whose registration another
-  // instance owns. The owning instance's after hook delivers the completion,
-  // so this instance's after hook passes those tasks through untouched. This
-  // deferral is the only tolerated silent completion path; every other
-  // unmatched completion refuses loudly.
   const deferred = new Map<string, RelayRegistration>()
-  // Keys whose relay start this instance refused. Their Tasks must never
-  // deliver child output as a completion, even if the host runtime swallowed
-  // the before hook's thrown refusal and launched the Task anyway.
   const refused = new Map<string, string>()
   const cwd = () => worktree || directory
+  debugLog("plugin initialized", { directory, worktree, registrySize: relays.size })
   const clearOwned = (key: string) => {
     const registration = relays.get(key)
     if (!registration || registration.owner !== owner) return
+    debugLog("clearing owned relay", { key })
     relays.delete(key)
     registration.relay.close()
   }
   const clearSession = (prefix: string) => {
-    // Owner-scoped on purpose: every live instance receives session.deleted
-    // and clears its own registrations, so the session empties collectively
-    // without one instance closing relays it does not own. A disposed
-    // instance's registrations are cleared by its dispose hook instead.
     for (const [key, registration] of relays) {
       if (!key.startsWith(prefix) || registration.owner !== owner) continue
+      debugLog("clearing relay for deleted session", { key })
       relays.delete(key)
       registration.relay.close()
     }
@@ -193,12 +183,14 @@ const OpenCodeReviewTransportPlugin: Plugin = async ({ directory, worktree }) =>
   }
   return {
     dispose: async () => {
+      debugLog("plugin dispose", { ownedRelays: [...relays.values()].filter((r) => r.owner === owner).length })
       deferred.clear()
       refused.clear()
       for (const [key, registration] of relays) if (registration.owner === owner) clearOwned(key)
     },
     event: async ({ event }) => {
       if (event.type !== "session.deleted") return
+      debugLog("session.deleted", { sessionID: event.properties.info.id })
       const prefix = `${event.properties.info.id}:`
       clearSession(prefix)
     },
@@ -206,43 +198,37 @@ const OpenCodeReviewTransportPlugin: Plugin = async ({ directory, worktree }) =>
       if (input.tool !== "task" || typeof output.args?.subagent_type !== "string" || !REVIEW_AGENTS.has(output.args.subagent_type)) return
       if (typeof output.args.prompt !== "string") throw new Error("review task prompt is unavailable for Go relay materialization")
       const key = taskKey(input.sessionID, input.callID)
+      debugLog("review Task before", { sessionID: input.sessionID, callID: input.callID, subagent: output.args.subagent_type, key })
       const existing = relays.get(key)
       if (existing) {
-        // Another instance already owns this task's relay: defer completion
-        // to that owner and pass this instance's hooks through untouched. A
-        // re-fired before hook for a registration this instance already owns
-        // keeps the live registration and defers nothing.
         if (existing.owner !== owner) deferred.set(key, existing)
+        debugLog("existing relay found", { key, ownedByThisInstance: existing.owner === owner })
         return
       }
       const relay = startRelay(cwd(), output.args.prompt)
       relays.set(key, { owner, relay, completing: false })
       try {
         output.args.prompt = (await relay.prompt).prompt
+        debugLog("review prompt materialized", { key, promptLength: output.args.prompt.length })
       } catch (cause) {
         clearOwned(key)
         const reason = relayRefusedReason(cause)
         refused.set(key, reason)
         output.args.prompt = relayRefusedPrompt(reason)
+        debugLog("review relay refused", { key, reason })
         throw cause
       }
     },
     "tool.execute.after": async (input, output) => {
       if (input.tool !== "task" || typeof input.args?.subagent_type !== "string" || !REVIEW_AGENTS.has(input.args.subagent_type)) return
       const key = taskKey(input.sessionID, input.callID)
+      debugLog("review Task after", { sessionID: input.sessionID, callID: input.callID, subagent: input.args.subagent_type, key, outputLength: typeof output.output === "string" ? output.output.length : undefined })
       const refusal = refused.get(key)
       if (refusal !== undefined) {
         refused.delete(key)
         output.output = relayRefusedOutput(refusal)
         throw new Error(relayRefusedOutput(refusal))
       }
-      // Owner-scoped dedup tolerance: this instance saw the before hook for
-      // this task but another instance owns the relay, so that owner's after
-      // hook delivers the completion and this one passes through untouched.
-      // The pass-through holds only while that exact owning registration is
-      // still live or has delivered its own completion; a deferred key whose
-      // owner vanished without completing falls through to the loud orphan
-      // refusal below instead of returning raw reviewer output as success.
       const deferredTo = deferred.get(key)
       if (deferredTo !== undefined) {
         deferred.delete(key)
@@ -255,6 +241,7 @@ const OpenCodeReviewTransportPlugin: Plugin = async ({ directory, worktree }) =>
       registration.completing = true
       try {
         output.output = await registration.relay.complete(output.output)
+        debugLog("review relay result materialized", { key, outputLength: typeof output.output === "string" ? output.output.length : undefined })
       } finally {
         if (relays.get(key) === registration) relays.delete(key)
         registration.relay.close()
