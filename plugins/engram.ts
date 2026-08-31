@@ -15,22 +15,10 @@
  */
 
 import type { Plugin } from "@opencode-ai/plugin"
-import { appendFileSync } from "node:fs"
-import path from "node:path"
 
 const ENGRAM_PORT = parseInt(process.env.ENGRAM_PORT ?? "7437")
 const ENGRAM_URL = `http://127.0.0.1:${ENGRAM_PORT}`
 const ENGRAM_BIN = process.env.ENGRAM_BIN ?? Bun.which("engram") ?? "/home/tony/.local/bin/engram"
-const DEBUG_LOG_PATH = process.env.TONY_DEBUG_LOG ?? path.join(process.cwd(), "engram-debug.log")
-
-function debugLog(message: string, details?: Record<string, unknown>) {
-  try {
-    const suffix = details ? ` ${JSON.stringify(details)}` : ""
-    appendFileSync(DEBUG_LOG_PATH, `[${new Date().toISOString()}] [ENGRAM] ${message}${suffix}\n`, "utf8")
-  } catch (err) {
-    console.error("[engram] debug log failed:", err)
-  }
-}
 
 const ENGRAM_TOOLS = new Set([
   "mem_search",
@@ -132,18 +120,14 @@ async function engramFetch(
   opts: { method?: string; body?: any } = {}
 ): Promise<any> {
   const method = opts.method ?? "GET"
-  debugLog("HTTP request", { method, path, hasBody: !!opts.body })
   try {
     const res = await fetch(`${ENGRAM_URL}${path}`, {
       method,
       headers: opts.body ? { "Content-Type": "application/json" } : undefined,
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     })
-    const data = await res.json()
-    debugLog("HTTP response", { method, path, status: res.status, ok: res.ok })
-    return data
-  } catch (err) {
-    debugLog("HTTP failed", { method, path, error: String(err) })
+    return await res.json()
+  } catch {
     return null
   }
 }
@@ -153,10 +137,8 @@ async function isEngramRunning(): Promise<boolean> {
     const res = await fetch(`${ENGRAM_URL}/health`, {
       signal: AbortSignal.timeout(500),
     })
-    debugLog("health check", { status: res.status, ok: res.ok })
     return res.ok
-  } catch (err) {
-    debugLog("health check failed", { error: String(err) })
+  } catch {
     return false
   }
 }
@@ -197,7 +179,6 @@ function stripPrivateTags(str: string): string {
 export const Engram: Plugin = async (ctx) => {
   const oldProject = ctx.directory.split("/").pop() ?? "unknown"
   const project = extractProjectName(ctx.directory)
-  debugLog("plugin initialized", { project, directory: ctx.directory, oldProject, engramUrl: ENGRAM_URL, engramBin: ENGRAM_BIN, debugLog: DEBUG_LOG_PATH })
 
   const toolCounts = new Map<string, number>()
   const lastNudgeTime = new Map<string, number>()
@@ -206,12 +187,8 @@ export const Engram: Plugin = async (ctx) => {
 
   async function ensureSession(sessionId: string): Promise<void> {
     if (!sessionId || knownSessions.has(sessionId)) return
-    if (subAgentSessions.has(sessionId)) {
-      debugLog("session skipped: subagent", { sessionID: sessionId })
-      return
-    }
+    if (subAgentSessions.has(sessionId)) return
     knownSessions.add(sessionId)
-    debugLog("ensuring session", { sessionID: sessionId, project })
     await engramFetch("/sessions", {
       method: "POST",
       body: {
@@ -224,7 +201,6 @@ export const Engram: Plugin = async (ctx) => {
 
   const running = await isEngramRunning()
   if (!running) {
-    debugLog("Engram server not running; attempting spawn", { command: ENGRAM_BIN })
     try {
       Bun.spawn([ENGRAM_BIN, "serve"], {
         stdout: "ignore",
@@ -232,16 +208,10 @@ export const Engram: Plugin = async (ctx) => {
         stdin: "ignore",
       })
       await new Promise((r) => setTimeout(r, 500))
-      debugLog("Engram server spawn attempted")
-    } catch (err) {
-      debugLog("Engram server spawn failed", { error: String(err) })
-    }
-  } else {
-    debugLog("Engram server already running")
+    } catch {}
   }
 
   if (oldProject !== project) {
-    debugLog("project migration", { oldProject, project })
     await engramFetch("/projects/migrate", {
       method: "POST",
       body: { old_project: oldProject, new_project: project },
@@ -252,44 +222,34 @@ export const Engram: Plugin = async (ctx) => {
     const manifestFile = `${ctx.directory}/.engram/manifest.json`
     const file = Bun.file(manifestFile)
     if (await file.exists()) {
-      debugLog("Engram sync import started", { manifestFile })
       Bun.spawn([ENGRAM_BIN, "sync", "--import"], {
         cwd: ctx.directory,
         stdout: "ignore",
         stderr: "ignore",
         stdin: "ignore",
       })
-    } else {
-      debugLog("Engram sync import skipped: no manifest", { manifestFile })
     }
-  } catch (err) {
-    debugLog("Engram sync import failed", { error: String(err) })
-  }
+  } catch {}
 
   return {
     event: async ({ event }) => {
-      debugLog("event", { type: event.type })
-
       if (event.type === "session.created") {
         const info = (event.properties as any)?.info
         const sessionId = info?.id
         const parentID = info?.parentID
         const title: string = info?.title ?? ""
         const isSubAgent = !!parentID || title.endsWith(" subagent)")
-        debugLog("session.created", { sessionID: sessionId, parentID, title, isSubAgent })
 
         if (sessionId && !isSubAgent) {
           await ensureSession(sessionId)
         } else if (sessionId && isSubAgent) {
           subAgentSessions.add(sessionId)
-          debugLog("subagent session registered", { sessionID: sessionId, parentID })
         }
       }
 
       if (event.type === "session.deleted") {
         const info = (event.properties as any)?.info
         const sessionId = info?.id
-        debugLog("session.deleted", { sessionID: sessionId })
         if (sessionId) {
           toolCounts.delete(sessionId)
           knownSessions.delete(sessionId)
@@ -300,10 +260,7 @@ export const Engram: Plugin = async (ctx) => {
     },
 
     "chat.message": async (input, output) => {
-      if (subAgentSessions.has(input.sessionID)) {
-        debugLog("chat.message skipped: subagent", { sessionID: input.sessionID })
-        return
-      }
+      if (subAgentSessions.has(input.sessionID)) return
 
       const sessionId = input.sessionID
       const content = output.parts
@@ -317,7 +274,6 @@ export const Engram: Plugin = async (ctx) => {
         : ""
 
       const finalContent = content || fallback
-      debugLog("chat.message", { sessionID: sessionId, contentLength: finalContent.length, contentPreview: truncate(finalContent, 120) })
 
       if (finalContent.length > 10) {
         await ensureSession(sessionId)
@@ -329,32 +285,23 @@ export const Engram: Plugin = async (ctx) => {
             project,
           },
         })
-      } else {
-        debugLog("prompt not persisted: length <= 10", { sessionID: sessionId, contentLength: finalContent.length })
       }
     },
 
     "tool.execute.after": async (input, output) => {
       const toolName = input.tool.toLowerCase()
-      debugLog("tool.execute.after", { sessionID: input.sessionID, callID: input.callID, tool: input.tool })
-      if (ENGRAM_TOOLS.has(toolName)) {
-        debugLog("tool ignored: Engram MCP tool", { sessionID: input.sessionID, callID: input.callID, tool: input.tool })
-        return
-      }
+      if (ENGRAM_TOOLS.has(toolName)) return
 
       const sessionId = input.sessionID
       if (sessionId) {
         await ensureSession(sessionId)
         const count = (toolCounts.get(sessionId) ?? 0) + 1
         toolCounts.set(sessionId, count)
-        debugLog("tool count updated", { sessionID: sessionId, tool: input.tool, count })
       }
 
       if (input.tool === "Task" && output && sessionId) {
         const text = typeof output === "string" ? output : JSON.stringify(output)
-        debugLog("Task completed", { sessionID: sessionId, callID: input.callID, outputLength: text.length })
         if (text.length > 50) {
-          debugLog("passive observation POST", { sessionID: sessionId, callID: input.callID, source: "task-complete", contentLength: text.length })
           await engramFetch("/observations/passive", {
             method: "POST",
             body: {
@@ -364,15 +311,11 @@ export const Engram: Plugin = async (ctx) => {
               source: "task-complete",
             },
           })
-        } else {
-          debugLog("passive observation skipped: Task output <= 50 chars", { sessionID: sessionId, callID: input.callID, outputLength: text.length })
         }
       }
     },
 
     "experimental.chat.system.transform": async (input, output) => {
-      debugLog("system.transform before", { sessionID: input.sessionID, systemMessages: output.system.length })
-
       if (output.system.length > 0) {
         output.system[output.system.length - 1] += "\n\n" + MEMORY_INSTRUCTIONS
       } else {
@@ -438,16 +381,10 @@ export const Engram: Plugin = async (ctx) => {
           output.system.push(nudge)
         }
         lastNudgeTime.set(sessionID, nowSecs)
-        debugLog("memory nudge injected", { sessionID })
-      } catch (err) {
-        debugLog("memory nudge failed silently", { sessionID: input.sessionID, error: String(err) })
-      }
-
-      debugLog("system.transform after", { sessionID: input.sessionID, systemMessages: output.system.length, lastSystemLength: output.system.at(-1)?.length ?? 0 })
+      } catch {}
     },
 
     "experimental.session.compacting": async (input, output) => {
-      debugLog("session.compacting", { sessionID: input.sessionID, contextEntriesBefore: output.context.length })
       if (input.sessionID) {
         await ensureSession(input.sessionID)
       }
@@ -455,9 +392,6 @@ export const Engram: Plugin = async (ctx) => {
       const data = await engramFetch(`/context?project=${encodeURIComponent(project)}`)
       if (data?.context) {
         output.context.push(data.context)
-        debugLog("compaction context injected", { sessionID: input.sessionID, contextLength: data.context.length })
-      } else {
-        debugLog("compaction context empty", { sessionID: input.sessionID })
       }
 
       output.context.push(
@@ -468,7 +402,6 @@ export const Engram: Plugin = async (ctx) => {
         `Use project: '${project}'. This preserves what was accomplished before compaction. Do this BEFORE any other work."\n\n` +
         `This is NOT optional. Without this, everything done before compaction is lost from memory.`
       )
-      debugLog("session.compacting complete", { sessionID: input.sessionID, contextEntriesAfter: output.context.length })
     },
   }
 }
