@@ -1,15 +1,11 @@
 import { spawn } from "node:child_process"
-import { decodeKernelBoundaryResponse, decodeKernelContextResponse, encodeKernelBoundaryRequest, encodeKernelContextRequest, type KernelBoundaryRequest, type KernelBoundaryResponse, type KernelContextRequest, type KernelContextResponse } from "./protocol"
+import { decodeKernelBoundaryResponse, decodeKernelCommandResponse, decodeKernelContextResponse, encodeKernelBoundaryRequest, encodeKernelCommandRequest, encodeKernelContextRequest, type KernelBoundaryRequest, type KernelBoundaryResponse, type KernelCommandRequest, type KernelCommandResponse, type KernelContextRequest, type KernelContextResponse } from "./protocol"
 
 export type KernelTransportOptions = { command?: string; args?: string[]; timeoutMs?: number; cwd?: string }
 
-export async function callKernelBoundary(request: KernelBoundaryRequest, options: KernelTransportOptions = {}): Promise<KernelBoundaryResponse> {
-  return callKernelProcess(encodeKernelBoundaryRequest(request), options, decodeKernelBoundaryResponse, "Kernel boundary")
-}
-
-export async function getKernelContext(request: KernelContextRequest, options: KernelTransportOptions = {}): Promise<KernelContextResponse> {
-  return callKernelProcess(encodeKernelContextRequest(request), options, decodeKernelContextResponse, "Kernel context")
-}
+export async function callKernelBoundary(request: KernelBoundaryRequest, options: KernelTransportOptions = {}): Promise<KernelBoundaryResponse> { return callKernelProcess(encodeKernelBoundaryRequest(request), options, decodeKernelBoundaryResponse, "Kernel boundary") }
+export async function getKernelContext(request: KernelContextRequest, options: KernelTransportOptions = {}): Promise<KernelContextResponse> { return callKernelProcess(encodeKernelContextRequest(request), options, decodeKernelContextResponse, "Kernel context") }
+export async function callKernelCommand(request: KernelCommandRequest, options: KernelTransportOptions = {}): Promise<KernelCommandResponse> { return callKernelProcess(encodeKernelCommandRequest(request), options, decodeKernelCommandResponse, "Kernel command") }
 
 async function callKernelProcess<T>(payload: string, options: KernelTransportOptions, decode: (payload: string) => T, label: string): Promise<T> {
   const command = options.command ?? process.env.TONYMEM_PYTHON ?? "python3"
@@ -20,12 +16,7 @@ async function callKernelProcess<T>(payload: string, options: KernelTransportOpt
     let stdout = ""
     let stderr = ""
     const child = spawn(command, args, { cwd: options.cwd, stdio: ["pipe", "pipe", "pipe"] })
-    const finish = (response: T) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      resolve(response)
-    }
+    const finish = (response: T) => { if (settled) return; settled = true; clearTimeout(timer); resolve(response) }
     const timer = setTimeout(() => { child.kill(); finish(fallback<T>(`${label} transport timed out`)) }, timeoutMs)
     child.stdout.setEncoding("utf8")
     child.stderr.setEncoding("utf8")
@@ -35,13 +26,10 @@ async function callKernelProcess<T>(payload: string, options: KernelTransportOpt
     child.on("close", (code) => {
       if (settled) return
       if (code !== 0) return finish(fallback<T>(`${label} process failed${stderr.trim() ? `: ${stderr.trim()}` : ""}`))
-      try { finish(decode(stdout.trim())) }
-      catch { finish(fallback<T>(`Invalid ${label} response`)) }
+      try { finish(decode(stdout.trim())) } catch { finish(fallback<T>(`Invalid ${label} response`)) }
     })
     child.stdin.end(payload)
   })
 }
 
-function fallback<T>(reason: string): T {
-  return { available: false, reason } as T
-}
+function fallback<T>(reason: string): T { return { available: false, reason } as T }
