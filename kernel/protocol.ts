@@ -3,6 +3,17 @@ export type KernelPhase = (typeof KERNEL_PHASES)[number]
 
 export type KernelTask = { id: string; description: string; phase: KernelPhase; dependencies: string[]; files?: string[] }
 export type KernelContext = { phase: string; status: string; tasks: KernelTask[]; completed: string[] }
+
+export type KernelContextRequest = {
+  operation: "get_context"
+  project_directory: string
+  session_id: string
+}
+
+export type KernelContextResponse =
+  | { available: true; context: KernelContext }
+  | { available: false; reason: string }
+
 export type KernelBoundaryRequest = KernelContext & { requested_description: string }
 export type KernelExecutionOrder = { task_id: string; description: string; phase: KernelPhase; files: string[] }
 export type KernelBoundaryResponse =
@@ -26,12 +37,27 @@ export function isKernelContext(value: unknown): value is KernelContext {
     Array.isArray(context.completed) && context.completed.every((id) => typeof id === "string")
 }
 
+export function encodeKernelContextRequest(request: KernelContextRequest): string { return JSON.stringify(request) }
+
+export function decodeKernelContextResponse(payload: string): KernelContextResponse {
+  const value: unknown = JSON.parse(payload)
+  if (!isKernelContextResponse(value)) throw new Error("Invalid Kernel context response")
+  return value
+}
+
 export function encodeKernelBoundaryRequest(request: KernelBoundaryRequest): string { return JSON.stringify(request) }
 
 export function decodeKernelBoundaryResponse(payload: string): KernelBoundaryResponse {
   const value: unknown = JSON.parse(payload)
   if (!isKernelBoundaryResponse(value)) throw new Error("Invalid Kernel boundary response")
   return value
+}
+
+function isKernelContextResponse(value: unknown): value is KernelContextResponse {
+  if (!value || typeof value !== "object") return false
+  const response = value as Record<string, unknown>
+  if (response.available === false) return typeof response.reason === "string"
+  return response.available === true && isKernelContext(response.context)
 }
 
 function isKernelBoundaryResponse(value: unknown): value is KernelBoundaryResponse {
