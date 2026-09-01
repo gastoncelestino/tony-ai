@@ -26,22 +26,22 @@ async function callKernelProcess<T>(payload: string, options: KernelTransportOpt
       clearTimeout(timer)
       resolve(response)
     }
-    const timer = setTimeout(() => { child.kill(); finish(blocked(`${label} transport timed out`)) }, timeoutMs)
+    const timer = setTimeout(() => { child.kill(); finish(fallback<T>(`${label} transport timed out`)) }, timeoutMs)
     child.stdout.setEncoding("utf8")
     child.stderr.setEncoding("utf8")
     child.stdout.on("data", (chunk: string) => { stdout += chunk })
     child.stderr.on("data", (chunk: string) => { stderr += chunk })
-    child.on("error", (error) => finish(blocked(`${label} process unavailable: ${error.message}`)))
+    child.on("error", (error) => finish(fallback<T>(`${label} process unavailable: ${error.message}`)))
     child.on("close", (code) => {
       if (settled) return
-      if (code !== 0) return finish(blocked(`${label} process failed${stderr.trim() ? `: ${stderr.trim()}` : ""}`))
+      if (code !== 0) return finish(fallback<T>(`${label} process failed${stderr.trim() ? `: ${stderr.trim()}` : ""}`))
       try { finish(decode(stdout.trim())) }
-      catch { finish(blocked(`Invalid ${label} response`)) }
+      catch { finish(fallback<T>(`Invalid ${label} response`)) }
     })
     child.stdin.end(payload)
   })
 }
 
-function blocked(reason: string): KernelBoundaryResponse & KernelContextResponse {
-  return { allowed: false, decision: "blocked", reason, execution_order: null, available: false }
+function fallback<T>(reason: string): T {
+  return { available: false, reason } as T
 }
