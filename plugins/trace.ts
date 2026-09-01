@@ -54,8 +54,17 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     const sessionID = childSessionID ?? phase.sessionID
     emit("PHASE_EXIT", { phase: phase.phase, taskID: phase.taskID, callID, sessionID, status, durationMs: Date.now() - phase.startedAt, tokens: sessionTokens.get(sessionID) ?? zeroTokens(), resultLength: typeof result === "string" ? result.length : undefined })
     const observed = taskEvents.get(callID) ?? new Set<string>()
-    const missing = REQUIRED_TRACE.filter((name) => !observed.has(name))
-    emit(missing.length === 0 ? "TRACE_VALID" : "TRACE_INVALID", { callID, taskID: phase.taskID, phase: phase.phase, ...(missing.length ? { missing } : { events: REQUIRED_TRACE.length }) })
+
+    // A kernel BLOCK is a valid terminal path for the phase: execution is
+    // intentionally stopped before TOOL_EXECUTE_START, TOOL_RESULT and
+    // TASK_COMPLETE. Do not classify those expected missing events as invalid.
+    if (status === "blocked") {
+      emit("TRACE_BLOCKED", { callID, taskID: phase.taskID, phase: phase.phase })
+    } else {
+      const missing = REQUIRED_TRACE.filter((name) => !observed.has(name))
+      emit(missing.length === 0 ? "TRACE_VALID" : "TRACE_INVALID", { callID, taskID: phase.taskID, phase: phase.phase, ...(missing.length ? { missing } : { events: REQUIRED_TRACE.length }) })
+    }
+
     phases.delete(callID); taskEvents.delete(callID)
   }
 
