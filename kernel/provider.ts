@@ -1,44 +1,28 @@
-import { execFile } from "node:child_process"
-import { promisify } from "node:util"
-import { join } from "node:path"
-import { isKernelContext, type KernelContext } from "./protocol"
-
-const execFileAsync = promisify(execFile)
+import type { KernelContext, KernelContextRequest, KernelContextResponse } from "./protocol"
 
 export type KernelContextProviderResult =
   | { kind: "available"; context: KernelContext }
   | { kind: "unavailable"; reason: string }
 
-export type KernelContextProviderOptions = { pythonCommand?: string; contextScript?: string; dbPath?: string; timeoutMs?: number }
-type CanonicalContext = { available: boolean; reason?: string; state?: unknown }
+export type KernelContextTransport = (request: KernelContextRequest) => Promise<KernelContextResponse>
 
-export function parseCanonicalContext(stdout: string): KernelContextProviderResult {
-  let payload: CanonicalContext
-  try { payload = JSON.parse(stdout) as CanonicalContext }
-  catch { return { kind: "unavailable", reason: "Invalid canonical TaskSet context response" } }
-  if (payload.available !== true) return { kind: "unavailable", reason: payload.reason ?? "Canonical TaskSet context unavailable" }
-  if (!isKernelContext(payload.state)) return { kind: "unavailable", reason: "Canonical TaskSet context is incomplete" }
-  return { kind: "available", context: payload.state }
-}
-
-export function createKernelContextProvider(projectDirectory: string, options: KernelContextProviderOptions = {}) {
-  const pythonCommand = options.pythonCommand ?? process.env.TONYMEM_PYTHON ?? "python3"
-  const contextScript = options.contextScript ?? process.env.TONYMEM_TASKSET_CONTEXT_SCRIPT ?? `${projectDirectory}/kernel/task_set_context.py`
-  const dbPath = options.dbPath ?? process.env.LOCAL_MEMORY_DB ?? join(projectDirectory, "local-memory", "memory.db")
-  const timeoutMs = options.timeoutMs ?? 3000
+export function createKernelContextProvider(getContext: KernelContextTransport) {
   return {
-    async getContext(input: { sessionID: string; tool: string }): Promise<KernelContextProviderResult> {
-      if (input.tool.toLowerCase() !== "task") return { kind: "unavailable", reason: "Kernel context requested for non-Task tool" }
-      const env = { ...process.env }
-      delete env.LOCAL_MEMORY_DB
+    async getContext(input: { projectDirectory: string; sessionID: string; tool: string }): Promise<KernelContextProviderResult> {
+      if (input.tool.toLowerCase() !== "task") {
+        return { kind: "unavailable", reason: "Kernel context requested for non-Task tool" }
+      }
       try {
-        const result = await execFileAsync(pythonCommand, [contextScript, "--get", "--project", projectDirectory, "--session-id", input.sessionID, "--db-path", dbPath], {
-          cwd: projectDirectory, timeout: timeoutMs, maxBuffer: 1024 * 1024, env,
+        const response = await getContext({
+          operation: "get_context",
+          project_directory: input.projectDirectory,
+          session_id: input.sessionID,
         })
-        return parseCanonicalContext(result.stdout)
+        if (!response.available) return { kind: "unavailable", reason: response.reason }
+        return { kind: "available", context: response.context }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error)
-        return { kind: "unavailable", reason: `Canonical TaskSet context provider unavailable: ${reason}` }
+        return { kind: "unavailable", reason: `Kernel context provider unavailable: ${reason}` }
       }
     },
   }
