@@ -2,7 +2,7 @@ import { execFile } from "node:child_process"
 import { join } from "node:path"
 import { promisify } from "node:util"
 import { adaptTaskExecutionContext } from "./adapter"
-import { callKernelBoundary } from "./transport"
+import { callKernelBoundary, getKernelContext } from "./transport"
 import type { KernelBoundaryRequest, KernelExecutionOrder } from "./protocol"
 import { createKernelContextProvider } from "./provider"
 
@@ -92,8 +92,8 @@ function validateOrder(request: KernelBoundaryRequest, order: KernelExecutionOrd
 
 export async function authorizeExecution(input: ExecutionAuthorizationInput): Promise<ExecutionAuthorization> {
   if (input.tool.toLowerCase() !== "task") return { allowed: true, reason: "not_task", order: { task_id: input.callID, description: "", phase: "explore", files: [] } }
-  const provider = createKernelContextProvider(input.directory)
-  let provided = await provider.getContext(input)
+  const provider = createKernelContextProvider((request) => getKernelContext(request, { cwd: input.directory }))
+  let provided = await provider.getContext({ projectDirectory: input.directory, sessionID: input.sessionID, tool: input.tool })
   if (provided.kind !== "available" && provided.reason.startsWith("SDD state unavailable")) {
     const key = sessionKey(input.directory, input.sessionID)
     const description = typeof input.args.description === "string" ? input.args.description.trim() : ""
@@ -104,7 +104,7 @@ export async function authorizeExecution(input: ExecutionAuthorizationInput): Pr
     input.args.subagent_type = "explore"
     input.args.command = BOOTSTRAP_COMMAND
     bootstrapSessions.add(key)
-    try { provided = await provider.getContext(input) }
+    try { provided = await provider.getContext({ projectDirectory: input.directory, sessionID: input.sessionID, tool: input.tool }) }
     catch (error) { bootstrapSessions.delete(key); throw error }
     if (provided.kind !== "available") bootstrapSessions.delete(key)
   }
