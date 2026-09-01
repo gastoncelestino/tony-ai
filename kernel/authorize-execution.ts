@@ -47,7 +47,13 @@ async function kernelCommand(directory: string, request: Parameters<typeof callK
 }
 
 async function prepareBootstrap(directory: string, sessionID: string) { await kernelCommand(directory, { operation: "prepare_bootstrap", project_directory: directory, session_id: sessionID }) }
-export function extractTaskResult(output: string) { return (output.match(/<task_result>\s*([\s\S]*?)\s*<\/task_result>/)?.[1] ?? output).trim() }
+
+export function extractTaskResult(output: string) {
+  const withoutTags = output.replace(/<\/?task_result>/g, "").trim()
+  const match = withoutTags.match(/\{[\s\S]*\}/)
+  return (match?.[0] ?? withoutTags).trim()
+}
+
 export async function completeBootstrap(directory: string, sessionID: string, output: string) { await kernelCommand(directory, { operation: "complete_bootstrap", project_directory: directory, session_id: sessionID, decomposition: extractTaskResult(output) }) }
 export async function completeSuccessfulTask(directory: string, sessionID: string, taskId: string, result: { title: string; output: string; metadata: unknown }) {
   await kernelCommand(directory, { operation: "complete_task", project_directory: directory, session_id: sessionID, task_id: taskId, evidence: JSON.stringify([{ kind: "opencode-task-result", title: result.title, output: result.output, metadata: result.metadata }]) })

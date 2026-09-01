@@ -108,7 +108,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       if (phase) {
         const observation = failed(result) ? observations.fail(input.callID, result) : observations.succeed(input.callID, result)
         emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: observation.status, outputLength: result.output.length })
-        emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, childSessionID })
+        emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
         emit("TASK_COMPLETE", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, status: observation.status })
         closePhase(input.callID, observation.status, result.output, childSessionID)
         if (observation.status === "succeeded") {
@@ -117,13 +117,22 @@ export const TonyTrace: Plugin = async ({ directory }) => {
             if (isBootstrap) await completeBootstrap(directory, input.sessionID, result.output)
             else await completeSuccessfulTask(directory, input.sessionID, phase.taskID, result)
           } finally {
-            if (isBootstrap) finishBootstrap(directory, input.sessionID)
+            if (isBootstrap) {
+              try { await completeBootstrap(directory, input.sessionID, result.output) }
+              catch (error) {
+                emit("BOOTSTRAP_FAILED", { sessionID: input.sessionID, callID: input.callID, reason: error instanceof Error ? error.message : String(error) })
+                return // no llames finishBootstrap: dejá bootstrapSessions/originalPromptBySession vivos para el retry
+              }
+              finishBootstrap(directory, input.sessionID)
+            } else {
+              await completeSuccessfulTask(directory, input.sessionID, phase.taskID, result)
+            }
           }
         }
         return
       }
       emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: failed(result) ? "error" : "completed", outputLength: result.output.length })
-      emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length })
+      emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
     },
 
     event: async ({ event }) => {
