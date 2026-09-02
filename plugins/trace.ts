@@ -164,7 +164,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         sessionId: input.sessionID,
         callId: input.callID,
         tool: input.tool,
-        args: output.args,
+        args: input.args,
         output: result.output,
         metadata: result.metadata,
         failed: status === "failed",
