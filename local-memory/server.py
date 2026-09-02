@@ -2,8 +2,7 @@
 """TonyMem: local persistent memory MCP server for OpenCode 1.18.22.
 
 Stdlib-only JSON-RPC/MCP server. Storage is project-scoped SQLite with WAL and
-FTS5. OpenCode starts local MCP servers with the workspace as cwd, so the
-unconfigured database is stored in <workspace>/.tonymem/memory.db.
+FTS5. The database lives in Tony-AI's existing local-memory directory.
 """
 import json
 import os
@@ -12,7 +11,9 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 
-DB_PATH = os.environ.get("LOCAL_MEMORY_DB") or os.path.join(os.getcwd(), ".tonymem", "memory.db")
+DB_PATH = os.environ.get("LOCAL_MEMORY_DB") or os.path.join(
+os.path.dirname(os.path.abspath(__file__)), "memory.db"
+)
 
 
 def now():
@@ -32,294 +33,261 @@ def connect():
 def init_db():
     conn = connect()
     try:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS observations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project TEXT NOT NULL DEFAULT 'default',
-                scope TEXT NOT NULL DEFAULT 'project',
-                title TEXT NOT NULL,
-                topic_key TEXT,
-                type TEXT NOT NULL DEFAULT 'manual',
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                lifecycle_status TEXT NOT NULL DEFAULT 'active'
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_project_topic
-                ON observations(project, topic_key)
-                WHERE topic_key IS NOT NULL;
-            CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts
-                USING fts5(title, content, content='observations', content_rowid='id');
-            CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
-                INSERT INTO observations_fts(rowid,title,content) VALUES(new.id,new.title,new.content);
-            END;
-            CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
-                INSERT INTO observations_fts(observations_fts,rowid,title,content)
-                VALUES('delete',old.id,old.title,old.content);
-            END;
-            CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
-                INSERT INTO observations_fts(observations_fts,rowid,title,content)
-                VALUES('delete',old.id,old.title,old.content);
-                INSERT INTO observations_fts(rowid,title,content)
-                VALUES(new.id,new.title,new.content);
-            END;
-            """
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project TEXT NOT NULL,
+            scope TEXT NOT NULL DEFAULT 'project',
+            title TEXT NOT NULL,
+            topic_key TEXT,
+            type TEXT NOT NULL DEFAULT 'fact',
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            lifecycle_status TEXT NOT NULL DEFAULT 'active'
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS observations_project_topic
+            ON observations(project, topic_key)
+            WHERE topic_key IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS observations_project_updated
+            ON observations(project, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS observations_project_status
+            ON observations(project, lifecycle_status);
+        CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
+            title, content, topic_key, content='observations', content_rowid='id'
+        );
+        CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
+            INSERT INTO observations_fts(rowid, title, content, topic_key)
+            VALUES (new.id, new.title, new.content, new.topic_key);
+        END;
+        CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
+            INSERT INTO observations_fts(observations_fts, rowid, title, content, topic_key)
+            VALUES ('delete', old.id, old.title, old.content, old.topic_key);
+        END;
+        CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
+            INSERT INTO observations_fts(observations_fts, rowid, title, content, topic_key)
+            VALUES ('delete', old.id, old.title, old.content, old.topic_key);
+            INSERT INTO observations_fts(rowid, title, content, topic_key)
+            VALUES (new.id, new.title, new.content, new.topic_key);
+        END;
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def result(value):
+    return {"content": [{"type": "text", "text": json.dumps(value, ensure_ascii=False)}]}
+
+
+def error(message):
+    return {"isError": True, "content": [{"type": "text", "text": message}]}
+
+
+def args_required(args, names):
+    missing = [name for name in names if not args.get(name)]
+    if missing:
+        raise ValueError("Missing required arguments: " + ", ".join(missing))
+
+
+def save(args):
+    args_required(args, ["project", "title", "content"])
+    ts = now()
+    project = args["project"]
+    topic_key = args.get("topic_key")
+    conn = connect()
+    try:
+        if topic_key:
+            row = conn.execute(
+                "SELECT id FROM observations WHERE project=? AND topic_key=?",
+                (project, topic_key),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    "UPDATE observations SET scope=?, title=?, type=?, content=?, updated_at=?, lifecycle_status=? WHERE id=?",
+                    (args.get("scope", "project"), args["title"], args.get("type", "fact"), args["content"], ts, args.get("lifecycle_status", "active"), row["id"]),
+                )
+                conn.commit()
+                return {"id": row["id"], "updated": True}
+        cur = conn.execute(
+            "INSERT INTO observations(project, scope, title, topic_key, type, content, created_at, updated_at, lifecycle_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (project, args.get("scope", "project"), args["title"], topic_key, args.get("type", "fact"), args["content"], ts, ts, args.get("lifecycle_status", "active")),
         )
         conn.commit()
-        try:
-            conn.execute("ALTER TABLE observations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'")
-            conn.commit()
-        except sqlite3.OperationalError:
-            pass
+        return {"id": cur.lastrowid, "created": True}
     finally:
         conn.close()
 
 
-def fts_query(query, mode="all"):
-    tokens = [x.replace('"', '""') for x in query.split() if x.strip()]
-    if not tokens:
-        return '""'
-    joiner = " OR " if mode == "any" else " AND "
-    return joiner.join(f'"{x}"' for x in tokens)
-
-
-def mem_save(a):
-    title, content = a["title"], a["content"]
-    topic = a.get("topic_key")
-    project = a.get("project", "default")
+def search(args):
+    args_required(args, ["project", "query"])
+    limit = min(max(int(args.get("limit", 10)), 1), 50)
     conn = connect()
     try:
-        ts = now()
-        existed = bool(topic and conn.execute(
-            "SELECT 1 FROM observations WHERE project=? AND topic_key=?", (project, topic)
-        ).fetchone())
-        row = conn.execute(
-            """INSERT INTO observations
-               (project,scope,title,topic_key,type,content,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,?)
-               ON CONFLICT(project,topic_key) WHERE topic_key IS NOT NULL
-               DO UPDATE SET title=excluded.title, content=excluded.content,
-                 type=excluded.type, scope=excluded.scope, updated_at=excluded.updated_at
-               RETURNING id""",
-            (project, a.get("scope", "project"), title, topic,
-             a.get("type", "manual"), content, ts, ts),
-        ).fetchone()
-        conn.commit()
-        return {"id": row["id"], "action": "updated" if existed else "created", "topic_key": topic}
-    finally:
-        conn.close()
-
-
-def mem_search(a):
-    project, all_projects = a.get("project"), a.get("all_projects", False)
-    typ, scope = a.get("type"), a.get("scope")
-    conn = connect()
-    try:
-        sql = """SELECT o.id,o.project,o.title,o.topic_key,o.type,o.scope,
-                 o.lifecycle_status,
-                 snippet(observations_fts,1,'[',']','...',12) snippet,
-                 o.created_at,o.updated_at
-                 FROM observations_fts f JOIN observations o ON o.id=f.rowid
-                 WHERE observations_fts MATCH ?"""
-        params = [fts_query(a["query"], a.get("match_mode", "all"))]
-        if project and not all_projects:
-            sql += " AND o.project=?"; params.append(project)
-        if typ:
-            sql += " AND o.type=?"; params.append(typ)
-        else:
-            sql += " AND o.type != 'prompt-capture'"
-        if scope:
-            sql += " AND o.scope=?"; params.append(scope)
-        sql += " ORDER BY CASE o.lifecycle_status WHEN 'proven' THEN 0 ELSE 1 END, rank LIMIT ?"
-        params.append(min(int(a.get("limit", 10)), 20))
-        rows = conn.execute(sql, params).fetchall()
-        return {"results": [dict(r) for r in rows], "count": len(rows)}
-    finally:
-        conn.close()
-
-
-def mem_get_observation(a):
-    conn = connect()
-    try:
-        row = conn.execute("SELECT * FROM observations WHERE id=?", (int(a["id"]),)).fetchone()
-        return dict(row) if row else {"error": f"observation {a['id']} not found"}
-    finally:
-        conn.close()
-
-
-def mem_update(a):
-    fields, params = [], []
-    for key in ("title", "content", "type"):
-        if a.get(key) is not None:
-            fields.append(key + "=?"); params.append(a[key])
-    if not fields:
-        return {"error": "nothing to update"}
-    fields.append("updated_at=?"); params.append(now()); params.append(int(a["id"]))
-    conn = connect()
-    try:
-        cur = conn.execute(f"UPDATE observations SET {','.join(fields)} WHERE id=?", params)
-        conn.commit()
-        return {"id": int(a["id"]), "action": "updated"} if cur.rowcount else {"error": f"observation {a['id']} not found"}
-    finally:
-        conn.close()
-
-
-def mem_context(a):
-    project = a.get("project", "default")
-    limit, offset = min(int(a.get("limit", 5)), 20), max(int(a.get("offset", 0)), 0)
-    conn = connect()
-    try:
-        if offset:
-            rows = conn.execute(
-                "SELECT id,project,title,topic_key,type,scope,content,created_at,updated_at "
-                "FROM observations WHERE project=? AND type!='prompt-capture' "
-                "ORDER BY updated_at DESC LIMIT ? OFFSET ?", (project, limit, offset)
-            ).fetchall()
-            return {"context": [dict(r) for r in rows], "count": len(rows)}
         rows = conn.execute(
-            "SELECT id,project,title,topic_key,type,scope,content,created_at,updated_at "
-            "FROM observations WHERE project=? AND type='session-summary' "
-            "ORDER BY updated_at DESC LIMIT 1", (project,)
+            """SELECT o.* FROM observations o
+               JOIN observations_fts f ON f.rowid=o.id
+               WHERE o.project=? AND o.lifecycle_status='active'
+                 AND observations_fts MATCH ?
+               ORDER BY rank LIMIT ?""",
+            (args["project"], args["query"], limit),
         ).fetchall()
-        remaining = limit - len(rows)
-        if remaining > 0:
-            ids = tuple(r["id"] for r in rows) or (-1,)
-            marks = ",".join("?" * len(ids))
-            rows += conn.execute(
-                f"SELECT id,project,title,topic_key,type,scope,content,created_at,updated_at "
-                f"FROM observations WHERE project=? AND type!='prompt-capture' AND id NOT IN ({marks}) "
-                f"ORDER BY updated_at DESC LIMIT ?", (project, *ids, remaining)
-            ).fetchall()
-        return {"context": [dict(r) for r in rows], "count": len(rows)}
+        return [dict(row) for row in rows]
     finally:
         conn.close()
 
 
-def mem_session_summary(a):
-    project, sid = a.get("project", "default"), a.get("session_id")
-    topic = f"session/{project}/{sid}" if sid else f"session/{project}/{now()}"
-    return mem_save({"title": f"Session summary — {project}", "content": a["content"],
-                     "topic_key": topic, "project": project, "type": "session-summary"})
-
-
-def slugify(text):
-    return re.sub(r"[^a-z0-9]+", "-", text.strip().lower()).strip("-") or "topic"
-
-
-def mem_suggest_topic_key(a):
-    base, project = slugify(a["title"]), a.get("project", "default")
+def get_observation(args):
+    args_required(args, ["project", "id"])
     conn = connect()
     try:
-        existing = {r[0] for r in conn.execute(
-            "SELECT topic_key FROM observations WHERE project=? AND topic_key LIKE ?", (project, base + "%")
-        )}
+        row = conn.execute(
+            "SELECT * FROM observations WHERE project=? AND id=?",
+            (args["project"], int(args["id"])),
+        ).fetchone()
+        if not row:
+            raise ValueError("Observation not found")
+        return dict(row)
     finally:
         conn.close()
-    if base not in existing:
-        return {"topic_key": base, "collision": False}
-    n = 2
-    while f"{base}-{n}" in existing: n += 1
-    return {"topic_key": f"{base}-{n}", "collision": True}
 
 
-def mem_save_prompt(a):
-    project, sid = a.get("project", "default"), a.get("session_id", "unknown")
-    return mem_save({"title": f"Prompt capture — {project}/{sid}", "content": a["content"],
-                     "topic_key": f"prompt/{project}/{sid}", "project": project,
-                     "type": "prompt-capture"})
-
-
-def mem_review(a):
-    action, project = a.get("action", "list"), a.get("project", "default")
+def update(args):
+    args_required(args, ["project", "id"])
+    allowed = {"scope", "title", "topic_key", "type", "content", "lifecycle_status"}
+    changes = {k: args[k] for k in allowed if k in args}
+    if not changes:
+        raise ValueError("No fields to update")
+    changes["updated_at"] = now()
     conn = connect()
     try:
-        if action == "list":
-            status = a.get("status")
-            if status:
-                rows = conn.execute(
-                    "SELECT id,project,title,topic_key,type,scope,lifecycle_status,created_at,updated_at "
-                    "FROM observations WHERE project=? AND lifecycle_status=? ORDER BY updated_at DESC", (project, status)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT id,project,title,topic_key,type,scope,lifecycle_status,created_at,updated_at "
-                    "FROM observations WHERE project=? AND lifecycle_status='needs_review' ORDER BY updated_at DESC", (project,)
-                ).fetchall()
-            return {"results": [dict(r) for r in rows], "count": len(rows)}
-        ids = a.get("ids")
-        if isinstance(ids, int): ids = [ids]
-        if not ids: return {"error": "ids required for update actions"}
-        status = {"mark_reviewed": "active", "mark_proven": "proven", "mark_stale": "needs_review"}.get(action)
-        if not status: return {"error": f"unknown action: {action}"}
-        marks = ",".join("?" * len(ids))
-        cur = conn.execute(f"UPDATE observations SET lifecycle_status=?,updated_at=? WHERE id IN ({marks})",
-                           [status, now(), *ids])
+        assignments = ", ".join(f"{key}=?" for key in changes)
+        values = list(changes.values()) + [int(args["id"]), args["project"]]
+        cur = conn.execute(
+            f"UPDATE observations SET {assignments} WHERE id=? AND project=?",
+            values,
+        )
         conn.commit()
-        return {"updated": cur.rowcount}
+        if cur.rowcount == 0:
+            raise ValueError("Observation not found")
+        return {"updated": True, "id": int(args["id"])}
     finally:
         conn.close()
 
 
-TOOLS = {
-    "mem_save": ("Save or upsert persistent memory; topic_key enables stable project-scoped upserts.", mem_save,
-        {"type":"object","properties":{"title":{"type":"string"},"content":{"type":"string"},"topic_key":{"type":"string"},"project":{"type":"string"},"type":{"type":"string"},"scope":{"type":"string"}},"required":["title","content"]}),
-    "mem_search": ("Full-text search over memories; returns snippets.", mem_search,
-        {"type":"object","properties":{"query":{"type":"string"},"type":{"type":"string"},"project":{"type":"string"},"all_projects":{"type":"boolean"},"scope":{"type":"string"},"match_mode":{"type":"string"},"limit":{"type":"number"}},"required":["query"]}),
-    "mem_get_observation": ("Retrieve full memory by id.", mem_get_observation,
-        {"type":"object","properties":{"id":{"type":["number","string"]}},"required":["id"]}),
-    "mem_update": ("Update title, content or type of an observation.", mem_update,
-        {"type":"object","properties":{"id":{"type":["number","string"]},"title":{"type":"string"},"content":{"type":"string"},"type":{"type":"string"}},"required":["id"]}),
-    "mem_context": ("Fast recent project context; offset supports pagination.", mem_context,
-        {"type":"object","properties":{"project":{"type":"string"},"limit":{"type":"number"},"offset":{"type":"number"}}}),
-    "mem_session_summary": ("Save an end-of-session summary, upserted by project/session_id.", mem_session_summary,
-        {"type":"object","properties":{"content":{"type":"string"},"project":{"type":"string"},"session_id":{"type":"string"}},"required":["content"]}),
-    "mem_suggest_topic_key": ("Suggest a stable collision-free topic key without saving.", mem_suggest_topic_key,
-        {"type":"object","properties":{"title":{"type":"string"},"project":{"type":"string"}},"required":["title"]}),
-    "mem_save_prompt": ("Capture the latest user prompt for a session.", mem_save_prompt,
-        {"type":"object","properties":{"content":{"type":"string"},"project":{"type":"string"},"session_id":{"type":"string"}},"required":["content"]}),
-    "mem_review": ("Manage memory lifecycle: list, mark_reviewed, mark_proven, mark_stale.", mem_review,
-        {"type":"object","properties":{"action":{"type":"string","enum":["list","mark_reviewed","mark_proven","mark_stale"]},"project":{"type":"string"},"status":{"type":"string","enum":["active","proven","needs_review"]},"ids":{"type":"array","items":{"type":"number"}}},"required":["action"]}),
+def context(args):
+    args_required(args, ["project"])
+    limit = min(max(int(args.get("limit", 20)), 1), 100)
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM observations WHERE project=? AND lifecycle_status='active' ORDER BY updated_at DESC LIMIT ?",
+            (args["project"], limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def session_summary(args):
+    args_required(args, ["project", "session_id", "summary"])
+    return save({
+        "project": args["project"],
+        "scope": "session",
+        "title": args.get("title") or f"Session {args['session_id']}",
+        "topic_key": f"session:{args['session_id']}",
+        "type": "session_summary",
+        "content": args["summary"],
+    })
+
+
+def suggest_topic_key(args):
+    args_required(args, ["title"])
+    value = re.sub(r"[^a-z0-9]+", "-", args["title"].lower()).strip("-")
+    return {"topic_key": value[:120]}
+
+
+def save_prompt(args):
+    args_required(args, ["project", "prompt"])
+    return save({
+        "project": args["project"],
+        "scope": "prompt",
+        "title": args.get("title") or "Prompt capture",
+        "topic_key": args.get("topic_key"),
+        "type": "prompt_capture",
+        "content": args["prompt"],
+    })
+
+
+def review(args):
+    args_required(args, ["project", "id", "lifecycle_status"])
+    return update({
+        "project": args["project"],
+        "id": args["id"],
+        "lifecycle_status": args["lifecycle_status"],
+    })
+
+TOOLS = [
+    {"name": "mem_save", "description": "Save or update durable project memory.", "inputSchema": {"type": "object", "required": ["project", "title", "content"], "properties": {"project": {"type": "string"}, "scope": {"type": "string"}, "title": {"type": "string"}, "topic_key": {"type": "string"}, "type": {"type": "string"}, "content": {"type": "string"}, "lifecycle_status": {"type": "string"}}}},
+    {"name": "mem_search", "description": "Search active project memory with FTS5.", "inputSchema": {"type": "object", "required": ["project", "query"], "properties": {"project": {"type": "string"}, "query": {"type": "string"}, "limit": {"type": "integer"}}}},
+    {"name": "mem_get_observation", "description": "Get one memory observation by id.", "inputSchema": {"type": "object", "required": ["project", "id"], "properties": {"project": {"type": "string"}, "id": {"type": "integer"}}}},
+    {"name": "mem_update", "description": "Update one project memory observation.", "inputSchema": {"type": "object", "required": ["project", "id"], "properties": {"project": {"type": "string"}, "id": {"type": "integer"}, "scope": {"type": "string"}, "title": {"type": "string"}, "topic_key": {"type": "string"}, "type": {"type": "string"}, "content": {"type": "string"}, "lifecycle_status": {"type": "string"}}}},
+    {"name": "mem_context", "description": "Return the most recently updated active project memories.", "inputSchema": {"type": "object", "required": ["project"], "properties": {"project": {"type": "string"}, "limit": {"type": "integer"}}}},
+    {"name": "mem_session_summary", "description": "Persist a compact session summary.", "inputSchema": {"type": "object", "required": ["project", "session_id", "summary"], "properties": {"project": {"type": "string"}, "session_id": {"type": "string"}, "summary": {"type": "string"}, "title": {"type": "string"}}}},
+    {"name": "mem_suggest_topic_key", "description": "Suggest a stable topic key for durable memory.", "inputSchema": {"type": "object", "required": ["title"], "properties": {"title": {"type": "string"}}}},
+    {"name": "mem_save_prompt", "description": "Explicitly persist a prompt capture.", "inputSchema": {"type": "object", "required": ["project", "prompt"], "properties": {"project": {"type": "string"}, "prompt": {"type": "string"}, "title": {"type": "string"}, "topic_key": {"type": "string"}}}},
+    {"name": "mem_review", "description": "Change the lifecycle status of a memory observation.", "inputSchema": {"type": "object", "required": ["project", "id", "lifecycle_status"], "properties": {"project": {"type": "string"}, "id": {"type": "integer"}, "lifecycle_status": {"type": "string"}}}},
+]
+
+DISPATCH = {
+    "mem_save": save,
+    "mem_search": search,
+    "mem_get_observation": get_observation,
+    "mem_update": update,
+    "mem_context": context,
+    "mem_session_summary": session_summary,
+    "mem_suggest_topic_key": suggest_topic_key,
+    "mem_save_prompt": save_prompt,
+    "mem_review": review,
 }
 
 
-def reply(mid, result=None, error=None):
-    out = {"jsonrpc":"2.0", "id":mid}
-    if error is not None: out["error"] = error
-    else: out["result"] = result
-    sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
-    sys.stdout.flush()
-
-
-def handle(msg):
-    method, mid = msg.get("method"), msg.get("id")
+def handle(request):
+    method = request.get("method")
+    request_id = request.get("id")
     if method == "initialize":
-        reply(mid, {"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"tonymem","version":"1.0.0"}})
-    elif method == "notifications/initialized":
-        return
-    elif method == "ping":
-        reply(mid, {})
-    elif method == "tools/list":
-        reply(mid, {"tools":[{"name":n,"description":d,"inputSchema":s} for n,(d,_,s) in TOOLS.items()]})
-    elif method == "tools/call":
-        p = msg.get("params", {}); name = p.get("name"); item = TOOLS.get(name)
-        if not item:
-            return reply(mid, error={"code":-32601,"message":f"unknown tool: {name}"})
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "serverInfo": {"name": "tonymem", "version": "1.0.0"}}}
+    if method in {"notifications/initialized", "ping"}:
+        return {"jsonrpc": "2.0", "id": request_id, "result": {}}
+    if method == "tools/list":
+        return {"jsonrpc": "2.0", "id": request_id, "result": {"tools": TOOLS}}
+    if method == "tools/call":
+        params = request.get("params") or {}
+        name = params.get("name")
+        args = params.get("arguments") or {}
+        fn = DISPATCH.get(name)
+        if not fn:
+            return {"jsonrpc": "2.0", "id": request_id, "result": error(f"Unknown tool: {name}")}
         try:
-            value = item[1](p.get("arguments") or {})
-            reply(mid, {"content":[{"type":"text","text":json.dumps(value,ensure_ascii=False)}]})
+            return {"jsonrpc": "2.0", "id": request_id, "result": result(fn(args))}
         except Exception as exc:
-            reply(mid, {"content":[{"type":"text","text":f"error: {exc}"}],"isError":True})
-    elif mid is not None:
-        reply(mid, error={"code":-32601,"message":f"unknown method: {method}"})
+            return {"jsonrpc": "2.0", "id": request_id, "result": error(str(exc))}
+    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}
 
 
 def main():
     init_db()
     for line in sys.stdin:
-        if not line.strip(): continue
-        try: handle(json.loads(line))
-        except json.JSONDecodeError: continue
+        if not line.strip():
+            continue
+        try:
+            response = handle(json.loads(line))
+            sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
+        except Exception as exc:
+            sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32603, "message": str(exc)}}) + "\n")
+            sys.stdout.flush()
 
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()
