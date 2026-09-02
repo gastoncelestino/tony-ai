@@ -1,0 +1,4 @@
+# TonyMem runtime database and SQLite sidecar files
+local-memory/*.db
+local-memory/*.db-wal
+local-memory/*.db-shm
