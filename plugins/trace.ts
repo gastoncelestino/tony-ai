@@ -3,6 +3,7 @@ import { appendFileSync } from "node:fs"
 import { join } from "node:path"
 import { authorizeExecution, assertBootstrapToolAllowed, bootstrapStarted, completeBootstrap, completeSuccessfulTask, finishBootstrap, KernelBlockedError, rememberPrompt } from "../kernel/authorize-execution"
 import { createExecutionObservationStore } from "../kernel/execution-observation"
+import { createExecutionGraph } from "../kernel/execution-graph"
 
 const WORK_TOOLS = new Set(["read", "glob", "grep", "bash", "write", "edit", "apply_patch", "skill", "todowrite", "webfetch", "websearch"])
 const REQUIRED_TRACE = ["TASK_CREATE", "MODEL_DECISION", "TOOL_REQUEST", "KERNEL_INTERCEPT", "KERNEL_DECISION", "TOOL_EXECUTE_START", "TOOL_EXECUTE_END", "TOOL_RESULT", "TASK_COMPLETE", "PHASE_ENTER", "PHASE_EXIT"] as const
@@ -36,6 +37,7 @@ function extractPrompt(parts: unknown[]) { return parts.filter((p): p is { type?
 export const TonyTrace: Plugin = async ({ directory }) => {
   const logPath = join(directory, "tony-trace.jsonl")
   const observations = createExecutionObservationStore()
+  const graph = createExecutionGraph()
   const phases = new Map<string, Phase>()
   const taskEvents = new Map<string, Set<string>>()
   const tokenByMessage = new Map<string, TokenSnapshot>()
@@ -55,9 +57,6 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     emit("PHASE_EXIT", { agent: phase.agent, phase: phase.phase, taskID: phase.taskID, callID, sessionID, status, durationMs: Date.now() - phase.startedAt, tokens: sessionTokens.get(sessionID) ?? zeroTokens(), resultLength: typeof result === "string" ? result.length : undefined })
     const observed = taskEvents.get(callID) ?? new Set<string>()
 
-    // A kernel BLOCK is a valid terminal path for the phase: execution is
-    // intentionally stopped before TOOL_EXECUTE_START, TOOL_RESULT and
-    // TASK_COMPLETE. Do not classify those expected missing events as invalid.
     if (status === "blocked") {
       emit("TRACE_BLOCKED", { callID, taskID: phase.taskID, phase: phase.phase })
     } else {
@@ -88,9 +87,14 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       }
 
       emit("TOOL_REQUEST", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, inputKeys: argKeys(args), ...(subagent ? { subagent } : {}) })
-      if (tool !== "task") { emit("TOOL_EXECUTE_START", { sessionID: input.sessionID, callID: input.callID, tool: input.tool }); return }
+      if (tool !== "task") {
+        graph.toolStarted({ sessionId: input.sessionID, callId: input.callID, tool: input.tool })
+        emit("TOOL_EXECUTE_START", { sessionID: input.sessionID, callID: input.callID, tool: input.tool })
+        return
+      }
 
       phases.set(input.callID, { agent: subagent ?? "task", phase: subagent ?? "task", taskID, callID: input.callID, sessionID: input.sessionID, startedAt: Date.now() })
+      graph.taskStarted({ sessionId: input.sessionID, callId: input.callID, taskId: taskID, agent: subagent })
       emit("TASK_CREATE", { sessionID: input.sessionID, callID: input.callID, taskID, ...(subagent ? { agent: subagent } : {}) })
       emit("PHASE_ENTER", { sessionID: input.sessionID, phase: subagent ?? "task", taskID, callID: input.callID })
       emit("KERNEL_INTERCEPT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, taskID, ...(subagent ? { subagent } : {}) })
@@ -104,6 +108,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         emit("KERNEL_DECISION", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, decision: "ALLOW", allowed: true, reason: decision.reason })
         observations.start({ projectId: directory, sessionId: input.sessionID, callId: input.callID, taskId: phase.taskID, phase: phase.phase })
       } catch (error) {
+        graph.taskFinished({ callId: input.callID, status: "blocked" })
         emit("KERNEL_DECISION", { sessionID: input.sessionID, callID: input.callID, taskID, decision: "BLOCK", allowed: false, reason: error instanceof Error ? error.message : String(error) })
         closePhase(input.callID, "blocked", "")
         throw error
@@ -117,6 +122,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       const childSessionID = asString((result.metadata as any)?.sessionId) ?? asString((result.metadata as any)?.sessionID)
       if (phase) {
         const observation = failed(result) ? observations.fail(input.callID, result) : observations.succeed(input.callID, result)
+        graph.taskFinished({ callId: input.callID, status: observation.status, result })
         emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: observation.status, outputLength: result.output.length })
         emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
         emit("TASK_COMPLETE", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, status: observation.status })
@@ -134,13 +140,9 @@ export const TonyTrace: Plugin = async ({ directory }) => {
                 callID: input.callID,
                 reason: error instanceof Error ? error.message : String(error),
               })
-
-              // No finalizar bootstrap: dejamos el estado vivo para retry.
               return
             }
 
-            // Solamente finalizar después de que completeBootstrap haya validado
-            // y persistido correctamente el resultado.
             finishBootstrap(directory, input.sessionID)
           } else {
             await completeSuccessfulTask(
@@ -153,14 +155,20 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         }
         return
       }
-      emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: failed(result) ? "error" : "completed", outputLength: result.output.length })
+
+      const status = failed(result) ? "failed" : "completed"
+      graph.toolFinished({ callId: input.callID, status, result })
+      emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status, outputLength: result.output.length })
       emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
     },
 
     event: async ({ event }) => {
       const p: any = (event as any).properties ?? {}
       if (event.type === "session.created") {
-        const info = p.info ?? {}; if (asString(info.id) && !info.parentID) emit("RUN_START", { sessionID: info.id })
+        const info = p.info ?? {}
+        const sessionID = asString(info.id)
+        if (sessionID) graph.sessionCreated({ sessionId: sessionID, parentSessionId: asString(info.parentID) })
+        if (sessionID && !info.parentID) emit("RUN_START", { sessionID })
       } else if (event.type === "message.updated") {
         const info: any = p.info; if (!info || info.role !== "assistant") return
         const sessionID = asString(info.sessionID); const messageID = asString(info.id); if (!sessionID || !messageID) return
