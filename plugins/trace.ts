@@ -4,11 +4,11 @@ import { join } from "node:path"
 import { authorizeExecution, assertBootstrapToolAllowed, bootstrapStarted, completeBootstrap, completeSuccessfulTask, finishBootstrap, KernelBlockedError, rememberPrompt } from "../kernel/authorize-execution"
 import { createExecutionObservationStore } from "../kernel/execution-observation"
 
-const WORK_TOOLS = new Set(["read", "glob", "grep", "bash", "write", "edit", "apply_patch", "skill", "todowrite"])
+const WORK_TOOLS = new Set(["read", "glob", "grep", "bash", "write", "edit", "apply_patch", "skill", "todowrite", "webfetch", "websearch"])
 const REQUIRED_TRACE = ["TASK_CREATE", "MODEL_DECISION", "TOOL_REQUEST", "KERNEL_INTERCEPT", "KERNEL_DECISION", "TOOL_EXECUTE_START", "TOOL_EXECUTE_END", "TOOL_RESULT", "TASK_COMPLETE", "PHASE_ENTER", "PHASE_EXIT"] as const
 
 type TokenSnapshot = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }
-type Phase = { phase: string; taskID: string; callID: string; sessionID: string; startedAt: number }
+type Phase = { agent: string; phase: string; taskID: string; callID: string; sessionID: string; startedAt: number }
 type Result = { title: string; output: string; metadata: unknown }
 
 const asString = (value: unknown) => typeof value === "string" && value.length > 0 ? value : undefined
@@ -52,7 +52,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
   const closePhase = (callID: string, status: string, result: unknown, childSessionID?: string) => {
     const phase = phases.get(callID); if (!phase) return
     const sessionID = childSessionID ?? phase.sessionID
-    emit("PHASE_EXIT", { phase: phase.phase, taskID: phase.taskID, callID, sessionID, status, durationMs: Date.now() - phase.startedAt, tokens: sessionTokens.get(sessionID) ?? zeroTokens(), resultLength: typeof result === "string" ? result.length : undefined })
+    emit("PHASE_EXIT", { agent: phase.agent, phase: phase.phase, taskID: phase.taskID, callID, sessionID, status, durationMs: Date.now() - phase.startedAt, tokens: sessionTokens.get(sessionID) ?? zeroTokens(), resultLength: typeof result === "string" ? result.length : undefined })
     const observed = taskEvents.get(callID) ?? new Set<string>()
 
     // A kernel BLOCK is a valid terminal path for the phase: execution is
@@ -83,13 +83,14 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       if (!rootSessionByDirectory.has(directory)) rootSessionByDirectory.set(directory, input.sessionID)
       assertBootstrapToolAllowed(directory, input.tool)
       if (tool !== "task" && WORK_TOOLS.has(tool) && rootSessionByDirectory.get(directory) === input.sessionID && !observations.hasRunningSession(input.sessionID)) {
+        emit("TOOL_BLOCKED", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, reason: "work tool blocked in orchestrator session" })
         throw new KernelBlockedError(`[Tony Kernel] Work tool '${input.tool}' is blocked in the orchestrator session; delegate work with task()`)
       }
 
       emit("TOOL_REQUEST", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, inputKeys: argKeys(args), ...(subagent ? { subagent } : {}) })
       if (tool !== "task") { emit("TOOL_EXECUTE_START", { sessionID: input.sessionID, callID: input.callID, tool: input.tool }); return }
 
-      phases.set(input.callID, { phase: subagent ?? "task", taskID, callID: input.callID, sessionID: input.sessionID, startedAt: Date.now() })
+      phases.set(input.callID, { agent: subagent ?? "task", phase: subagent ?? "task", taskID, callID: input.callID, sessionID: input.sessionID, startedAt: Date.now() })
       emit("TASK_CREATE", { sessionID: input.sessionID, callID: input.callID, taskID, ...(subagent ? { agent: subagent } : {}) })
       emit("PHASE_ENTER", { sessionID: input.sessionID, phase: subagent ?? "task", taskID, callID: input.callID })
       emit("KERNEL_INTERCEPT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, taskID, ...(subagent ? { subagent } : {}) })

@@ -173,9 +173,18 @@ def _next_eligible_task(request: dict) -> dict | None:
         if ready(t):
             return t
     return None
-
-
+    
+    
 def op_boundary(request: dict) -> dict:
+    completed = set(request.get("completed", []))
+    tasks = request.get("tasks", [])
+    if tasks and all(t["id"] in completed for t in tasks):
+        return {
+            "allowed": False,
+            "decision": "done",
+            "reason": "all tasks completed — respond to the user directly, do not call task() again",
+            "execution_order": None,
+        }
     task = _next_eligible_task(request)
     if task is None:
         return {"allowed": False, "decision": "blocked", "reason": "no eligible tasks (all completed or blocked by dependencies)", "execution_order": None}

@@ -19,7 +19,7 @@ PYTHON_MIN_MINOR=10
 JUDGMENT_EMBED_MODEL="${JUDGMENT_EMBED_MODEL:-nomic-embed-text}"
 CODE_EMBED_MODEL="${CODE_EMBED_MODEL:-bge-m3}"
 # Estos IDs deben coincidir con las claves/aliases definidos en el
-PLANNING_MODEL="${TONY_PLANNING_MODEL:-qwen3-coder:30b}"
+PLANNING_MODEL="${TONY_PLANNING_MODEL:-qwen3-coder-30b}"
 IMPLEMENTATION_MODEL="${TONY_IMPLEMENTATION_MODEL:-omnicoder:9b}"
 REVIEW_MODEL="${TONY_REVIEW_MODEL:-deepseek-r1-8b}"
 LLAMASWAP_URL="${TONY_LLAMASWAP_URL:-http://localhost:8080}"

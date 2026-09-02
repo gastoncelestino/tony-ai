@@ -1,332 +1,208 @@
 {
-  "$schema": "https://opencode.ai/config.json",  
+  "$schema": "https://opencode.ai/config.json",
   "plugin": [
-        "./plugins/trace.ts"
-    ],
-    "provider": {
-        "llamaswap": {
-            "npm": "@ai-sdk/openai-compatible",
-            "options": {
-                "baseURL": "http://127.0.0.1:8080/v1"
-            },
-            "models": {
-                "qwen3-coder:30b": {
-                    "name": "Qwen3-Coder 30B",
-                    "limit": {
-                        "context": 32768,
-                        "output": 8192
-                    },
-                    "ttl": 600
-                },
-                "ornith-1.5-9b": {
-                    "name": "Ornith 1.5 9B",
-                    "limit": {
-                        "context": 131072,
-                        "output": 8192
-                    },
-                    "ttl": 600
-                },
-                "deepseek-r1-8b": {
-                    "name": "DeepSeek R1 8B",
-                    "limit": {
-                        "context": 32768,
-                        "output": 8192
-                    },
-                    "ttl": 600
-                },
-                "qwen-3.8-9b": {
-                    "name": "Qwen 3.8 9B",
-                    "limit": {
-                        "context": 32768,
-                        "output": 8192
-                    },
-                    "ttl": 600
-                }
-            }
+    "./plugins/trace.ts"
+  ],
+  "provider": {
+    "llamaswap": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1"
+      },
+      "models": {
+        "qwen3-coder-30b": {
+          "name": "Qwen3-Coder",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          },
+          "ttl": 600
+        },
+        "ornith-1.5-9b": {
+          "name": "Ornith 1.5",
+          "limit": {
+            "context": 131072,
+            "output": 8192
+          },
+          "ttl": 600
+        },
+        "deepseek-r1-8b": {
+          "name": "DeepSeek R1",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          },
+          "ttl": 600
+        },
+        "qwen-3.8-9b": {
+          "name": "Qwen 3.8",
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          },
+          "ttl": 600
         }
-    },
-    "model": "llamaswap/qwen3-coder:30b",
+      }
+    }
+  },
   "agent": {
-    "explore": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": false,
-        "codegraph_codegraph_explore": true,
-        "edit": false,
-        "read": true,
-        "task": false,
-        "write": false
-      }
-    },
-    "general": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "task": false,
-        "write": true
-      }
-    },
     "gentle-orchestrator": {
       "mode": "primary",
       "permission": {
         "question": "allow",
         "task": {
           "*": "deny",
-          "explore": "allow",
-          "general": "allow",
-          "jd-fix-agent": "allow",
-          "jd-judge-a": "allow",
-          "jd-judge-b": "allow",
-          "review-readability": "allow",
-          "review-refuter": "allow",
-          "review-reliability": "allow",
-          "review-resilience": "allow",
-          "review-risk": "allow",
-          "review-validator": "allow",
-          "sdd-apply": "allow",
-          "sdd-archive": "allow",
-          "sdd-design": "allow",
           "sdd-explore": "allow",
-          "sdd-init": "allow",
-          "sdd-onboard": "allow",
           "sdd-propose": "allow",
           "sdd-spec": "allow",
+          "sdd-design": "allow",
           "sdd-tasks": "allow",
-          "sdd-verify": "allow"
+          "sdd-apply": "allow",
+          "sdd-verify": "allow",
+          "sdd-archive": "allow"
+        },
+        "tools": {
+          "bash": "deny",
+          "read": "deny",
+          "edit": "deny",
+          "glob": "deny",
+          "grep": "deny",
+          "list": "deny",
+          "webfetch": "deny",
+          "websearch": "deny"
         }
-      },
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "question": true,
-        "read": true,
-        "task": true,
-        "write": true
-      }
-    },
-    "jd-fix-agent": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
-      }
-    },
-    "jd-judge-a": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "*": false,
-        "bash": false,
-        "edit": false,
-        "read": true,
-        "task": false,
-        "write": false
-      }
-    },
-    "jd-judge-b": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "*": false,
-        "bash": false,
-        "edit": false,
-        "read": true,
-        "task": false,
-        "write": false
-      }
-    },
-    "review-readability": {
-      "hidden": true,
-      "mode": "subagent",
-      "permission": {
-        "bash": "deny",
-        "edit": "deny"
-      },
-      "tools": {
-        "*": false,
-        "bash": false,
-        "edit": false,
-        "read": false,
-        "task": false,
-        "write": false
-      }
-    },
-    "review-refuter": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "*": false,
-        "bash": false,
-        "edit": false,
-        "read": true,
-        "task": false,
-        "write": false
-      }
-    },
-    "review-reliability": {
-      "hidden": true,
-      "mode": "subagent",
-      "permission": {
-        "bash": "deny",
-        "edit": "deny"
-      },
-      "tools": {
-        "*": false,
-        "bash": false,
-        "edit": false,
-        "read": false,
-        "task": false,
-        "write": false
-      }
-    },
-    "review-resilience": {
-      "hidden": true,
-      "mode": "subagent",
-      "permission": {
-        "bash": "deny",
-        "edit": "deny"
-      },
-      "tools": {
-        "*": false,
-        "bash": false,
-        "edit": false,
-        "read": false,
-        "task": false,
-        "write": false
-      }
-    },
-    "review-risk": {
-      "hidden": true,
-      "mode": "subagent",
-      "permission": {
-        "bash": "deny",
-        "edit": "deny"
-      },
-      "tools": {
-        "*": false,
-        "bash": false,
-        "edit": false,
-        "read": false,
-        "task": false,
-        "write": false
-      }
-    },
-    "review-validator": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": false,
-        "read": true,
-        "task": false,
-        "write": false
-      }
-    },
-    "sdd-apply": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
-      }
-    },
-    "sdd-archive": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
-      }
-    },
-    "sdd-design": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
       }
     },
     "sdd-explore": {
       "hidden": true,
       "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
-      }
-    },
-    "sdd-init": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
-      }
-    },
-    "sdd-onboard": {
-      "hidden": true,
-      "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
+	  "prompt": "You are Tony's exploration agent.\nComplete ONLY the assigned task directly \n— you have NO ability to delegate or spawn subagents (the task tool is unavailable to you).\n- Investigate using the minimum necessary tool calls.\n- Prefer direct evidence.\n- Do not modify files. Do not investigate unrelated areas.\n- Stop as soon as the task is sufficiently proven.\nDEFAULT BEHAVIOR (use this for every assigned task, including this one): respond with:\n- conclusion (direct answer to what was asked)\n- evidence (files/lines that prove it)\n- relevant files\nONLY return the {'tasks':[...]} JSON format if your prompt explicitly and literally asks you to 'decompose' or 'produce a TaskSet'. If unsure, default to conclusion/evidence/relevant files",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny",
+        "todowrite": "deny"
       }
     },
     "sdd-propose": {
       "hidden": true,
       "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny"
       }
     },
     "sdd-spec": {
       "hidden": true,
       "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny"
+      }
+    },
+    "sdd-design": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny"
       }
     },
     "sdd-tasks": {
       "hidden": true,
       "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny"
+      }
+    },
+    "sdd-apply": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "bash": "allow",
+        "edit": "allow",
+        "task": "deny"
       }
     },
     "sdd-verify": {
       "hidden": true,
       "mode": "subagent",
-      "tools": {
-        "bash": true,
-        "edit": true,
-        "read": true,
-        "write": true
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "bash": "allow",
+        "edit": "deny",
+        "task": "deny"
+      }
+    },
+    "sdd-archive": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "allow",
+        "bash": "deny",
+        "task": "deny"
+      }
+    },
+    "sdd-init": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "task": "deny"
+      }
+    },
+    "sdd-onboard": {
+      "hidden": true,
+      "mode": "subagent",
+      "permission": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "task": "deny"
       }
     }
   },

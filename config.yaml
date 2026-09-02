@@ -8,18 +8,24 @@ macros:
 models:
   qwen3-coder-30b:
     aliases:
-      - "qwen3-coder:30b"
+      - "qwen3-coder-30b"
     cmd: |
       ${llamaServerBase}
-      --model /home/tony/.tony-ai/models/qwen3-coder-30B.q4_k_m.gguf
+      --model /home/tony/.tony-ai/models/qwen3-coder-30b.q4_k_m.gguf
+      --chat-template-file /home/tony/.tony-ai/templates/qwen3-coder.jinja
       --ctx-size 32768
       --n-gpu-layers 99
       --n-cpu-moe 30
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
-      --temp 0
-      --top-k 1
+      --jinja
+      --temp 0.60
+      --top-p 0.95
+      --min-p 0.05
+      --repeat-penalty 1.0
+      --n-predict 4096
+      --log-verbosity 3
     ttl: 600
 
   ornith-1.5-9b:
@@ -28,17 +34,21 @@ models:
     cmd: |
       ${llamaServerBase}
       --model /home/tony/.tony-ai/models/ornith-1.5-9b-q5_k_m.gguf
+      --chat-template-file /home/tony/.tony-ai/templates/ornith-1.5-9b.jinja
       --ctx-size 131072
       --n-gpu-layers 99
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
+      --jinja
       --temp 0.6 
       --top-p 0.95
       --top-k 20
       --min-p 0.0
       --repeat-penalty 1.0
       --presence-penalty 0.0
+      --n-predict 4096
+      --log-verbosity 3
     ttl: 600
     
   deepseek-r1-8b:
@@ -47,18 +57,21 @@ models:
     cmd: |
       ${llamaServerBase}
       --model /home/tony/.tony-ai/models/deepseek-r1-8b.q5_k_m.gguf
+      --chat-template-file /home/tony/.tony-ai/templates/deepseek-r1-8b.jinja
       --ctx-size 32768
       --n-gpu-layers 99
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
       --jinja
-      --reasoning-budget 4096
-      --n-predict 8192
+      --reasoning-format deepseek
+      --reasoning-budget 2048
+      --reasoning-budget-message "... tiempo de pensamiento agotado, respondiendo ahora directamente:"
+      --n-predict 4096
       --temp 0.60
       --top-p 0.95
       --min-p 0.05
-      --repeat-penalty 1.0
+      --repeat-penalty 1.05
       --log-verbosity 3
     ttl: 600
     
@@ -68,17 +81,23 @@ models:
     cmd: |
       ${llamaServerBase}
       --model /home/tony/.tony-ai/models/qwen3.8-9b-q6_k.gguf
+      --chat-template-file /home/tony/.tony-ai/templates/qwen3.8-9b.jinja
       --ctx-size 32768
       --n-gpu-layers 99
       --cache-type-k q8_0
       --cache-type-v q8_0
       --parallel 1
+      --jinja
+      --reasoning-format deepseek
+      --reasoning-budget 2048
+      --reasoning-budget-message "... tiempo de pensamiento agotado, concluyendo respuesta:"
       --temp 0.6 
       --top-p 0.95
       --top-k 20
       --min-p 0.0
-      --repeat-penalty 1.0
-      --presence-penalty 0.0
+      --repeat-penalty 1.05
+      --n-predict 4096
+      --log-verbosity 3
     ttl: 600
 
   nomic-embed-text:

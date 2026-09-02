@@ -4,7 +4,7 @@ import type { KernelBoundaryRequest, KernelExecutionOrder } from "./protocol"
 
 const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
 const BOOTSTRAP_DESCRIPTION = "decompose task graph"
-const BOOTSTRAP_READ_ONLY_TOOLS = new Set(["read", "glob"])
+const BOOTSTRAP_READ_ONLY_TOOLS = new Set(["read", "glob", "grep", "list"])
 
 export class KernelBlockedError extends Error {
   constructor(message: string) {
@@ -17,6 +17,13 @@ export class KernelUnavailableError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "KernelUnavailableError"
+  }
+}
+
+export class KernelDoneError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "KernelDoneError"
   }
 }
 
@@ -82,7 +89,7 @@ function bootstrapPrompt(
 ) {
   return `You are Tony's task-graph decomposition subagent. This is ONLY the bootstrap planning step of a new execution session.
 
-Your ONLY output is a machine-readable TaskSet. Do NOT perform the requested work, implement anything, modify files, create files, or create temporary files. Do not use bash, shell commands, write/edit tools, or skills. If repository inspection is necessary, use read/glob only.
+Your ONLY output is a machine-readable TaskSet. Do NOT perform the requested work, implement anything, modify files, create files, or create temporary files. Do not use bash, shell commands, write/edit tools, skills, todo lists, or the task tool — you cannot delegate, spawn subagents, or plan in multiple steps. If repository inspection is necessary, use read/glob only, directly, in this same turn.
 
 ORIGINAL TASK DESCRIPTION:
 ${description || "(not provided)"}
@@ -271,7 +278,7 @@ export async function authorizeExecution(
       description,
       prompt
     )
-    input.args.subagent_type = "explore"
+    input.args.subagent_type = "sdd-explore"
     input.args.command = BOOTSTRAP_COMMAND
 
     bootstrapSessions.add(key)
@@ -317,6 +324,10 @@ export async function authorizeExecution(
       cwd: input.directory,
     }
   )
+
+  if (!response.allowed && response.decision === "done") {
+    throw new KernelDoneError(response.reason)
+  }
 
   if (!response.allowed) {
     throw new KernelBlockedError(response.reason)
