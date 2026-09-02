@@ -9,10 +9,12 @@ OpenCode inicia `local-memory/server.py` como un MCP server por workspace. El se
 Por defecto la base queda en:
 
 ```text
-<workspace>/.tonymem/memory.db
+local-memory/memory.db
 ```
 
 También se puede sobrescribir con `LOCAL_MEMORY_DB`.
+
+El estado estructurado de SDD vive en el mismo SQLite, pero en tablas separadas (`sdd_state` y `sdd_state_history`). `local-memory/sdd_state.py` expone una API Python de escritura y una interfaz CLI de solo lectura para el Kernel.
 
 ## Herramientas
 
@@ -39,7 +41,7 @@ La configuración usa el soporte MCP local nativo de OpenCode:
 }
 ```
 
-OpenCode ejecuta los MCP locales con el workspace como `cwd`; por eso TonyMem usa `os.getcwd()` para resolver la base por proyecto.
+El servidor MCP se mantiene independiente de OpenCode y utiliza la ubicación fija `local-memory/memory.db`, salvo que `LOCAL_MEMORY_DB` la sobrescriba.
 
 ## Principio de memoria
 
