@@ -5,6 +5,7 @@ import { authorizeExecution, assertBootstrapToolAllowed, bootstrapStarted, compl
 import { createExecutionObservationStore } from "../kernel/execution-observation"
 import { createExecutionGraph } from "../kernel/execution-graph"
 import { createEvidenceLedger, recordToolEvidence } from "../kernel/evidence-ledger"
+import { evaluateEvidenceClaim, type EvidenceClaim } from "../kernel/evidence-gate"
 
 const WORK_TOOLS = new Set(["read", "glob", "grep", "bash", "write", "edit", "apply_patch", "skill", "todowrite", "webfetch", "websearch"])
 const REQUIRED_TRACE = ["TASK_CREATE", "MODEL_DECISION", "TOOL_REQUEST", "KERNEL_INTERCEPT", "KERNEL_DECISION", "TOOL_EXECUTE_START", "TOOL_EXECUTE_END", "TOOL_RESULT", "TASK_COMPLETE", "PHASE_ENTER", "PHASE_EXIT"] as const
@@ -60,21 +61,42 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       callID,
       taskID,
       count: entries.length,
-      evidence: entries.map((entry) => ({
-        id: entry.id,
-        taskID,
-        kind: entry.kind,
-        tool: entry.tool,
-        target: entry.target,
-      })),
+      evidence: entries.map((entry) => ({ id: entry.id, taskID, kind: entry.kind, tool: entry.tool, target: entry.target })),
     })
+  }
+
+  const emitEvidenceGateResults = (sessionID: string, callID: string, taskID: string) => {
+    const entries = evidence.list().filter((entry) => entry.sessionId === sessionID)
+    const discovered = entries.filter((entry) => entry.kind === "FILE_DISCOVERED" && entry.target)
+    for (const entry of discovered) {
+      const claim: EvidenceClaim = {
+        id: `task:${taskID}:file:${entry.id}`,
+        type: "file_content",
+        statement: `Discovered file '${entry.target}' has direct content evidence`,
+        requirements: [{ kind: "FILE_CONTENT_READ", target: entry.target }],
+      }
+      const result = evaluateEvidenceClaim(evidence, claim)
+      emit("EVIDENCE_GATE_RESULT", {
+        sessionID,
+        callID,
+        taskID,
+        claimId: result.claimId,
+        allowed: result.allowed,
+        matchedEvidenceIds: result.matchedEvidenceIds,
+        missing: result.missing,
+        reason: result.reason,
+      })
+    }
   }
 
   const emitTaskEvidenceSnapshot = (callID: string, taskID: string) => {
     const taskNode = graph.getByCallId(callID)
     if (!taskNode) return
     const childSession = graph.getChildren(taskNode.id).find((node) => node.kind === "session")
-    if (childSession) emitEvidenceSnapshot(childSession.sessionId, callID, taskID)
+    if (childSession) {
+      emitEvidenceSnapshot(childSession.sessionId, callID, taskID)
+      emitEvidenceGateResults(childSession.sessionId, callID, taskID)
+    }
   }
 
   const closePhase = (callID: string, status: string, result: unknown, childSessionID?: string) => {
@@ -162,22 +184,13 @@ export const TonyTrace: Plugin = async ({ directory }) => {
             try {
               await completeBootstrap(directory, input.sessionID, result.output)
             } catch (error) {
-              emit("BOOTSTRAP_FAILED", {
-                sessionID: input.sessionID,
-                callID: input.callID,
-                reason: error instanceof Error ? error.message : String(error),
-              })
+              emit("BOOTSTRAP_FAILED", { sessionID: input.sessionID, callID: input.callID, reason: error instanceof Error ? error.message : String(error) })
               return
             }
 
             finishBootstrap(directory, input.sessionID)
           } else {
-            await completeSuccessfulTask(
-              directory,
-              input.sessionID,
-              phase.taskID,
-              result,
-            )
+            await completeSuccessfulTask(directory, input.sessionID, phase.taskID, result)
           }
         }
         return
