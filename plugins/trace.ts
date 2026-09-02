@@ -5,14 +5,16 @@ import { authorizeExecution, assertBootstrapToolAllowed, bootstrapStarted, compl
 import { createExecutionObservationStore } from "../kernel/execution-observation"
 import { createExecutionGraph } from "../kernel/execution-graph"
 import { createEvidenceLedger, recordToolEvidence } from "../kernel/evidence-ledger"
-import { evaluateEvidenceClaim, type EvidenceClaim } from "../kernel/evidence-gate"
+import { evaluateEvidenceClaim, type EvidenceClaim, type EvidenceClaimType } from "../kernel/evidence-gate"
 
 const WORK_TOOLS = new Set(["read", "glob", "grep", "bash", "write", "edit", "apply_patch", "skill", "todowrite", "webfetch", "websearch"])
 const REQUIRED_TRACE = ["TASK_CREATE", "MODEL_DECISION", "TOOL_REQUEST", "KERNEL_INTERCEPT", "KERNEL_DECISION", "TOOL_EXECUTE_START", "TOOL_EXECUTE_END", "TOOL_RESULT", "TASK_COMPLETE", "PHASE_ENTER", "PHASE_EXIT"] as const
+const CLAIM_TYPES = new Set<EvidenceClaimType>(["file_discovery", "file_content", "search", "command", "modification"])
 
 type TokenSnapshot = { input: number; output: number; reasoning: number; cacheRead: number; cacheWrite: number }
 type Phase = { agent: string; phase: string; taskID: string; callID: string; sessionID: string; startedAt: number }
 type Result = { title: string; output: string; metadata: unknown }
+type StructuredClaim = { type: EvidenceClaimType; target?: string; statement?: string; evidenceIds?: string[] }
 
 const asString = (value: unknown) => typeof value === "string" && value.length > 0 ? value : undefined
 const argKeys = (value: unknown) => value && typeof value === "object" ? Object.keys(value as Record<string, unknown>).sort() : []
@@ -35,6 +37,24 @@ function normalizeResult(value: unknown): Result {
 }
 function failed(result: Result) { const metadata = result.metadata; return !!metadata && typeof metadata === "object" && ((metadata as any).status === "error" || (metadata as any).error === true || (metadata as any).failed === true) }
 function extractPrompt(parts: unknown[]) { return parts.filter((p): p is { type?: string; text?: string } => !!p && typeof p === "object").filter((p) => p.type === "text" && typeof p.text === "string").map((p) => p.text!.trim()).filter(Boolean).join("\n").trim() }
+function extractStructuredClaims(output: string): StructuredClaim[] {
+  const match = output.match(/<evidence_claims>\s*([\s\S]*?)\s*<\/evidence_claims>/i)
+  if (!match) return []
+  try {
+    const parsed = JSON.parse(match[1])
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is Record<string, unknown> => !!item && typeof item === "object").flatMap((item) => {
+      const type = item.type
+      if (typeof type !== "string" || !CLAIM_TYPES.has(type as EvidenceClaimType)) return []
+      const target = typeof item.target === "string" && item.target.length > 0 ? item.target : undefined
+      const statement = typeof item.statement === "string" && item.statement.length > 0 ? item.statement : undefined
+      const evidenceIds = Array.isArray(item.evidenceIds) && item.evidenceIds.every((id) => typeof id === "string") ? item.evidenceIds as string[] : undefined
+      return [{ type: type as EvidenceClaimType, target, statement, evidenceIds }]
+    })
+  } catch {
+    return []
+  }
+}
 
 export const TonyTrace: Plugin = async ({ directory }) => {
   const logPath = join(directory, "tony-trace.jsonl")
@@ -65,16 +85,16 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     })
   }
 
-  const emitEvidenceGateResults = (sessionID: string, callID: string, taskID: string) => {
+  const emitEvidenceGateResults = (sessionID: string, callID: string, taskID: string, claims: EvidenceClaim[] = []) => {
     const entries = evidence.list().filter((entry) => entry.sessionId === sessionID)
     const discovered = entries.filter((entry) => entry.kind === "FILE_DISCOVERED" && entry.target)
-    for (const entry of discovered) {
-      const claim: EvidenceClaim = {
-        id: `task:${taskID}:file:${entry.id}`,
-        type: "file_content",
-        statement: `Discovered file '${entry.target}' has direct content evidence`,
-        requirements: [{ kind: "FILE_CONTENT_READ", target: entry.target }],
-      }
+    const automaticClaims: EvidenceClaim[] = discovered.map((entry) => ({
+      id: `task:${taskID}:file:${entry.id}`,
+      type: "file_content",
+      statement: `Discovered file '${entry.target}' has direct content evidence`,
+      requirements: [{ kind: "FILE_CONTENT_READ", target: entry.target }],
+    }))
+    for (const claim of [...automaticClaims, ...claims]) {
       const result = evaluateEvidenceClaim(evidence, claim)
       emit("EVIDENCE_GATE_RESULT", {
         sessionID,
@@ -89,14 +109,21 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     }
   }
 
-  const emitTaskEvidenceSnapshot = (callID: string, taskID: string) => {
+  const emitTaskEvidenceSnapshot = (callID: string, taskID: string, resultOutput: string) => {
     const taskNode = graph.getByCallId(callID)
     if (!taskNode) return
     const childSession = graph.getChildren(taskNode.id).find((node) => node.kind === "session")
-    if (childSession) {
-      emitEvidenceSnapshot(childSession.sessionId, callID, taskID)
-      emitEvidenceGateResults(childSession.sessionId, callID, taskID)
-    }
+    if (!childSession) return
+    emitEvidenceSnapshot(childSession.sessionId, callID, taskID)
+    const structuredClaims = extractStructuredClaims(resultOutput).map((claim, index): EvidenceClaim => ({
+      id: `task:${taskID}:claim:${index + 1}`,
+      type: claim.type,
+      statement: claim.statement,
+      evidenceIds: claim.evidenceIds,
+      requirements: claim.target ? [{ kind: ({ file_discovery: "FILE_DISCOVERED", file_content: "FILE_CONTENT_READ", search: "SEARCH_RESULT", command: "COMMAND_RESULT", modification: "FILE_MODIFIED" } as const)[claim.type], target: claim.target }] : undefined,
+    }))
+    emit("EVIDENCE_CLAIMS", { sessionID: childSession.sessionId, callID, taskID, count: structuredClaims.length, claims: structuredClaims })
+    emitEvidenceGateResults(childSession.sessionId, callID, taskID, structuredClaims)
   }
 
   const closePhase = (callID: string, status: string, result: unknown, childSessionID?: string) => {
@@ -174,7 +201,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: observation.status, outputLength: result.output.length })
         emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
         emit("TASK_COMPLETE", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, status: observation.status })
-        if (observation.status === "succeeded") emitTaskEvidenceSnapshot(input.callID, phase.taskID)
+        if (observation.status === "succeeded") emitTaskEvidenceSnapshot(input.callID, phase.taskID, result.output)
         closePhase(input.callID, observation.status, result.output, childSessionID)
 
         if (observation.status === "succeeded") {
