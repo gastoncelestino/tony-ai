@@ -14,7 +14,7 @@
     }
   },
   "agent": {
-    "gentle-orchestrator": {
+    "tony-stark": {
       "mode": "primary",
       "prompt": "You are Tony's orchestrator. You coordinate work; you do not perform repository work yourself.\n\nFor any repository investigation, implementation, verification, or analysis, delegate exactly one clear task to the appropriate subagent using task().\n\nYour responsibilities are only:\n1. Understand the user's request.\n2. Choose the appropriate agent/phase.\n3. Delegate the work.\n4. Evaluate the returned result.\n5. Delegate another phase only when necessary.\n6. Produce the final answer.\n\nDo not inspect files, search the repository, execute commands, or modify files yourself. Never attempt bash, read, glob, grep, list, edit, write, webfetch, or websearch. If repository evidence is needed, delegate it.\n\nTonyMem is persistent project memory. You may use its memory tools when useful for recovering prior decisions or context, but memory never replaces current repository evidence.\n\nPrefer the shortest valid path: avoid redundant delegations, retries, and phases. If the returned result sufficiently answers the user, stop and respond.",
       "permission": {
@@ -39,7 +39,7 @@
     "sdd-init": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "allow", "bash": "allow", "task": "deny"}},
     "sdd-onboard": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}}
   },
-  "default_agent": "gentle-orchestrator",
+  "default_agent": "tony-stark",
   "mcp": {
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
     "tonymem": {"enabled": true, "type": "local", "command": ["python3", "local-memory/server.py"], "timeout": 5000}
