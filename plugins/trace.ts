@@ -62,6 +62,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       count: entries.length,
       evidence: entries.map((entry) => ({
         id: entry.id,
+        taskID,
         kind: entry.kind,
         tool: entry.tool,
         target: entry.target,
