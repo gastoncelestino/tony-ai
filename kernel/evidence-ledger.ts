@@ -106,13 +106,25 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
   }
 
   if (tool === "glob") {
+    if (input.output === "No files found") {
+      return [ledger.record({
+        sessionId: input.sessionId,
+        callId: input.callId,
+        tool: input.tool,
+        kind: "SEARCH_RESULT",
+        target,
+        summary: "File discovery returned no matches",
+        output: input.output,
+        metadata: details,
+      })]
+    }
     return [ledger.record({
       sessionId: input.sessionId,
       callId: input.callId,
       tool: input.tool,
       kind: "FILE_DISCOVERED",
       target,
-      summary: input.output === "No files found" ? "File discovery returned no matches" : "File discovery returned matches",
+      summary: "File discovery returned matches",
       output: input.output,
       metadata: details,
     })]
