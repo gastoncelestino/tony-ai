@@ -2,8 +2,8 @@
 """TonyMem: local persistent memory MCP server for OpenCode 1.18.22.
 
 Stdlib-only JSON-RPC/MCP server. Storage is project-scoped SQLite with WAL and
-FTS5. The server is intentionally independent from OpenCode internals so it
-can also be used by tests or other MCP clients.
+FTS5. OpenCode starts local MCP servers with the workspace as cwd, so the
+unconfigured database is stored in <workspace>/.tonymem/memory.db.
 """
 import json
 import os
@@ -12,9 +12,7 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 
-DB_PATH = os.environ.get("LOCAL_MEMORY_DB") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "memory.db"
-)
+DB_PATH = os.environ.get("LOCAL_MEMORY_DB") or os.path.join(os.getcwd(), ".tonymem", "memory.db")
 
 
 def now():
@@ -22,6 +20,8 @@ def now():
 
 
 def connect():
+    parent = os.path.dirname(os.path.abspath(DB_PATH))
+    os.makedirs(parent, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -68,9 +68,7 @@ def init_db():
         )
         conn.commit()
         try:
-            conn.execute(
-                "ALTER TABLE observations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'"
-            )
+            conn.execute("ALTER TABLE observations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'")
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -285,25 +283,28 @@ TOOLS = {
 }
 
 
-def reply(msg_id, result=None, error=None):
-    out = {"jsonrpc":"2.0", "id":msg_id}
-    if error: out["error"] = error
+def reply(mid, result=None, error=None):
+    out = {"jsonrpc":"2.0", "id":mid}
+    if error is not None: out["error"] = error
     else: out["result"] = result
-    sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n"); sys.stdout.flush()
+    sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
 
 
 def handle(msg):
     method, mid = msg.get("method"), msg.get("id")
     if method == "initialize":
         reply(mid, {"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"tonymem","version":"1.0.0"}})
-    elif method == "notifications/initialized": return
-    elif method == "ping": reply(mid, {})
+    elif method == "notifications/initialized":
+        return
+    elif method == "ping":
+        reply(mid, {})
     elif method == "tools/list":
         reply(mid, {"tools":[{"name":n,"description":d,"inputSchema":s} for n,(d,_,s) in TOOLS.items()]})
     elif method == "tools/call":
-        p, name = msg.get("params",{}), msg.get("params",{}).get("name")
-        item = TOOLS.get(name)
-        if not item: return reply(mid, error={"code":-32601,"message":f"unknown tool: {name}"})
+        p = msg.get("params", {}); name = p.get("name"); item = TOOLS.get(name)
+        if not item:
+            return reply(mid, error={"code":-32601,"message":f"unknown tool: {name}"})
         try:
             value = item[1](p.get("arguments") or {})
             reply(mid, {"content":[{"type":"text","text":json.dumps(value,ensure_ascii=False)}]})
