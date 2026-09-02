@@ -85,6 +85,14 @@ function targetFromArgs(args: Record<string, unknown> | undefined) {
   return undefined
 }
 
+function globMatches(output: string) {
+  if (output === "No files found") return []
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
 export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceInput): Evidence[] {
   const tool = input.tool.toLowerCase()
   const args = record(input.args)
@@ -106,7 +114,8 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
   }
 
   if (tool === "glob") {
-    if (input.output === "No files found") {
+    const matches = globMatches(input.output)
+    if (matches.length === 0) {
       return [ledger.record({
         sessionId: input.sessionId,
         callId: input.callId,
@@ -118,16 +127,17 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
         metadata: details,
       })]
     }
-    return [ledger.record({
+
+    return matches.map((match) => ledger.record({
       sessionId: input.sessionId,
       callId: input.callId,
       tool: input.tool,
       kind: "FILE_DISCOVERED",
-      target,
-      summary: "File discovery returned matches",
+      target: match,
+      summary: "File discovery returned a matching path",
       output: input.output,
       metadata: details,
-    })]
+    }))
   }
 
   if (tool === "read") {
