@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { authorizeExecution, assertBootstrapToolAllowed, bootstrapStarted, completeBootstrap, completeSuccessfulTask, finishBootstrap, KernelBlockedError, rememberPrompt } from "../kernel/authorize-execution"
 import { createExecutionObservationStore } from "../kernel/execution-observation"
 import { createExecutionGraph } from "../kernel/execution-graph"
+import { createEvidenceLedger, recordToolEvidence } from "../kernel/evidence-ledger"
 
 const WORK_TOOLS = new Set(["read", "glob", "grep", "bash", "write", "edit", "apply_patch", "skill", "todowrite", "webfetch", "websearch"])
 const REQUIRED_TRACE = ["TASK_CREATE", "MODEL_DECISION", "TOOL_REQUEST", "KERNEL_INTERCEPT", "KERNEL_DECISION", "TOOL_EXECUTE_START", "TOOL_EXECUTE_END", "TOOL_RESULT", "TASK_COMPLETE", "PHASE_ENTER", "PHASE_EXIT"] as const
@@ -38,6 +39,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
   const logPath = join(directory, "tony-trace.jsonl")
   const observations = createExecutionObservationStore()
   const graph = createExecutionGraph()
+  const evidence = createEvidenceLedger()
   const phases = new Map<string, Phase>()
   const taskEvents = new Map<string, Set<string>>()
   const tokenByMessage = new Map<string, TokenSnapshot>()
@@ -158,8 +160,17 @@ export const TonyTrace: Plugin = async ({ directory }) => {
 
       const status = failed(result) ? "failed" : "completed"
       graph.toolFinished({ callId: input.callID, status, result })
+      const evidenceEntries = recordToolEvidence(evidence, {
+        sessionId: input.sessionID,
+        callId: input.callID,
+        tool: input.tool,
+        args: output.args,
+        output: result.output,
+        metadata: result.metadata,
+        failed: status === "failed",
+      })
       emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status, outputLength: result.output.length })
-      emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
+      emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID, evidence: evidenceEntries.map((entry) => ({ id: entry.id, kind: entry.kind, target: entry.target })) })
     },
 
     event: async ({ event }) => {
