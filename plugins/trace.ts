@@ -53,6 +53,22 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     catch (error) { console.error("[TONY TRACE] write failed", error) }
   }
 
+  const emitEvidenceSnapshot = (sessionID: string, callID: string, taskID: string) => {
+    const entries = evidence.list().filter((entry) => entry.sessionId === sessionID)
+    emit("EVIDENCE_SNAPSHOT", {
+      sessionID,
+      callID,
+      taskID,
+      count: entries.length,
+      evidence: entries.map((entry) => ({
+        id: entry.id,
+        kind: entry.kind,
+        tool: entry.tool,
+        target: entry.target,
+      })),
+    })
+  }
+
   const closePhase = (callID: string, status: string, result: unknown, childSessionID?: string) => {
     const phase = phases.get(callID); if (!phase) return
     const sessionID = childSessionID ?? phase.sessionID
@@ -128,6 +144,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: observation.status, outputLength: result.output.length })
         emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
         emit("TASK_COMPLETE", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, status: observation.status })
+        if (childSessionID) emitEvidenceSnapshot(childSessionID, input.callID, phase.taskID)
         closePhase(input.callID, observation.status, result.output, childSessionID)
 
         if (observation.status === "succeeded") {
