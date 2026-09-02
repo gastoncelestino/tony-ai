@@ -67,27 +67,30 @@ export type ToolEvidenceInput = {
   sessionId: string
   callId: string
   tool: string
+  args: unknown
   output: string
   metadata: unknown
   failed: boolean
 }
 
-function metadataRecord(value: unknown): Record<string, unknown> | undefined {
+function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
-function targetFromMetadata(metadata: Record<string, unknown> | undefined) {
+function targetFromArgs(args: Record<string, unknown> | undefined) {
   const candidates = ["path", "file", "filepath", "filePath", "pattern", "query", "command"]
   for (const key of candidates) {
-    if (typeof metadata?.[key] === "string" && metadata[key]) return metadata[key] as string
+    if (typeof args?.[key] === "string" && args[key]) return args[key] as string
   }
   return undefined
 }
 
 export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceInput): Evidence[] {
   const tool = input.tool.toLowerCase()
-  const metadata = metadataRecord(input.metadata)
-  const target = targetFromMetadata(metadata)
+  const args = record(input.args)
+  const metadata = record(input.metadata)
+  const target = targetFromArgs(args)
+  const details = metadata ?? (args ? { input: args } : undefined)
 
   if (input.failed) {
     return [ledger.record({
@@ -98,7 +101,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
       target,
       summary: `Tool '${input.tool}' returned an error`,
       output: input.output,
-      metadata,
+      metadata: details,
     })]
   }
 
@@ -111,7 +114,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
       target,
       summary: input.output === "No files found" ? "File discovery returned no matches" : "File discovery returned matches",
       output: input.output,
-      metadata,
+      metadata: details,
     })]
   }
 
@@ -124,7 +127,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
       target,
       summary: "File content was returned by the read tool",
       output: input.output,
-      metadata,
+      metadata: details,
     })]
   }
 
@@ -137,7 +140,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
       target,
       summary: `Search/list operation completed with tool '${input.tool}'`,
       output: input.output,
-      metadata,
+      metadata: details,
     })]
   }
 
@@ -150,7 +153,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
       target,
       summary: "Command execution returned a result",
       output: input.output,
-      metadata,
+      metadata: details,
     })]
   }
 
@@ -163,7 +166,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
       target,
       summary: `File modification completed with tool '${input.tool}'`,
       output: input.output,
-      metadata,
+      metadata: details,
     })]
   }
 
