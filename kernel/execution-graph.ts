@@ -19,12 +19,11 @@ export type ExecutionGraphNode = {
 }
 
 export type ExecutionGraph = {
-  sessionCreated: (input: { sessionId: string; parentSessionId?: string; agent?: string; startedAt?: string }) => ExecutionGraphNode
+  sessionCreated: (input: { sessionId: string; parentSessionId?: string; startedAt?: string }) => ExecutionGraphNode
   taskStarted: (input: { sessionId: string; callId: string; taskId: string; agent?: string; startedAt?: string }) => ExecutionGraphNode
   taskFinished: (input: { callId: string; status: ExecutionGraphNode["status"]; finishedAt?: string; result?: ExecutionGraphNode["result"] }) => ExecutionGraphNode | undefined
   toolStarted: (input: { sessionId: string; callId: string; tool: string; startedAt?: string }) => ExecutionGraphNode
   toolFinished: (input: { callId: string; status: ExecutionGraphNode["status"]; finishedAt?: string; result?: ExecutionGraphNode["result"] }) => ExecutionGraphNode | undefined
-  attachChildSession: (input: { parentSessionId: string; childSessionId: string }) => ExecutionGraphNode | undefined
   get: (id: string) => ExecutionGraphNode | undefined
   getByCallId: (callId: string) => ExecutionGraphNode | undefined
   getChildren: (id: string) => ExecutionGraphNode[]
@@ -45,7 +44,7 @@ export function createExecutionGraph(now: () => string = () => new Date().toISOS
   }
   const getChildren = (id: string) => [...nodes.values()].filter((node) => node.parentId === id)
 
-  const sessionCreated = (input: { sessionId: string; parentSessionId?: string; agent?: string; startedAt?: string }) => {
+  const sessionCreated = (input: { sessionId: string; parentSessionId?: string; startedAt?: string }) => {
     const existing = sessionIndex.get(input.sessionId)
     if (existing) return nodes.get(existing)!
 
@@ -68,7 +67,8 @@ export function createExecutionGraph(now: () => string = () => new Date().toISOS
       if (taskCallId) {
         taskChildren.set(taskCallId, input.sessionId)
         const task = getByCallId(taskCallId)
-        if (task) task.parentId = node.id
+        const child = nodes.get(node.id)
+        if (task && child) child.parentId = task.id
       }
     }
 
@@ -120,9 +120,7 @@ export function createExecutionGraph(now: () => string = () => new Date().toISOS
     if (existing) return existing
 
     const parentSession = sessionIndex.get(input.sessionId)
-    const task = [...nodes.values()].find(
-      (node) => node.kind === "task" && node.sessionId !== input.sessionId && taskChildren.get(node.callId ?? "") === input.sessionId,
-    )
+    const task = getTaskForChildSession(input.sessionId)
     const node: ExecutionGraphNode = {
       id: `tool:${input.callId}`,
       kind: "tool",
@@ -147,24 +145,10 @@ export function createExecutionGraph(now: () => string = () => new Date().toISOS
     return node
   }
 
-  const attachChildSession = (input: { parentSessionId: string; childSessionId: string }) => {
-    const child = sessionIndex.get(input.childSessionId)
-    if (!child) return undefined
-    const task = [...nodes.values()].find(
-      (node) => node.kind === "task" && node.sessionId === input.parentSessionId && taskChildren.get(node.callId ?? "") === input.childSessionId,
-    )
-    if (task) {
-      const childNode = nodes.get(child)
-      if (childNode) childNode.parentId = task.id
-      return childNode
-    }
-    return nodes.get(child)
-  }
-
   const getTaskForChildSession = (childSessionId: string) => {
     const callId = [...taskChildren.entries()].find(([, sessionId]) => sessionId === childSessionId)?.[0]
     return callId ? getByCallId(callId) : undefined
   }
 
-  return { sessionCreated, taskStarted, taskFinished, toolStarted, toolFinished, attachChildSession, get, getByCallId, getChildren, getTaskForChildSession }
+  return { sessionCreated, taskStarted, taskFinished, toolStarted, toolFinished, get, getByCallId, getChildren, getTaskForChildSession }
 }
