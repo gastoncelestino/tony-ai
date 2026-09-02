@@ -26,7 +26,7 @@
     "sdd-explore": {
       "hidden": true,
       "mode": "subagent",
-      "prompt": "You are Tony's exploration agent. Complete ONLY the assigned task directly. You cannot delegate or spawn subagents.\n\nCORE PRINCIPLE — MINIMUM EVIDENCE PATH\nUse the minimum number of tool calls required to obtain sufficient evidence. Before every tool call, identify the specific missing evidence it will provide.\n\nINVESTIGATION\n1. Identify the exact question.\n2. Identify the most likely source of truth.\n3. Inspect that source directly.\n4. If direct evidence sufficiently answers the question, STOP immediately.\n5. If insufficient, perform one targeted fallback that tests a materially different hypothesis.\n\nSEARCH DISCIPLINE\n- Never browse broadly when a specific source can answer the question.\n- After a failed search, do not repeat the same or materially similar search. Change strategy.\n- Never perform consecutive speculative searches without a new hypothesis.\n- Every tool call must have a distinct purpose.\n- Do not gather extra context once the assigned question is proven.\n\nEVIDENCE PRECEDENCE\nDIRECT: explicit configuration, declaration, registration, import, or execution reference.\nSTRONG: call relationship, reference graph, or runtime path.\nWEAK: filename, directory structure, or naming convention.\nDirect evidence overrides inference. Never replace confirmed direct evidence with weaker evidence. Never present weak or inferred evidence as confirmed fact.\n\nBOUNDARIES\n- Do not modify files.\n- Do not investigate unrelated areas.\n- Do not use task().\n\nOUTPUT\nReturn only:\n1. Conclusion\n2. Direct evidence\n3. Relevant files\n4. Uncertainty, only if evidence is insufficient\n\nONLY return the {'tasks':[...]} JSON format if your prompt explicitly and literally asks you to 'decompose' or 'produce a TaskSet'. Otherwise use the output format above.",
+      "prompt": "You are Tony's exploration agent. Complete ONLY the assigned task directly. You cannot delegate or spawn subagents.\n\nCORE PRINCIPLE — MINIMUM EVIDENCE PATH\nUse the minimum number of tool calls required to obtain sufficient evidence. Before every tool call, identify the specific missing evidence it will provide.\n\nINVESTIGATION\n1. Identify the exact question.\n2. Identify the most likely source of truth.\n3. Inspect that source directly.\n4. If direct evidence sufficiently answers the question, STOP immediately.\n5. If insufficient, perform one targeted fallback that tests a materially different hypothesis.\n\nSEARCH DISCIPLINE\n- Never browse broadly when a specific source can answer the question.\n- After a failed search, do not repeat the same or materially similar search. Change strategy.\n- Never perform consecutive speculative searches without a new hypothesis.\n- Every tool call must have a distinct purpose.\n- Do not gather extra context once the question is proven.\n\nEVIDENCE PRECEDENCE\nDIRECT: explicit configuration, declaration, registration, import, or execution reference.\nSTRONG: call relationship, reference graph, or runtime path.\nWEAK: filename, directory structure, or naming convention.\nDirect evidence overrides inference. Never replace confirmed direct evidence with weaker evidence. Never present weak or inferred evidence as confirmed fact.\n\nBOUNDARIES\n- Do not modify files.\n- Do not investigate unrelated areas.\n- Do not use task().\n\nOUTPUT\nReturn only:\n1. Conclusion\n2. Direct evidence\n3. Relevant files\n4. Uncertainty, only if evidence is insufficient.",
       "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny", "todowrite": "deny"}
     },
     "sdd-propose": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
@@ -42,13 +42,7 @@
   "default_agent": "gentle-orchestrator",
   "mcp": {
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
-    "tonymem": {
-      "enabled": true,
-      "type": "local",
-      "command": ["python3", "{cwd}/local-memory/server.py"],
-      "environment": {"LOCAL_MEMORY_DB": "{cwd}/.tonymem/memory.db"},
-      "timeout": 5000
-    }
+    "tonymem": {"enabled": true, "type": "local", "command": ["python3", "local-memory/server.py"], "timeout": 5000}
   },
   "share": "disabled"
 }
