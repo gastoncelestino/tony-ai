@@ -1,35 +1,17 @@
 #!/usr/bin/env python3
-"""Tony local developer tools for OpenCode 1.18.22.
-
-This MCP server exposes fast, read-only repository operations. It is deliberately
-scoped to the OpenCode workspace supplied as its working directory.
-"""
+"""Tony local developer tools for OpenCode 1.18.22."""
 from __future__ import annotations
-
 import fnmatch
 import json
 import os
 import sys
 from pathlib import Path
 
-DEFAULT_IGNORES = {
-    ".git",
-    ".hg",
-    ".svn",
-    "node_modules",
-    "dist",
-    "build",
-    ".next",
-    ".turbo",
-    "coverage",
-    "__pycache__",
-    ".venv",
-    "venv",
-}
+DEFAULT_IGNORES = {".git", ".hg", ".svn", "node_modules", "dist", "build", ".next", ".turbo", "coverage", "__pycache__", ".venv", "venv"}
 DEFAULT_INCLUDE = ["**/*"]
-MAX_FILES = 100
-MAX_FILE_BYTES = 256 * 1024
-MAX_TOTAL_BYTES = 2 * 1024 * 1024
+MAX_FILES = 8
+MAX_FILE_BYTES = 8 * 1024
+MAX_TOTAL_BYTES = 16 * 1024
 
 
 def json_result(value: object) -> dict:
@@ -54,10 +36,12 @@ def inside_workspace(path: Path) -> bool:
 
 def safe_scope(directory: str) -> Path:
     raw = Path(directory)
-    root = raw if raw.is_absolute() else workspace() / raw
-    root = root.resolve()
+    root = (raw if raw.is_absolute() else workspace() / raw).resolve()
+    workspace_root = workspace()
     if not inside_workspace(root):
         raise ValueError("Scope must be inside the OpenCode workspace")
+    if root == workspace_root:
+        raise ValueError("Repository-root batch_read is forbidden; choose a narrow directory such as kernel or plugins")
     if not root.is_dir():
         raise ValueError(f"Scope is not a directory: {root}")
     return root
@@ -84,7 +68,9 @@ def matches(relative: str, patterns: list[str]) -> bool:
 
 
 def batch_read(args: dict) -> dict:
-    directory = str(args.get("directory") or ".")
+    directory = str(args.get("directory") or "")
+    if not directory:
+        raise ValueError("directory is required and must name a narrow repository scope")
     scope = safe_scope(directory)
     patterns = args.get("include") or DEFAULT_INCLUDE
     if isinstance(patterns, str):
@@ -92,18 +78,17 @@ def batch_read(args: dict) -> dict:
     if not isinstance(patterns, list) or not all(isinstance(item, str) and item for item in patterns):
         raise ValueError("include must be a non-empty string or array of strings")
 
-    max_files = min(max(int(args.get("max_files", 50)), 1), MAX_FILES)
-    max_file_bytes = min(max(int(args.get("max_file_bytes", MAX_FILE_BYTES)), 1), MAX_FILE_BYTES)
-    max_total_bytes = min(max(int(args.get("max_total_bytes", MAX_TOTAL_BYTES)), 1), MAX_TOTAL_BYTES)
+    requested_files = max(int(args.get("max_files", MAX_FILES)), 1)
+    requested_file_bytes = max(int(args.get("max_file_bytes", MAX_FILE_BYTES)), 1)
+    requested_total_bytes = max(int(args.get("max_total_bytes", MAX_TOTAL_BYTES)), 1)
+    max_files = min(requested_files, MAX_FILES)
+    max_file_bytes = min(requested_file_bytes, MAX_FILE_BYTES)
+    max_total_bytes = min(requested_total_bytes, MAX_TOTAL_BYTES)
 
     files: list[dict] = []
     total_bytes = 0
     skipped: list[dict] = []
-
-    candidates = sorted(
-        (path for path in scope.rglob("*") if path.is_file() and not ignored(path, scope)),
-        key=lambda path: str(path.relative_to(scope)),
-    )
+    candidates = sorted((path for path in scope.rglob("*") if path.is_file() and not ignored(path, scope)), key=lambda path: str(path.relative_to(scope)))
 
     for path in candidates:
         relative = str(path.relative_to(scope)).replace(os.sep, "/")
@@ -131,43 +116,27 @@ def batch_read(args: dict) -> dict:
         except OSError as exc:
             skipped.append({"path": relative, "reason": f"read_error: {exc}"})
             continue
-        files.append({
-            "path": str(resolved),
-            "relative_path": relative,
-            "bytes": size,
-            "content": content,
-        })
+        files.append({"path": str(resolved), "relative_path": relative, "bytes": size, "content": content})
         total_bytes += size
 
-    return {
-        "operation": "batch_read",
-        "scope": str(scope),
-        "include": patterns,
-        "count": len(files),
-        "total_bytes": total_bytes,
-        "truncated": bool(skipped),
-        "files": files,
-        "skipped": skipped,
-    }
+    return {"operation": "batch_read", "scope": str(scope), "include": patterns, "count": len(files), "total_bytes": total_bytes, "truncated": bool(skipped), "files": files, "skipped": skipped}
 
 
-TOOLS = [
-    {
-        "name": "batch_read",
-        "description": "Read many source files in one call inside the current OpenCode workspace. Use this when a small directory or scoped set of files is relevant; it discovers and reads matching files together, avoiding repeated glob/read calls. Never use it for the whole repository. Prefer a narrow directory such as kernel or plugins and a focused include pattern such as **/*.ts.",
-        "inputSchema": {
-            "type": "object",
-            "required": ["directory"],
-            "properties": {
-                "directory": {"type": "string", "description": "Directory inside the current workspace, for example kernel or plugins."},
-                "include": {"type": "array", "items": {"type": "string"}, "description": "Optional file patterns relative to directory, for example **/*.ts or *.{ts,tsx}."},
-                "max_files": {"type": "integer", "minimum": 1, "maximum": MAX_FILES, "default": 50},
-                "max_file_bytes": {"type": "integer", "minimum": 1, "maximum": MAX_FILE_BYTES, "default": MAX_FILE_BYTES},
-                "max_total_bytes": {"type": "integer", "minimum": 1, "maximum": MAX_TOTAL_BYTES, "default": MAX_TOTAL_BYTES},
-            },
-        },
+TOOLS = [{
+    "name": "batch_read",
+    "description": "Read many source files in one call inside a narrow directory of the current OpenCode workspace. Repository-root batch reads are forbidden. Use a focused scope such as kernel or plugins. Hard limits: 8 files, 8 KiB per file, 16 KiB total.",
+    "inputSchema": {
+        "type": "object",
+        "required": ["directory"],
+        "properties": {
+            "directory": {"type": "string", "description": "Narrow directory inside the workspace, for example kernel or plugins. The repository root is forbidden."},
+            "include": {"type": "array", "items": {"type": "string"}, "description": "File patterns relative to directory, for example **/*.ts."},
+            "max_files": {"type": "integer", "minimum": 1, "maximum": MAX_FILES, "default": MAX_FILES},
+            "max_file_bytes": {"type": "integer", "minimum": 1, "maximum": MAX_FILE_BYTES, "default": MAX_FILE_BYTES},
+            "max_total_bytes": {"type": "integer", "minimum": 1, "maximum": MAX_TOTAL_BYTES, "default": MAX_TOTAL_BYTES}
+        }
     }
-]
+}]
 
 DISPATCH = {"batch_read": batch_read}
 
