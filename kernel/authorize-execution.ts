@@ -1,5 +1,6 @@
 import { adaptTaskExecutionContext } from "./adapter"
 import { callKernelBoundary, callKernelCommand, getKernelContext } from "./transport"
+import { resolveActionPlan } from "./action-plan"
 import type { KernelBoundaryRequest, KernelExecutionOrder } from "./protocol"
 
 const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
@@ -290,6 +291,16 @@ export async function authorizeExecution(
       `[Tony Kernel] ${provided.reason}`
     )
   }
+
+  const plan = resolveActionPlan(provided.context)
+  if (plan.action === "done") {
+    throw new KernelDoneError(`[Tony Kernel] ${plan.reason}`)
+  }
+
+  input.args.description = plan.objective
+  input.args.prompt = actionPlanPrompt(plan)
+  input.args.subagent_type = plan.agent
+  input.args.command = `tony:${plan.phase}`
 
   const adapted = adaptTaskExecutionContext(
     {
