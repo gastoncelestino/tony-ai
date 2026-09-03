@@ -1147,7 +1147,11 @@ const layer = Layer.effect(
           // Tony deterministic runtime: when enabled, the Kernel owns delegation.
           // The LLM is never asked to choose the next agent or phase.
           if (process.env.TONY_KERNEL_ROOT) {
-            const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID))
+            const userObjective = lastUser.parts
+    .filter((part): part is SessionV1.TextPart => part.type === "text")
+    .map((part) => part.text)
+    .join("\n")
+  const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID, userObjective))
 
             if (kernel.available) {
               if (kernel.plan.action === "done") {
@@ -1183,7 +1187,13 @@ const layer = Layer.effect(
               })
 
               const completion = yield* Effect.promise(() =>
-                TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
+
+                plan.task_id === "bootstrap"
+
+                  ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)
+
+                  : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
+
               )
               if (!completion.ok) {
                 throw new Error(`Tony Kernel rejected completion for ${plan.task_id}: ${completion.reason}`)
