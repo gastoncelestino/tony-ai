@@ -299,10 +299,12 @@ export async function authorizeExecution(
     provided.context
   )
 
+  if (adapted.kind === "blocked") {
+    throw new KernelBlockedError(`[Tony Kernel] ${adapted.reason}`)
+  }
+
   if (adapted.kind !== "ready") {
-    throw new KernelUnavailableError(
-      `[Tony Kernel] ${adapted.reason}`
-    )
+    throw new KernelUnavailableError(`[Tony Kernel] ${adapted.reason}`)
   }
 
   const response = await callKernelBoundary(
