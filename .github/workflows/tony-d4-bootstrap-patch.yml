@@ -20,30 +20,35 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p = Path('packages/opencode/src/session/prompt.ts')
           s = p.read_text()
 
-          old = '''            const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID))'''
-          new = '''            const userObjective = lastUser.parts
+          old = 'TonyKernel.nextAction(ctx.worktree, sessionID)'
+          new = '''const userObjective = lastUser.parts
               .filter((part): part is SessionV1.TextPart => part.type === "text")
               .map((part) => part.text)
               .join("\\n")
             const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID, userObjective))'''
           if old not in s:
               raise SystemExit('nextAction call pattern not found')
-          s = s.replace(old, new, 1)
+          s = s.replace('const kernel = yield* Effect.promise(() => ' + old + ')', new, 1)
 
-          old = '''              const completion = yield* Effect.promise(() =>
-                TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
-              )'''
-          new = '''              const completion = yield* Effect.promise(() =>
-                plan.task_id === "bootstrap"
-                  ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)
-                  : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
-              )'''
-          if old not in s:
+          pattern = re.compile(
+              r'(?m)^(\s*)const completion = yield\* Effect\.promise\(\(\) =>\n'
+              r'\s*TonyKernel\.completeTask\(ctx\.worktree, sessionID, plan\.task_id, evidence\),\n'
+              r'\s*\)'
+          )
+          replacement = (
+              r'\1const completion = yield* Effect.promise(() =>\n'
+              r'\1  plan.task_id === "bootstrap"\n'
+              r'\1    ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)\n'
+              r'\1    : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),\n'
+              r'\1)'
+          )
+          s, count = pattern.subn(replacement, s, count=1)
+          if count != 1:
               raise SystemExit('completion call pattern not found')
-          s = s.replace(old, new, 1)
 
           p.write_text(s)
           PY
