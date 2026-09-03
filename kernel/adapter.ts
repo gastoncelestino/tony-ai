@@ -2,6 +2,7 @@ import { isKernelContext, type KernelBoundaryRequest } from "./protocol"
 
 type AdapterResult =
   | { kind: "ready"; request: KernelBoundaryRequest }
+  | { kind: "blocked"; reason: string }
   | { kind: "unavailable"; reason: string }
   | { kind: "ignored" }
 
@@ -14,14 +15,14 @@ export function adaptTaskExecutionContext(
 
   if (input.arguments.task_id !== undefined) {
     return {
-      kind: "unavailable",
+      kind: "blocked",
       reason: "task_id is not allowed for Tony Kernel task execution; child sessions must not be reused",
     }
   }
 
   if (input.arguments.background === true) {
     return {
-      kind: "unavailable",
+      kind: "blocked",
       reason: "background=true is not allowed for Tony Kernel task execution; tasks must complete synchronously",
     }
   }
