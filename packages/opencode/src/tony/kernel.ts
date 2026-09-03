@@ -55,8 +55,13 @@ function call<T extends KernelResponse>(payload: Record<string, unknown>): Promi
   })
 }
 
-export async function nextAction(projectDirectory: string, sessionID: string): Promise<TonyKernelResult> {
-  return call<TonyKernelResult>({ operation: "next_action", project_directory: projectDirectory, session_id: sessionID })
+export async function nextAction(projectDirectory: string, sessionID: string, prompt = ""): Promise<TonyKernelResult> {
+  return call<TonyKernelResult>({
+    operation: "next_action",
+    project_directory: projectDirectory,
+    session_id: sessionID,
+    prompt,
+  })
 }
 
 export async function completeBootstrap(projectDirectory: string, sessionID: string, decomposition: string): Promise<CompletionResult> {
