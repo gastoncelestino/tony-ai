@@ -1148,10 +1148,12 @@ const layer = Layer.effect(
           // The LLM is never asked to choose the next agent or phase.
           if (process.env.TONY_KERNEL_ROOT) {
             const userObjective = lastUser.parts
-    .filter((part): part is SessionV1.TextPart => part.type === "text")
-    .map((part) => part.text)
-    .join("\n")
-  const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID, userObjective))
+              .filter((part): part is SessionV1.TextPart => part.type === "text")
+              .map((part) => part.text)
+              .join("\n")
+            const kernel = yield* Effect.promise(() =>
+              TonyKernel.nextAction(ctx.worktree, sessionID, userObjective),
+            )
 
             if (kernel.available) {
               if (kernel.plan.action === "done") {
@@ -1187,13 +1189,9 @@ const layer = Layer.effect(
               })
 
               const completion = yield* Effect.promise(() =>
-
                 plan.task_id === "bootstrap"
-
                   ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)
-
                   : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
-
               )
               if (!completion.ok) {
                 throw new Error(`Tony Kernel rejected completion for ${plan.task_id}: ${completion.reason}`)
@@ -1201,10 +1199,7 @@ const layer = Layer.effect(
               continue
             }
 
-            yield* Effect.logWarning("tony runtime unavailable; falling back to legacy loop", {
-              "session.id": sessionID,
-              reason: kernel.reason,
-            })
+            throw new Error(`Tony Kernel unavailable: ${kernel.reason}`)
           }
 
           const task = tasks.pop()
