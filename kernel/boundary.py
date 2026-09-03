@@ -79,10 +79,47 @@ def op_get_context(req: dict) -> dict:
     return {"available": True, "context": _context_of(state)}
 
 
+def _bootstrap_objective(user_prompt: str) -> str:
+    return "\n\n".join(
+        [
+            "Decompose the user's task into an executable TaskSet.",
+            f"User objective:\n{user_prompt or '(not provided)'}",
+            "Return a TaskSet using this schema:\n<task_result>{\"tasks\":[{\"id\":\"unique-id\",\"description\":\"unique executable task description\",\"phase\":\"phase-name\",\"dependencies\":[\"other-task-id\"],\"files\":[\"optional/path\"]}]}</task_result>",
+            "phase must be one of: explore, propose, spec, design, tasks, apply, verify, archive.",
+        ]
+    )
+
+
+def _bootstrap_state() -> dict:
+    return {
+        "phase": "explore",
+        "status": "bootstrapping",
+        "tasks": [{"id": BOOTSTRAP_TASK_ID, "description": BOOTSTRAP_DESCRIPTION, "phase": "explore", "dependencies": [], "files": []}],
+        "completed": [],
+    }
+
+
+def _bootstrap_plan(user_prompt: str) -> dict:
+    return {
+        "action": "delegate",
+        "phase": "explore",
+        "task_id": BOOTSTRAP_TASK_ID,
+        "agent": PHASE_AGENTS["explore"],
+        "objective": _bootstrap_objective(user_prompt),
+        "files": [],
+        "allowed_tools": list(PHASE_TOOLS["explore"]),
+        "max_iterations": MAX_ITERATIONS,
+    }
+
+
 def op_next_action(req: dict) -> dict:
-    state = _load_state(req["project_directory"], req["session_id"])
+    project_directory = req["project_directory"]
+    session_id = req["session_id"]
+    state = _load_state(project_directory, session_id)
     if state is None:
-        return {"available": False, "reason": "SDD state unavailable: no bootstrap for session"}
+        state = _bootstrap_state()
+        _save_state(project_directory, session_id, state)
+        return {"available": True, "plan": _bootstrap_plan(str(req.get("prompt", "")))}
 
     completed = set(state.get("completed", []))
     tasks = state.get("tasks", [])
@@ -115,13 +152,7 @@ def op_next_action(req: dict) -> dict:
 def op_prepare_bootstrap(req: dict) -> dict:
     state = _load_state(req["project_directory"], req["session_id"])
     if state is None:
-        state = {
-            "phase": "explore",
-            "status": "bootstrapping",
-            "tasks": [{"id": BOOTSTRAP_TASK_ID, "description": BOOTSTRAP_DESCRIPTION, "phase": "explore", "dependencies": [], "files": []}],
-            "completed": [],
-        }
-        _save_state(req["project_directory"], req["session_id"], state)
+        _save_state(req["project_directory"], req["session_id"], _bootstrap_state())
     return {"ok": True}
 
 
@@ -139,18 +170,32 @@ def _valid_task(value: object) -> bool:
     return files is None or (isinstance(files, list) and all(isinstance(f, str) for f in files))
 
 
+def _parse_decomposition(value: str) -> object:
+    text = value.strip()
+    match = re.search(r"<task_result>\s*(.*?)\s*</task_result>", text, re.DOTALL)
+    if match:
+        text = match.group(1).strip()
+    return json.loads(text)
+
+
 def op_complete_bootstrap(req: dict) -> dict:
     state = _load_state(req["project_directory"], req["session_id"])
     if state is None:
         return {"ok": False, "reason": "complete_bootstrap called before prepare_bootstrap"}
     try:
-        decomposition = json.loads(req["decomposition"])
-    except json.JSONDecodeError as exc:
+        decomposition = _parse_decomposition(req["decomposition"])
+    except (json.JSONDecodeError, TypeError) as exc:
         return {"ok": False, "reason": f"decomposition is not valid JSON: {exc}"}
     tasks = decomposition.get("tasks") if isinstance(decomposition, dict) else None
     if not isinstance(tasks, list) or not tasks or not all(_valid_task(t) for t in tasks):
         return {"ok": False, "reason": "decomposition.tasks is missing, empty, or has invalid task entries"}
+    ids = [task["id"] for task in tasks]
+    if len(ids) != len(set(ids)) or BOOTSTRAP_TASK_ID in ids:
+        return {"ok": False, "reason": "decomposition contains duplicate task ids or reserved bootstrap id"}
+    known = set(ids)
     for task in tasks:
+        if any(dependency not in known for dependency in task.get("dependencies", [])):
+            return {"ok": False, "reason": f"task {task['id']} has an unknown dependency"}
         task.setdefault("files", [])
     state["tasks"] = tasks
     state["completed"] = [BOOTSTRAP_TASK_ID]
