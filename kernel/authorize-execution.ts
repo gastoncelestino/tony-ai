@@ -1,3 +1,4 @@
+import { TerminalError } from "../packages/opencode/src/tool/tool"
 import { adaptTaskExecutionContext } from "./adapter"
 import { callKernelBoundary, callKernelCommand, getKernelContext } from "./transport"
 import type { KernelBoundaryRequest, KernelExecutionOrder } from "./protocol"
@@ -20,7 +21,7 @@ export class KernelUnavailableError extends Error {
   }
 }
 
-export class KernelDoneError extends Error {
+export class KernelDoneError extends TerminalError {
   constructor(message: string) {
     super(message)
     this.name = "KernelDoneError"

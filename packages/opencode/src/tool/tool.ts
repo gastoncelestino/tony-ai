@@ -33,6 +33,27 @@ export class InvalidArgumentsError extends Schema.TaggedErrorClass<InvalidArgume
   }
 }
 
+/**
+ * Terminal tool failure used by Tony Runtime to signal that the current
+ * session must stop instead of asking the model to retry the tool.
+ *
+ * It intentionally derives from the existing permission rejection error so
+ * OpenCode 1.18.22's processor treats it as a terminal/blocked condition
+ * without changing vanilla processor behavior in this first patch.
+ */
+export class TerminalError extends PermissionV1.RejectedError {
+  readonly reason: string
+
+  constructor(reason: string) {
+    super()
+    this.reason = reason
+  }
+
+  override get message() {
+    return this.reason
+  }
+}
+
 export type Context<M extends Metadata = Metadata> = {
   sessionID: SessionID
   messageID: MessageID
