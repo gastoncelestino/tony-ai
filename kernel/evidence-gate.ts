@@ -79,12 +79,16 @@ function findEvidenceForRequirement(
   })
 }
 
+function evidenceList(source: EvidenceLedger | Evidence[]) {
+  return Array.isArray(source) ? source : source.list()
+}
+
 export function evaluateEvidenceClaim(
-  ledger: EvidenceLedger,
+  source: EvidenceLedger | Evidence[],
   claim: EvidenceClaim,
 ): EvidenceGateResult {
   const requirements = requirementsForClaim(claim)
-  const evidence = ledger.list()
+  const evidence = evidenceList(source)
   const preferredIds = claim.evidenceIds ? new Set(claim.evidenceIds) : undefined
   const matchedEvidenceIds: string[] = []
   const missing: EvidenceRequirement[] = []
@@ -119,14 +123,14 @@ export function evaluateEvidenceClaim(
 }
 
 export function evaluateEvidenceClaims(
-  ledger: EvidenceLedger,
+  source: EvidenceLedger | Evidence[],
   claims: EvidenceClaim[],
 ) {
-  return claims.map((claim) => evaluateEvidenceClaim(ledger, claim))
+  return claims.map((claim) => evaluateEvidenceClaim(source, claim))
 }
 
-export function assertEvidenceClaim(ledger: EvidenceLedger, claim: EvidenceClaim) {
-  const result = evaluateEvidenceClaim(ledger, claim)
+export function assertEvidenceClaim(source: EvidenceLedger | Evidence[], claim: EvidenceClaim) {
+  const result = evaluateEvidenceClaim(source, claim)
   if (!result.allowed) {
     throw new Error(result.reason)
   }
