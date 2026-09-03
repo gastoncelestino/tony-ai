@@ -93,13 +93,42 @@ function globMatches(output: string) {
     .filter(Boolean)
 }
 
+function isBatchReadFile(file: unknown): file is Record<string, unknown> {
+  return !!file && typeof file === "object" && typeof (file as Record<string, unknown>).path === "string"
+}
+
+function batchReadFiles(value: unknown) {
+  if (!value || typeof value !== "object") return []
+  const files = (value as Record<string, unknown>).files
+  return Array.isArray(files) ? files.filter(isBatchReadFile) : []
+}
+
 function parseBatchRead(output: string) {
   try {
-    const parsed = JSON.parse(output)
-    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.files)) return []
-    return parsed.files.filter((file: unknown): file is Record<string, unknown> => {
-      return !!file && typeof file === "object" && typeof (file as Record<string, unknown>).path === "string"
-    })
+    const parsed: unknown = JSON.parse(output)
+    const directFiles = batchReadFiles(parsed)
+    if (directFiles.length > 0) return directFiles
+
+    const content = parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>).content
+      : undefined
+
+    if (!Array.isArray(content)) return []
+
+    for (const item of content) {
+      if (!item || typeof item !== "object") continue
+      const text = (item as Record<string, unknown>).text
+      if (typeof text !== "string") continue
+
+      try {
+        const wrappedFiles = batchReadFiles(JSON.parse(text))
+        if (wrappedFiles.length > 0) return wrappedFiles
+      } catch {
+        continue
+      }
+    }
+
+    return []
   } catch {
     return []
   }
