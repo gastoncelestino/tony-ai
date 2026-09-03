@@ -17,6 +17,8 @@ export type TonyKernelResult = { available: true; plan: TonyActionPlan } | { ava
 
 type KernelResponse = TonyKernelResult | { ok: true; result?: Record<string, unknown> } | { ok: false; reason: string }
 
+type CompletionResult = { ok: true; result?: Record<string, unknown> } | { ok: false; reason: string }
+
 const command = () => process.env.TONYMEM_PYTHON ?? "python3"
 const args = () => ["-m", "kernel.boundary"]
 const timeoutMs = 5000
@@ -57,8 +59,17 @@ export async function nextAction(projectDirectory: string, sessionID: string): P
   return call<TonyKernelResult>({ operation: "next_action", project_directory: projectDirectory, session_id: sessionID })
 }
 
-export async function completeTask(projectDirectory: string, sessionID: string, taskID: string, evidence: string) {
-  return call<{ ok: true; result?: Record<string, unknown> } | { ok: false; reason: string }>({
+export async function completeBootstrap(projectDirectory: string, sessionID: string, decomposition: string): Promise<CompletionResult> {
+  return call<CompletionResult>({
+    operation: "complete_bootstrap",
+    project_directory: projectDirectory,
+    session_id: sessionID,
+    decomposition,
+  })
+}
+
+export async function completeTask(projectDirectory: string, sessionID: string, taskID: string, evidence: string): Promise<CompletionResult> {
+  return call<CompletionResult>({
     operation: "complete_task",
     project_directory: projectDirectory,
     session_id: sessionID,
