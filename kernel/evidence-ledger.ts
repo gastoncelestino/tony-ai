@@ -73,12 +73,12 @@ export type ToolEvidenceInput = {
   failed: boolean
 }
 
-function record(value: unknown): Record<string, unknown> | undefined {
+function recordValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
 function targetFromArgs(args: Record<string, unknown> | undefined) {
-  const candidates = ["path", "file", "filepath", "filePath", "pattern", "query", "command"]
+  const candidates = ["path", "file", "filepath", "filePath", "pattern", "query", "command", "directory"]
   for (const key of candidates) {
     if (typeof args?.[key] === "string" && args[key]) return args[key] as string
   }
@@ -93,10 +93,22 @@ function globMatches(output: string) {
     .filter(Boolean)
 }
 
+function parseBatchRead(output: string) {
+  try {
+    const parsed = JSON.parse(output)
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.files)) return []
+    return parsed.files.filter((file: unknown): file is Record<string, unknown> => {
+      return !!file && typeof file === "object" && typeof (file as Record<string, unknown>).path === "string"
+    })
+  } catch {
+    return []
+  }
+}
+
 export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceInput): Evidence[] {
   const tool = input.tool.toLowerCase()
-  const args = record(input.args)
-  const metadata = record(input.metadata)
+  const args = recordValue(input.args)
+  const metadata = recordValue(input.metadata)
   const target = targetFromArgs(args)
   const details = metadata ?? (args ? { input: args } : undefined)
 
@@ -111,6 +123,32 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
       output: input.output,
       metadata: details,
     })]
+  }
+
+  if (tool === "tony-tools_batch_read") {
+    const files = parseBatchRead(input.output)
+    if (files.length === 0) {
+      return [ledger.record({
+        sessionId: input.sessionId,
+        callId: input.callId,
+        tool: input.tool,
+        kind: "SEARCH_RESULT",
+        target,
+        summary: "Batch read returned no readable files",
+        output: input.output,
+        metadata: details,
+      })]
+    }
+    return files.map((file) => ledger.record({
+      sessionId: input.sessionId,
+      callId: input.callId,
+      tool: input.tool,
+      kind: "FILE_CONTENT_READ",
+      target: String(file.path),
+      summary: "File content was returned by the scoped batch_read tool",
+      output: typeof file.content === "string" ? file.content : undefined,
+      metadata: { ...details, batchRead: true, relativePath: file.relative_path, bytes: file.bytes },
+    }))
   }
 
   if (tool === "glob") {
@@ -156,7 +194,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
   if (tool === "grep" || tool === "list") {
     return [ledger.record({
       sessionId: input.sessionId,
-      callId: input.callId,
+      callId: input.callID,
       tool: input.tool,
       kind: "SEARCH_RESULT",
       target,
