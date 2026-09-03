@@ -357,18 +357,39 @@ const layer = Layer.effect(
               Effect.provideService(Database.Service, database),
             )
             const recentParts = parts.slice(-DOOM_LOOP_THRESHOLD)
+            const sameCall = (part: SessionV1.Part) =>
+              part.type === "tool" &&
+              part.tool === value.name &&
+              part.state.status !== "pending" &&
+              JSON.stringify(part.state.input) === JSON.stringify(input)
 
             if (
               recentParts.length !== DOOM_LOOP_THRESHOLD ||
-              !recentParts.every(
-                (part) =>
-                  part.type === "tool" &&
-                  part.tool === value.name &&
-                  part.state.status !== "pending" &&
-                  JSON.stringify(part.state.input) === JSON.stringify(input),
-              )
+              !recentParts.every(sameCall)
             ) {
               return
+            }
+
+            // Tony Runtime: repeated identical failures are not delegated back
+            // to the model forever. This protects the session from consuming
+            // context in a deterministic tool-error loop.
+            if (
+              recentParts.every(
+                (part) => part.type === "tool" && part.state.status === "error",
+              )
+            ) {
+              const reason =
+                `Tony Runtime LOOP_DETECTED: ${value.name} was called with the same input ` +
+                `after ${DOOM_LOOP_THRESHOLD} consecutive failures; terminating the run.`
+              yield* Effect.logWarn("tony.loop.detected", {
+                "session.id": ctx.sessionID,
+                messageID: ctx.assistantMessage.id,
+                tool: value.name,
+                attempts: DOOM_LOOP_THRESHOLD + 1,
+                input,
+              })
+              ctx.blocked = true
+              throw new TerminalError(reason)
             }
 
             const agent = yield* agents.get(ctx.assistantMessage.agent)
