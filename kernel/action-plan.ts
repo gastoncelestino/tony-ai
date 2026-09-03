@@ -72,5 +72,5 @@ export function resolveActionPlan(context: KernelContext): ActionPlan {
 }
 
 export function actionPlanPrompt(plan: Extract<ActionPlan, { action: "delegate" }>) {
-  return `Objective:\n${plan.objective}\n\nReturn the task result as <task_result>...</task_result>.`
+  return plan.objective
 }
