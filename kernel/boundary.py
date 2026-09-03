@@ -2,15 +2,8 @@
 Tony Kernel — implementacion minima del lado Python que kernel/transport.ts
 invoca como `python3 -m kernel.boundary`.
 
-Protocolo (un JSON por invocacion, via stdin -> stdout, ver kernel/protocol.ts):
-
-  KernelContextRequest   {"operation": "get_context", "project_directory": ..., "session_id": ...}
-  KernelCommandRequest   {"operation": "prepare_bootstrap" | "complete_bootstrap" | "complete_task", ...}
-  KernelBoundaryRequest  KernelContext + {"requested_description": ...}   (SIN campo "operation")
-
-Cada invocacion es un proceso nuevo (ver transport.ts: spawn + stdin.end(payload)),
-asi que el estado se persiste en disco entre llamadas, indexado por
-(project_directory, session_id).
+El Kernel es la fuente de verdad de las decisiones de orquestacion. OpenCode
+solo consume el Action Plan y ejecuta el trabajo.
 """
 from __future__ import annotations
 
@@ -24,6 +17,27 @@ from pathlib import Path
 KERNEL_PHASES = ["explore", "propose", "spec", "design", "tasks", "apply", "verify", "archive"]
 BOOTSTRAP_TASK_ID = "bootstrap"
 BOOTSTRAP_DESCRIPTION = "decompose task graph"
+PHASE_AGENTS = {
+    "explore": "sdd-explore",
+    "propose": "sdd-propose",
+    "spec": "sdd-spec",
+    "design": "sdd-design",
+    "tasks": "sdd-tasks",
+    "apply": "sdd-apply",
+    "verify": "sdd-verify",
+    "archive": "sdd-archive",
+}
+PHASE_TOOLS = {
+    "explore": ["read", "glob", "grep", "batch_read"],
+    "propose": ["read", "glob", "grep", "batch_read"],
+    "spec": ["read", "glob", "grep", "batch_read"],
+    "design": ["read", "glob", "grep", "batch_read"],
+    "tasks": ["read", "glob", "grep", "batch_read"],
+    "apply": ["read", "glob", "grep", "batch_read", "edit", "write"],
+    "verify": ["read", "glob", "grep", "batch_read", "bash"],
+    "archive": ["read", "glob", "grep", "batch_read"],
+}
+MAX_ITERATIONS = 8
 
 
 def _state_dir() -> Path:
@@ -51,17 +65,11 @@ def _load_state(project_directory: str, session_id: str) -> dict | None:
 
 
 def _save_state(project_directory: str, session_id: str, state: dict) -> None:
-    path = _state_path(project_directory, session_id)
-    path.write_text(json.dumps(state), encoding="utf-8")
+    _state_path(project_directory, session_id).write_text(json.dumps(state), encoding="utf-8")
 
 
 def _context_of(state: dict) -> dict:
-    return {
-        "phase": state["phase"],
-        "status": state["status"],
-        "tasks": state["tasks"],
-        "completed": state["completed"],
-    }
+    return {"phase": state["phase"], "status": state["status"], "tasks": state["tasks"], "completed": state["completed"]}
 
 
 def op_get_context(req: dict) -> dict:
@@ -71,19 +79,46 @@ def op_get_context(req: dict) -> dict:
     return {"available": True, "context": _context_of(state)}
 
 
+def op_next_action(req: dict) -> dict:
+    state = _load_state(req["project_directory"], req["session_id"])
+    if state is None:
+        return {"available": False, "reason": "SDD state unavailable: no bootstrap for session"}
+
+    completed = set(state.get("completed", []))
+    tasks = state.get("tasks", [])
+    if tasks and all(task["id"] in completed for task in tasks):
+        return {"available": True, "plan": {"action": "done", "reason": "all tasks completed"}}
+
+    for task in tasks:
+        if task["id"] in completed:
+            continue
+        if not all(dependency in completed for dependency in task.get("dependencies", [])):
+            continue
+        phase = task["phase"]
+        return {
+            "available": True,
+            "plan": {
+                "action": "delegate",
+                "phase": phase,
+                "task_id": task["id"],
+                "agent": PHASE_AGENTS[phase],
+                "objective": task["description"],
+                "files": task.get("files", []),
+                "allowed_tools": list(PHASE_TOOLS[phase]),
+                "max_iterations": MAX_ITERATIONS,
+            },
+        }
+
+    return {"available": False, "reason": "no eligible task is available"}
+
+
 def op_prepare_bootstrap(req: dict) -> dict:
     state = _load_state(req["project_directory"], req["session_id"])
     if state is None:
         state = {
             "phase": "explore",
             "status": "bootstrapping",
-            "tasks": [{
-                "id": BOOTSTRAP_TASK_ID,
-                "description": BOOTSTRAP_DESCRIPTION,
-                "phase": "explore",
-                "dependencies": [],
-                "files": [],
-            }],
+            "tasks": [{"id": BOOTSTRAP_TASK_ID, "description": BOOTSTRAP_DESCRIPTION, "phase": "explore", "dependencies": [], "files": []}],
             "completed": [],
         }
         _save_state(req["project_directory"], req["session_id"], state)
@@ -101,9 +136,7 @@ def _valid_task(value: object) -> bool:
     if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
         return False
     files = value.get("files")
-    if files is not None and (not isinstance(files, list) or not all(isinstance(f, str) for f in files)):
-        return False
-    return True
+    return files is None or (isinstance(files, list) and all(isinstance(f, str) for f in files))
 
 
 def op_complete_bootstrap(req: dict) -> dict:
@@ -117,8 +150,8 @@ def op_complete_bootstrap(req: dict) -> dict:
     tasks = decomposition.get("tasks") if isinstance(decomposition, dict) else None
     if not isinstance(tasks, list) or not tasks or not all(_valid_task(t) for t in tasks):
         return {"ok": False, "reason": "decomposition.tasks is missing, empty, or has invalid task entries"}
-    for t in tasks:
-        t.setdefault("files", [])
+    for task in tasks:
+        task.setdefault("files", [])
     state["tasks"] = tasks
     state["completed"] = [BOOTSTRAP_TASK_ID]
     state["status"] = "ready"
@@ -132,11 +165,11 @@ def op_complete_task(req: dict) -> dict:
     if state is None:
         return {"ok": False, "reason": "complete_task called with no active session"}
     task_id = req["task_id"]
-    if not any(t["id"] == task_id for t in state["tasks"]):
+    if not any(task["id"] == task_id for task in state["tasks"]):
         return {"ok": False, "reason": f"unknown task_id: {task_id}"}
     if task_id not in state["completed"]:
         state["completed"].append(task_id)
-    remaining = [t for t in state["tasks"] if t["id"] not in state["completed"]]
+    remaining = [task for task in state["tasks"] if task["id"] not in state["completed"]]
     state["status"] = "ready" if remaining else "done"
     if remaining:
         state["phase"] = remaining[0]["phase"]
@@ -146,6 +179,7 @@ def op_complete_task(req: dict) -> dict:
 
 COMMAND_OPS = {
     "get_context": op_get_context,
+    "next_action": op_next_action,
     "prepare_bootstrap": op_prepare_bootstrap,
     "complete_bootstrap": op_complete_bootstrap,
     "complete_task": op_complete_task,
@@ -154,63 +188,29 @@ COMMAND_OPS = {
 
 def _next_eligible_task(request: dict) -> dict | None:
     completed = set(request.get("completed", []))
-    tasks = request.get("tasks", [])
-    requested_description = request.get("requested_description", "")
-
-    def ready(t: dict) -> bool:
-        return t["id"] not in completed and set(t.get("dependencies", [])).issubset(completed)
-
-    # No fallback is allowed: the Kernel must never substitute another
-    # eligible task for the task explicitly requested by the orchestrator.
-    for t in tasks:
-        if ready(t) and t["description"] == requested_description:
-            return t
+    for task in request.get("tasks", []):
+        if task["id"] not in completed and all(dependency in completed for dependency in task.get("dependencies", [])) and task["description"] == request.get("requested_description", ""):
+            return task
     return None
 
 
 def op_boundary(request: dict) -> dict:
     completed = set(request.get("completed", []))
     tasks = request.get("tasks", [])
-
-    # DONE remains a distinct boundary decision from BLOCKED.
-    if tasks and all(t["id"] in completed for t in tasks):
-        return {
-            "allowed": False,
-            "decision": "done",
-            "reason": "all tasks completed — respond to the user directly, do not call task() again",
-            "execution_order": None,
-        }
-
+    if tasks and all(task["id"] in completed for task in tasks):
+        return {"allowed": False, "decision": "done", "reason": "all tasks completed — respond to the user directly, do not call task() again", "execution_order": None}
     task = _next_eligible_task(request)
     if task is None:
-        return {
-            "allowed": False,
-            "decision": "blocked",
-            "reason": "requested task is not the next eligible task",
-            "execution_order": None,
-        }
-
-    return {
-        "allowed": True,
-        "decision": "proceed",
-        "reason": f"authorized task {task['id']}",
-        "execution_order": {
-            "task_id": task["id"],
-            "description": task["description"],
-            "phase": task["phase"],
-            "files": task.get("files", []),
-        },
-    }
+        return {"allowed": False, "decision": "blocked", "reason": "requested task is not the next eligible task", "execution_order": None}
+    return {"allowed": True, "decision": "proceed", "reason": f"authorized task {task['id']}", "execution_order": {"task_id": task["id"], "description": task["description"], "phase": task["phase"], "files": task.get("files", [])}}
 
 
 def main() -> int:
-    raw = sys.stdin.read()
     try:
-        request = json.loads(raw)
+        request = json.loads(sys.stdin.read())
     except json.JSONDecodeError as exc:
         print(f"invalid JSON request: {exc}", file=sys.stderr)
         return 1
-
     try:
         if isinstance(request, dict) and "operation" in request:
             handler = COMMAND_OPS.get(request["operation"])
@@ -223,7 +223,6 @@ def main() -> int:
     except (KeyError, TypeError) as exc:
         print(f"malformed request: {exc}", file=sys.stderr)
         return 1
-
     sys.stdout.write(json.dumps(response))
     return 0
 
