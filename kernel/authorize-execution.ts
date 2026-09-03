@@ -88,7 +88,12 @@ function bootstrapPrompt(
   description: string,
   prompt: string
 ) {
-  return `You are Tony's task-graph decomposition subagent. This is ONLY the bootstrap planning step of a new execution session.\n\nYour ONLY output is a machine-readable TaskSet. Do NOT perform the requested work, implement anything, modify files, create files, or create temporary files. Do not use bash, shell commands, write/edit tools, skills, todo lists, or the task tool — you cannot delegate, spawn subagents, or plan in multiple steps. If repository inspection is necessary, use read/glob only, directly, in this same turn.\n\nORIGINAL TASK DESCRIPTION:\n${description || "(not provided)"}\n\nORIGINAL TASK PROMPT / OBJECTIVE:\n${prompt || "(not provided)"}\n\nReturn ONLY valid JSON wrapped in <task_result> tags, with this exact top-level shape:\n<task_result>{"tasks":[{"id":"unique-id","description":"unique executable task description","phase":"phase-name","dependencies":["other-task-id"],"files":["optional/path"]}]}</task_result>\n\nThe phase field MUST use one of: explore, propose, spec, design, tasks, apply, verify, archive. Do not include the reserved bootstrap task. Do not return an empty tasks array.`
+  return [
+    `Task description:\n${description || "(not provided)"}`,
+    `Task objective:\n${prompt || "(not provided)"}`,
+    `Return a TaskSet using this schema:\n<task_result>{"tasks":[{"id":"unique-id","description":"unique executable task description","phase":"phase-name","dependencies":["other-task-id"],"files":["optional/path"]}]}</task_result>`,
+    `phase must be one of: explore, propose, spec, design, tasks, apply, verify, archive.`,
+  ].join("\n\n")
 }
 
 async function kernelCommand(
