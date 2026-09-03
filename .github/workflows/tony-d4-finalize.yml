@@ -1,0 +1,60 @@
+name: tony-d4-finalize
+
+on:
+  push:
+    branches: [opencode2]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: "!contains(github.event.head_commit.message, 'tony: finalize D.4 runtime')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: opencode2
+
+      - name: Normalize deterministic runtime
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/opencode/src/session/prompt.ts')
+          s = p.read_text()
+
+          start = s.index('          if (process.env.TONY_KERNEL_ROOT) {')
+          end = s.index('\n          const task = tasks.pop()', start)
+          block = s[start:end]
+
+          block = block.replace(
+              '''            const userObjective = lastUser.parts\n    .filter((part): part is SessionV1.TextPart => part.type === "text")\n    .map((part) => part.text)\n    .join("\\n")\n  const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID, userObjective))''',
+              '''            const userObjective = lastUser.parts\n              .filter((part): part is SessionV1.TextPart => part.type === "text")\n              .map((part) => part.text)\n              .join("\\n")\n            const kernel = yield* Effect.promise(() =>\n              TonyKernel.nextAction(ctx.worktree, sessionID, userObjective),\n            )''',
+          )
+
+          block = block.replace(
+              '''              const completion = yield* Effect.promise(() =>\n\n                plan.task_id === "bootstrap"\n\n                  ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)\n\n                  : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),\n\n              )''',
+              '''              const completion = yield* Effect.promise(() =>\n                plan.task_id === "bootstrap"\n                  ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)\n                  : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),\n              )''',
+          )
+
+          fallback = '''            yield* Effect.logWarning("tony runtime unavailable; falling back to legacy loop", {\n              "session.id": sessionID,\n              reason: kernel.reason,\n            })'''
+          if fallback not in block:
+              raise SystemExit('legacy fallback block not found')
+          block = block.replace(
+              fallback,
+              '''            throw new Error(`Tony Kernel unavailable: ${kernel.reason}`)''',
+              1,
+          )
+
+          s = s[:start] + block + s[end:]
+          p.write_text(s)
+          PY
+
+      - name: Commit and remove temporary workflow
+        run: |
+          rm .github/workflows/tony-d4-finalize.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/opencode/src/session/prompt.ts .github/workflows/tony-d4-finalize.yml
+          git commit -m 'tony: finalize D.4 runtime'
+          git push origin HEAD:opencode2
