@@ -1,0 +1,58 @@
+name: tony-d4-bootstrap-patch
+
+on:
+  push:
+    branches: [opencode2]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, 'tony: apply D.4 bootstrap runtime')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: opencode2
+
+      - name: Patch runtime bootstrap
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/opencode/src/session/prompt.ts')
+          s = p.read_text()
+
+          old = '''            const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID))'''
+          new = '''            const userObjective = lastUser.parts
+              .filter((part): part is SessionV1.TextPart => part.type === "text")
+              .map((part) => part.text)
+              .join("\\n")
+            const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID, userObjective))'''
+          if old not in s:
+              raise SystemExit('nextAction call pattern not found')
+          s = s.replace(old, new, 1)
+
+          old = '''              const completion = yield* Effect.promise(() =>
+                TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
+              )'''
+          new = '''              const completion = yield* Effect.promise(() =>
+                plan.task_id === "bootstrap"
+                  ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)
+                  : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
+              )'''
+          if old not in s:
+              raise SystemExit('completion call pattern not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Commit runtime patch and remove temporary workflow
+        run: |
+          rm .github/workflows/tony-d4-bootstrap-patch.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/opencode/src/session/prompt.ts .github/workflows/tony-d4-bootstrap-patch.yml
+          git commit -m 'tony: apply D.4 bootstrap runtime'
+          git push origin HEAD:opencode2
