@@ -87,16 +87,8 @@ export const TonyTrace: Plugin = async ({ directory }) => {
   }
 
   const evaluateTaskEvidence = (sessionID: string, callID: string, taskID: string, claims: EvidenceClaim[] = []): EvidenceEvaluation => {
-    const entries = evidence.list().filter((entry) => entry.sessionId === sessionID)
-    const discovered = entries.filter((entry) => entry.kind === "FILE_DISCOVERED" && entry.target)
-    const automaticClaims: EvidenceClaim[] = discovered.map((entry) => ({
-      id: `task:${taskID}:file:${entry.id}`,
-      type: "file_content",
-      statement: `Discovered file '${entry.target}' has direct content evidence`,
-      requirements: [{ kind: "FILE_CONTENT_READ", target: entry.target }],
-    }))
     const results: EvidenceGateResult[] = []
-    for (const claim of [...automaticClaims, ...claims]) {
+    for (const claim of claims) {
       const result = evaluateEvidenceClaim(evidence, claim)
       results.push(result)
       emit("EVIDENCE_GATE_RESULT", {
@@ -216,7 +208,8 @@ export const TonyTrace: Plugin = async ({ directory }) => {
           const first = blocked[0]
           const reason = first?.reason ?? "Evidence requirements are not satisfied"
           const missing = blocked.flatMap((item) => item.missing)
-          const blockedMessage = `[Tony Kernel] Evidence Gate blocked task '${phase.taskID}'.\nReason: ${reason}\nMissing evidence: ${missing.join(", ") || "unknown"}`
+          const missingText = missing.map((item) => `${item.kind}${item.target ? `: ${item.target}` : ""}${item.tool ? ` (tool=${item.tool})` : ""}${item.callId ? ` (callID=${item.callId})` : ""}`).join("\n- ")
+          const blockedMessage = `[Tony Kernel] Evidence Gate blocked task '${phase.taskID}'.\nReason: ${reason}\nMissing evidence:\n- ${missingText || "unknown"}`
           output.output = blockedMessage
           output.title = "Evidence Gate blocked"
           if (!output.metadata || typeof output.metadata !== "object") output.metadata = {}
