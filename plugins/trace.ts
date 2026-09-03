@@ -56,6 +56,30 @@ function extractStructuredClaims(output: string): StructuredClaim[] {
     return []
   }
 }
+function summarizeTraceOutput(tool: string, output: string): string {
+  if (tool.toLowerCase() !== "tony-tools_batch_read") return output
+  try {
+    const parsed = JSON.parse(output) as Record<string, unknown>
+    const files = Array.isArray(parsed.files)
+      ? parsed.files.map((file) => {
+          if (!file || typeof file !== "object") return file
+          const item = file as Record<string, unknown>
+          return { path: item.path, relative_path: item.relative_path, bytes: item.bytes, skipped: item.skipped }
+        })
+      : []
+    return JSON.stringify({
+      operation: parsed.operation,
+      scope: parsed.scope,
+      include: parsed.include,
+      count: parsed.count,
+      total_bytes: parsed.total_bytes,
+      truncated: parsed.truncated,
+      files,
+    })
+  } catch {
+    return `[batch_read output omitted from trace; outputLength=${output.length}]`
+  }
+}
 
 export const TonyTrace: Plugin = async ({ directory }) => {
   const logPath = join(directory, "tony-trace.jsonl")
@@ -261,7 +285,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         failed: status === "failed",
       })
       emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status, outputLength: result.output.length })
-      emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID, evidence: evidenceEntries.map((entry) => ({ id: entry.id, kind: entry.kind, target: entry.target })) })
+      emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: summarizeTraceOutput(input.tool, result.output), childSessionID, evidence: evidenceEntries.map((entry) => ({ id: entry.id, kind: entry.kind, target: entry.target })) })
     },
 
     event: async ({ event }) => {
