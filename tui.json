@@ -1,6 +1,0 @@
-{
-  "$schema": "https://opencode.ai/tui.json",
-  "plugin": [
-    "/home/tony/.config/opencode/local-plugins/sub-agent-statusline/dist/tui.js"
-  ]
-}
