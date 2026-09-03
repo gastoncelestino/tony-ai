@@ -1,6 +1,6 @@
 import { adaptTaskExecutionContext } from "./adapter"
 import { callKernelBoundary, callKernelCommand, getKernelContext } from "./transport"
-import { resolveActionPlan } from "./action-plan"
+import { actionPlanPrompt, resolveActionPlan } from "./action-plan"
 import type { KernelBoundaryRequest, KernelExecutionOrder } from "./protocol"
 
 const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
