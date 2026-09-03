@@ -381,13 +381,9 @@ const layer = Layer.effect(
               const reason =
                 `Tony Runtime LOOP_DETECTED: ${value.name} was called with the same input ` +
                 `after ${DOOM_LOOP_THRESHOLD} consecutive failures; terminating the run.`
-              yield* Effect.logWarn("tony.loop.detected", {
-                "session.id": ctx.sessionID,
-                messageID: ctx.assistantMessage.id,
-                tool: value.name,
-                attempts: DOOM_LOOP_THRESHOLD + 1,
-                input,
-              })
+              // Keep the terminal path dependency-free: logging APIs in the
+              // Effect version bundled with OpenCode can introduce an environment
+              // requirement and break the processor's Effect<Result> contract.
               ctx.blocked = true
               throw new TerminalError(reason)
             }
