@@ -56,6 +56,7 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
+import * as TonyKernel from "@/tony/kernel"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -427,7 +428,9 @@ const layer = Layer.effect(
         } satisfies SessionV1.ToolPart)
       }
 
-      if (!task.command) return
+      const output = result?.output ?? ""
+
+      if (!task.command) return output
 
       const summaryUserMsg: SessionV1.User = {
         id: MessageID.ascending(),
@@ -446,6 +449,7 @@ const layer = Layer.effect(
         text: "Summarize the task tool output above and continue with your task.",
         synthetic: true,
       } satisfies SessionV1.TextPart)
+      return output
     })
 
     const shellImpl = Effect.fn("SessionPrompt.shellImpl")(function* (input: ShellInput, ready?: Latch.Latch) {
@@ -1139,6 +1143,57 @@ const layer = Layer.effect(
             }).pipe(Effect.ignore, Effect.forkIn(scope))
 
           const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
+
+          // Tony deterministic runtime: when enabled, the Kernel owns delegation.
+          // The LLM is never asked to choose the next agent or phase.
+          if (process.env.TONY_KERNEL_ROOT) {
+            const kernel = yield* Effect.promise(() => TonyKernel.nextAction(ctx.worktree, sessionID))
+
+            if (kernel.available) {
+              if (kernel.plan.action === "done") {
+                yield* Effect.logInfo("tony runtime done", {
+                  "session.id": sessionID,
+                  reason: kernel.plan.reason,
+                })
+                break
+              }
+
+              const plan = kernel.plan
+              const runtimeTask: SessionV1.SubtaskPart = {
+                type: "subtask",
+                id: PartID.ascending(),
+                messageID: lastUser.id,
+                sessionID,
+                agent: plan.agent,
+                description: `Tony runtime task ${plan.task_id} (${plan.phase})`,
+                prompt: [
+                  plan.objective,
+                  plan.files.length ? `Files:\n${plan.files.join("\n")}` : "",
+                  plan.allowed_tools.length ? `Allowed tools: ${plan.allowed_tools.join(", ")}` : "",
+                ].filter(Boolean).join("\n\n"),
+              }
+
+              const evidence = yield* handleSubtask({
+                task: runtimeTask,
+                model,
+                lastUser,
+                sessionID,
+                session,
+                msgs,
+              })
+
+              yield* Effect.promise(() =>
+                TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
+              )
+              continue
+            }
+
+            yield* Effect.logWarning("tony runtime unavailable; falling back to legacy loop", {
+              "session.id": sessionID,
+              reason: kernel.reason,
+            })
+          }
+
           const task = tasks.pop()
 
           if (task?.type === "subtask") {
@@ -1239,6 +1294,11 @@ const layer = Layer.effect(
               Effect.provideService(Truncate.Service, truncate),
               Effect.provideService(RuntimeFlags.Service, flags),
             )
+
+            // Runtime-owned orchestration: workers must not recursively delegate.
+            if (agent.mode === "subagent") {
+              delete tools[TaskTool.id]
+            }
 
             if (lastUser.format?.type === "json_schema") {
               tools["StructuredOutput"] = createStructuredOutputTool({
