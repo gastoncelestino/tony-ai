@@ -1182,9 +1182,12 @@ const layer = Layer.effect(
                 msgs,
               })
 
-              yield* Effect.promise(() =>
+              const completion = yield* Effect.promise(() =>
                 TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
               )
+              if (!completion.ok) {
+                throw new Error(`Tony Kernel rejected completion for ${plan.task_id}: ${completion.reason}`)
+              }
               continue
             }
 
