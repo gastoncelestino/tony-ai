@@ -5,7 +5,7 @@ import { authorizeExecution, assertBootstrapToolAllowed, bootstrapStarted, compl
 import { createExecutionObservationStore } from "../kernel/execution-observation"
 import { createExecutionGraph } from "../kernel/execution-graph"
 import { createEvidenceLedger, recordToolEvidence } from "../kernel/evidence-ledger"
-import { evaluateEvidenceClaim, type EvidenceClaim, type EvidenceClaimType } from "../kernel/evidence-gate"
+import { evaluateEvidenceClaim, type EvidenceClaim, type EvidenceClaimType, type EvidenceGateResult } from "../kernel/evidence-gate"
 
 const WORK_TOOLS = new Set(["read", "glob", "grep", "bash", "write", "edit", "apply_patch", "skill", "todowrite", "webfetch", "websearch"])
 const REQUIRED_TRACE = ["TASK_CREATE", "MODEL_DECISION", "TOOL_REQUEST", "KERNEL_INTERCEPT", "KERNEL_DECISION", "TOOL_EXECUTE_START", "TOOL_EXECUTE_END", "TOOL_RESULT", "TASK_COMPLETE", "PHASE_ENTER", "PHASE_EXIT"] as const
@@ -15,6 +15,7 @@ type TokenSnapshot = { input: number; output: number; reasoning: number; cacheRe
 type Phase = { agent: string; phase: string; taskID: string; callID: string; sessionID: string; startedAt: number }
 type Result = { title: string; output: string; metadata: unknown }
 type StructuredClaim = { type: EvidenceClaimType; target?: string; statement?: string; evidenceIds?: string[] }
+type EvidenceEvaluation = { allowed: boolean; results: EvidenceGateResult[] }
 
 const asString = (value: unknown) => typeof value === "string" && value.length > 0 ? value : undefined
 const argKeys = (value: unknown) => value && typeof value === "object" ? Object.keys(value as Record<string, unknown>).sort() : []
@@ -85,7 +86,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
     })
   }
 
-  const emitEvidenceGateResults = (sessionID: string, callID: string, taskID: string, claims: EvidenceClaim[] = []) => {
+  const evaluateTaskEvidence = (sessionID: string, callID: string, taskID: string, claims: EvidenceClaim[] = []): EvidenceEvaluation => {
     const entries = evidence.list().filter((entry) => entry.sessionId === sessionID)
     const discovered = entries.filter((entry) => entry.kind === "FILE_DISCOVERED" && entry.target)
     const automaticClaims: EvidenceClaim[] = discovered.map((entry) => ({
@@ -94,8 +95,10 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       statement: `Discovered file '${entry.target}' has direct content evidence`,
       requirements: [{ kind: "FILE_CONTENT_READ", target: entry.target }],
     }))
+    const results: EvidenceGateResult[] = []
     for (const claim of [...automaticClaims, ...claims]) {
       const result = evaluateEvidenceClaim(evidence, claim)
+      results.push(result)
       emit("EVIDENCE_GATE_RESULT", {
         sessionID,
         callID,
@@ -107,13 +110,14 @@ export const TonyTrace: Plugin = async ({ directory }) => {
         reason: result.reason,
       })
     }
+    return { allowed: results.every((result) => result.allowed), results }
   }
 
-  const emitTaskEvidenceSnapshot = (callID: string, taskID: string, resultOutput: string) => {
+  const emitTaskEvidenceSnapshot = (callID: string, taskID: string, resultOutput: string): EvidenceEvaluation | undefined => {
     const taskNode = graph.getByCallId(callID)
-    if (!taskNode) return
+    if (!taskNode) return undefined
     const childSession = graph.getChildren(taskNode.id).find((node) => node.kind === "session")
-    if (!childSession) return
+    if (!childSession) return undefined
     emitEvidenceSnapshot(childSession.sessionId, callID, taskID)
     const structuredClaims = extractStructuredClaims(resultOutput).map((claim, index): EvidenceClaim => ({
       id: `task:${taskID}:claim:${index + 1}`,
@@ -123,7 +127,7 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       requirements: claim.target ? [{ kind: ({ file_discovery: "FILE_DISCOVERED", file_content: "FILE_CONTENT_READ", search: "SEARCH_RESULT", command: "COMMAND_RESULT", modification: "FILE_MODIFIED" } as const)[claim.type], target: claim.target }] : undefined,
     }))
     emit("EVIDENCE_CLAIMS", { sessionID: childSession.sessionId, callID, taskID, count: structuredClaims.length, claims: structuredClaims })
-    emitEvidenceGateResults(childSession.sessionId, callID, taskID, structuredClaims)
+    return evaluateTaskEvidence(childSession.sessionId, callID, taskID, structuredClaims)
   }
 
   const closePhase = (callID: string, status: string, result: unknown, childSessionID?: string) => {
@@ -196,29 +200,58 @@ export const TonyTrace: Plugin = async ({ directory }) => {
       const phase = phases.get(input.callID)
       const childSessionID = asString((result.metadata as any)?.sessionId) ?? asString((result.metadata as any)?.sessionID)
       if (phase) {
-        const observation = failed(result) ? observations.fail(input.callID, result) : observations.succeed(input.callID, result)
+        if (failed(result)) {
+          const observation = observations.fail(input.callID, result)
+          graph.taskFinished({ callId: input.callID, status: observation.status, result })
+          emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: observation.status, outputLength: result.output.length })
+          emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
+          emit("TASK_COMPLETE", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, status: observation.status })
+          closePhase(input.callID, observation.status, result.output, childSessionID)
+          return
+        }
+
+        const evidenceEvaluation = emitTaskEvidenceSnapshot(input.callID, phase.taskID, result.output)
+        if (evidenceEvaluation && !evidenceEvaluation.allowed) {
+          const blocked = evidenceEvaluation.results.filter((item) => !item.allowed)
+          const first = blocked[0]
+          const reason = first?.reason ?? "Evidence requirements are not satisfied"
+          const missing = blocked.flatMap((item) => item.missing)
+          const blockedMessage = `[Tony Kernel] Evidence Gate blocked task '${phase.taskID}'.\nReason: ${reason}\nMissing evidence: ${missing.join(", ") || "unknown"}`
+          output.output = blockedMessage
+          output.title = "Evidence Gate blocked"
+          if (!output.metadata || typeof output.metadata !== "object") output.metadata = {}
+          ;(output.metadata as Record<string, unknown>).status = "error"
+          ;(output.metadata as Record<string, unknown>).error = true
+          ;(output.metadata as Record<string, unknown>).tonyEvidenceGate = "blocked"
+
+          const observation = observations.incomplete(input.callID)
+          graph.taskFinished({ callId: input.callID, status: "blocked", result: normalizeResult(output) })
+          emit("EVIDENCE_GATE_BLOCKED", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, allowed: false, claimId: first?.claimId, missing, reason })
+          emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: "blocked", outputLength: blockedMessage.length })
+          emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: blockedMessage.length, output: blockedMessage, childSessionID })
+          closePhase(input.callID, "blocked", blockedMessage, childSessionID)
+          return
+        }
+
+        const observation = observations.succeed(input.callID, result)
         graph.taskFinished({ callId: input.callID, status: observation.status, result })
         emit("TOOL_EXECUTE_END", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, status: observation.status, outputLength: result.output.length })
         emit("TOOL_RESULT", { sessionID: input.sessionID, callID: input.callID, tool: input.tool, outputLength: result.output.length, output: result.output, childSessionID })
         emit("TASK_COMPLETE", { sessionID: input.sessionID, callID: input.callID, taskID: phase.taskID, status: observation.status })
-        if (observation.status === "succeeded") emitTaskEvidenceSnapshot(input.callID, phase.taskID, result.output)
         closePhase(input.callID, observation.status, result.output, childSessionID)
 
-        if (observation.status === "succeeded") {
-          const isBootstrap = bootstrapStarted(directory, input.sessionID)
-
-          if (isBootstrap) {
-            try {
-              await completeBootstrap(directory, input.sessionID, result.output)
-            } catch (error) {
-              emit("BOOTSTRAP_FAILED", { sessionID: input.sessionID, callID: input.callID, reason: error instanceof Error ? error.message : String(error) })
-              return
-            }
-
-            finishBootstrap(directory, input.sessionID)
-          } else {
-            await completeSuccessfulTask(directory, input.sessionID, phase.taskID, result)
+        const isBootstrap = bootstrapStarted(directory, input.sessionID)
+        if (isBootstrap) {
+          try {
+            await completeBootstrap(directory, input.sessionID, result.output)
+          } catch (error) {
+            emit("BOOTSTRAP_FAILED", { sessionID: input.sessionID, callID: input.callID, reason: error instanceof Error ? error.message : String(error) })
+            return
           }
+
+          finishBootstrap(directory, input.sessionID)
+        } else {
+          await completeSuccessfulTask(directory, input.sessionID, phase.taskID, result)
         }
         return
       }
