@@ -64,8 +64,6 @@ def _context_of(state: dict) -> dict:
     }
 
 
-# --- operaciones (KernelCommandRequest / KernelContextRequest) -------------
-
 def op_get_context(req: dict) -> dict:
     state = _load_state(req["project_directory"], req["session_id"])
     if state is None:
@@ -154,8 +152,6 @@ COMMAND_OPS = {
 }
 
 
-# --- boundary check (KernelBoundaryRequest, sin "operation") ---------------
-
 def _next_eligible_task(request: dict) -> dict | None:
     completed = set(request.get("completed", []))
     tasks = request.get("tasks", [])
@@ -164,20 +160,19 @@ def _next_eligible_task(request: dict) -> dict | None:
     def ready(t: dict) -> bool:
         return t["id"] not in completed and set(t.get("dependencies", [])).issubset(completed)
 
-    # Preferimos matchear por descripcion exacta (asi el orquestador elige la
-    # tarea), y si no matchea nada, caemos a la primera tarea lista.
+    # No fallback is allowed: the Kernel must never substitute another
+    # eligible task for the task explicitly requested by the orchestrator.
     for t in tasks:
         if ready(t) and t["description"] == requested_description:
             return t
-    for t in tasks:
-        if ready(t):
-            return t
     return None
-    
-    
+
+
 def op_boundary(request: dict) -> dict:
     completed = set(request.get("completed", []))
     tasks = request.get("tasks", [])
+
+    # DONE remains a distinct boundary decision from BLOCKED.
     if tasks and all(t["id"] in completed for t in tasks):
         return {
             "allowed": False,
@@ -185,9 +180,16 @@ def op_boundary(request: dict) -> dict:
             "reason": "all tasks completed — respond to the user directly, do not call task() again",
             "execution_order": None,
         }
+
     task = _next_eligible_task(request)
     if task is None:
-        return {"allowed": False, "decision": "blocked", "reason": "no eligible tasks (all completed or blocked by dependencies)", "execution_order": None}
+        return {
+            "allowed": False,
+            "decision": "blocked",
+            "reason": "requested task is not the next eligible task",
+            "execution_order": None,
+        }
+
     return {
         "allowed": True,
         "decision": "proceed",
