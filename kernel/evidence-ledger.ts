@@ -194,7 +194,7 @@ export function recordToolEvidence(ledger: EvidenceLedger, input: ToolEvidenceIn
   if (tool === "grep" || tool === "list") {
     return [ledger.record({
       sessionId: input.sessionId,
-      callId: input.callID,
+      callId: input.callId,
       tool: input.tool,
       kind: "SEARCH_RESULT",
       target,
