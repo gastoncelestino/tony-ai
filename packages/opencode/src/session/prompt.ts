@@ -1147,10 +1147,13 @@ const layer = Layer.effect(
           // Tony deterministic runtime: when enabled, the Kernel owns delegation.
           // The LLM is never asked to choose the next agent or phase.
           if (process.env.TONY_KERNEL_ROOT) {
-            const userObjective = lastUser.parts
-              .filter((part): part is SessionV1.TextPart => part.type === "text")
-              .map((part) => part.text)
-              .join("\n")
+            const lastUserMsg = msgs.findLast(
+    (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,
+  )
+  const userObjective = lastUserMsg?.parts
+    .filter((part): part is SessionV1.TextPart => part.type === "text")
+    .map((part) => part.text)
+    .join("\n") ?? ""
             const kernel = yield* Effect.promise(() =>
               TonyKernel.nextAction(ctx.worktree, sessionID, userObjective),
             )
