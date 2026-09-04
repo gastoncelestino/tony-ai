@@ -72,6 +72,12 @@ const SUPPORTED_MCP_RESOURCE_ATTACHMENT_MIMES = new Set([
   "image/webp",
 ])
 
+const TONY_TRACE = process.env.TONY_TRACE === "1"
+function tonyTrace(event: string, data: Record<string, unknown> = {}) {
+  if (!TONY_TRACE) return
+  console.error(`[TONY-TRACE] ${event} ${JSON.stringify(data)}`)
+}
+
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
 
 IMPORTANT:
@@ -1090,6 +1096,7 @@ const layer = Layer.effect(
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         while (true) {
+          tonyTrace("LOOP_ENTER", { sessionID, step, kernelRoot: process.env.TONY_KERNEL_ROOT ?? null })
           yield* status.set(sessionID, { type: "busy" })
           yield* Effect.logInfo("loop", { "session.id": sessionID, step })
 
@@ -1144,6 +1151,8 @@ const layer = Layer.effect(
 
           const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
 
+          tonyTrace("MODEL_PATH", { sessionID, step, agent: lastUser.agent, model: model.id, kernelEnabled: Boolean(process.env.TONY_KERNEL_ROOT) })
+
           // Tony deterministic runtime: when enabled, the Kernel owns delegation.
           // The LLM is never asked to choose the next agent or phase.
           if (process.env.TONY_KERNEL_ROOT) {
@@ -1154,9 +1163,11 @@ const layer = Layer.effect(
               .filter((part): part is SessionV1.TextPart => part.type === "text")
               .map((part) => part.text)
               .join("\n") ?? ""
+            tonyTrace("KERNEL_NEXT_ACTION_START", { sessionID, step, objective: userObjective.slice(0, 300) })
             const kernel = yield* Effect.promise(() =>
               TonyKernel.nextAction(ctx.worktree, sessionID, userObjective),
             )
+            tonyTrace("KERNEL_NEXT_ACTION_RESULT", { sessionID, step, available: kernel.available, plan: kernel.available ? { action: kernel.plan.action, phase: kernel.plan.action === "delegate" ? kernel.plan.phase : null, taskID: kernel.plan.action === "delegate" ? kernel.plan.task_id : null, agent: kernel.plan.action === "delegate" ? kernel.plan.agent : null } : null, reason: kernel.available ? null : kernel.reason })
 
             if (kernel.available) {
               if (kernel.plan.action === "done") {
@@ -1182,6 +1193,7 @@ const layer = Layer.effect(
                 ].filter(Boolean).join("\n\n"),
               }
 
+              tonyTrace("RUNTIME_DELEGATE_START", { sessionID, step, taskID: plan.task_id, phase: plan.phase, agent: plan.agent })
               const evidence = yield* handleSubtask({
                 task: runtimeTask,
                 model,
@@ -1191,6 +1203,7 @@ const layer = Layer.effect(
                 msgs,
               })
 
+              tonyTrace("RUNTIME_DELEGATE_END", { sessionID, step, taskID: plan.task_id, evidenceBytes: evidence.length })
               const completion = yield* Effect.promise(() =>
                 plan.task_id === "bootstrap"
                   ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)
@@ -1340,6 +1353,7 @@ const layer = Layer.effect(
             ]
             const format = lastUser.format ?? { type: "text" as const }
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+            tonyTrace("ORCHESTRATOR_LLM_PROCESS_START", { sessionID, step, agent: agent.name, model: model.id, messageID: lastUser.id })
             const result = yield* handle.process({
               user: lastUser,
               agent,

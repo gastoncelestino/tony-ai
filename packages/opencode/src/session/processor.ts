@@ -645,6 +645,9 @@ const layer = Layer.effect(
       })
 
       const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {
+        if (process.env.TONY_TRACE === "1") {
+          console.error(`[TONY-TRACE] PROCESSOR_LLM_STREAM ${JSON.stringify({ sessionID: input.sessionID, messageID: input.assistantMessage.id, agent: input.assistantMessage.agent, model: input.model.id })}`)
+        }
         yield* Effect.logInfo("process", {
           "session.id": input.sessionID,
           messageID: input.assistantMessage.id,
