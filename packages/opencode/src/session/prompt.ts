@@ -1319,7 +1319,9 @@ const layer = Layer.effect(
             )
 
             // Runtime-owned orchestration: workers must not recursively delegate.
-            if (agent.mode === "subagent") {
+            if (agent.mode !== "subagent" && !process.env.TONY_KERNEL_ROOT) {
+              // solo se registra "task" si NO hay kernel deterministic corriendo
+            } else if (agent.mode === "subagent") {
               delete tools[TaskTool.id]
             }
 
