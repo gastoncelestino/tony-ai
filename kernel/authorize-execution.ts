@@ -5,8 +5,6 @@ import type { KernelBoundaryRequest, KernelExecutionOrder } from "./protocol"
 
 const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
 const BOOTSTRAP_DESCRIPTION = "decompose task graph"
-// Debe matchear BOOTSTRAP_TASK_ID en kernel/boundary.py
-const BOOTSTRAP_TASK_ID = "bootstrap"
 const BOOTSTRAP_READ_ONLY_TOOLS = new Set(["read", "glob", "grep", "list", "tony-tools_batch_read"])
 
 export class KernelBlockedError extends Error {
@@ -304,17 +302,10 @@ export async function authorizeExecution(
     throw new KernelDoneError(`[Tony Kernel] ${plan.reason}`)
   }
 
-  const isBootstrapTask = plan.task_id === BOOTSTRAP_TASK_ID
-  if (!isBootstrapTask) {
-    // Bootstrap ya seteó description/prompt/subagent/command arriba (con
-    // las instrucciones del schema TaskSet). El objective genérico de
-    // resolveActionPlan() no debe pisarlo, o el sub-agente nunca se entera
-    // de que tiene que devolver un TaskSet.
-    input.args.description = plan.objective
-    input.args.prompt = actionPlanPrompt(plan)
-    input.args.subagent_type = plan.agent
-    input.args.command = `tony:${plan.phase}`
-  }
+  input.args.description = plan.objective
+  input.args.prompt = actionPlanPrompt(plan)
+  input.args.subagent_type = plan.agent
+  input.args.command = `tony:${plan.phase}`
 
   const adapted = adaptTaskExecutionContext(
     {
