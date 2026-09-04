@@ -24,31 +24,25 @@ jobs:
           p = Path('packages/opencode/src/session/prompt.ts')
           s = p.read_text()
 
-          old = '''            const lastUserMsg = msgs.findLast(
-    (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,
-  )
-  const userObjective = lastUserMsg?.parts
-    .filter((part): part is SessionV1.TextPart => part.type === "text")
-    .map((part) => part.text)
-    .join("\\n") ?? ""'''
+          replacements = [
+              ('    (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,', '              (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,'),
+              ('  )\n  const userObjective = lastUserMsg?.parts', '            )\n            const userObjective = lastUserMsg?.parts'),
+              ('    .filter((part): part is SessionV1.TextPart => part.type === "text")', '              .filter((part): part is SessionV1.TextPart => part.type === "text")'),
+              ('    .map((part) => part.text)', '              .map((part) => part.text)'),
+              ('    .join("\\n") ?? ""', '              .join("\\n") ?? ""'),
+          ]
 
-          new = '''            const lastUserMsg = msgs.findLast(
-              (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,
-            )
-            const userObjective = lastUserMsg?.parts
-              .filter((part): part is SessionV1.TextPart => part.type === "text")
-              .map((part) => part.text)
-              .join("\\n") ?? ""'''
+          for old, new in replacements:
+              if old not in s:
+                  raise SystemExit(f'target formatting text not found: {old!r}')
+              s = s.replace(old, new, 1)
 
-          if old not in s:
-              raise SystemExit('D.4 formatting block not found')
-
-          p.write_text(s.replace(old, new, 1))
+          p.write_text(s)
           PY
 
       - name: Commit cleanup and remove temporary workflows
         run: |
-          rm -f .github/workflows/tony-fix-lastuser.yml .github/workflows/tony-fix-lastuser-v2.yml .github/workflows/tony-fix-lastuser-v3.yml .github/workflows/tony-fix-lastuser-v4.yml
+          rm -f .github/workflows/tony-fix-lastuser.yml .github/workflows/tony-fix-lastuser-v2.yml .github/workflows/tony-fix-lastuser-v3.yml .github/workflows/tony-fix-lastuser-v4.yml .github/workflows/tony-fix-lastuser-v5.yml .github/workflows/tony-fix-lastuser-v2.yml .github/workflows/tony-fix-lastuser-v3.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add packages/opencode/src/session/prompt.ts .github/workflows/
