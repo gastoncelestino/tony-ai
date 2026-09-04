@@ -17,6 +17,7 @@ from pathlib import Path
 KERNEL_PHASES = ["explore", "propose", "spec", "design", "tasks", "apply", "verify", "archive"]
 BOOTSTRAP_TASK_ID = "bootstrap"
 BOOTSTRAP_DESCRIPTION = "decompose task graph"
+BOOTSTRAP_AGENT = "sdd-bootstrap"
 PHASE_AGENTS = {
     "explore": "sdd-explore",
     "propose": "sdd-propose",
@@ -89,6 +90,9 @@ def _bootstrap_objective(user_prompt: str) -> str:
             f"User objective:\n{user_prompt or '(not provided)'}",
             "Return a TaskSet using this schema:\n<task_result>{\"tasks\":[{\"id\":\"unique-id\",\"description\":\"unique executable task description\",\"phase\":\"phase-name\",\"dependencies\":[\"other-task-id\"],\"files\":[\"optional/path\"]}]}</task_result>",
             "phase must be one of: explore, propose, spec, design, tasks, apply, verify, archive.",
+            "You have NO tools available. Produce the <task_result> JSON directly in your "
+            "very first message. Do not describe what you will do, do not explore, do not "
+            "use prose — output ONLY the <task_result> block containing all 8 phase tasks.",
         ]
     )
 
@@ -107,10 +111,13 @@ def _bootstrap_plan(user_prompt: str) -> dict:
         "action": "delegate",
         "phase": "explore",
         "task_id": BOOTSTRAP_TASK_ID,
-        "agent": PHASE_AGENTS["explore"],
+        "agent": BOOTSTRAP_AGENT,
         "objective": _bootstrap_objective(user_prompt),
         "files": [],
-        "allowed_tools": list(PHASE_TOOLS["explore"]),
+        # The bootstrap is a pure prompt-to-TaskSet transformation with no tools:
+        # giving it read/glob/grep tempts the model to explore files and exhaust its
+        # step budget producing prose instead of the required JSON (the original bug).
+        "allowed_tools": [],
         "max_iterations": MAX_ITERATIONS,
     }
 
@@ -173,12 +180,48 @@ def _valid_task(value: object) -> bool:
     return files is None or (isinstance(files, list) and all(isinstance(f, str) for f in files))
 
 
+def _find_embedded_json(text: str) -> object:
+    """Extract the first JSON value embedded anywhere in a text blob."""
+    decoder = json.JSONDecoder()
+    idx = 0
+    n = len(text)
+    while idx < n:
+        while idx < n and text[idx] not in "{[":
+            idx += 1
+        if idx >= n:
+            break
+        try:
+            obj, _ = decoder.raw_decode(text, idx)
+            return obj
+        except json.JSONDecodeError:
+            idx += 1
+    raise json.JSONDecodeError("no JSON object found in text", text, 0)
+
+
 def _parse_decomposition(value: str) -> object:
     text = value.strip()
-    match = re.search(r"<task_result>\s*(.*?)\s*</task_result>", text, re.DOTALL)
-    if match:
-        text = match.group(1).strip()
-    return json.loads(text)
+    if not text:
+        raise json.JSONDecodeError("empty decomposition", text, 0)
+    # Priorities:
+    #  1. The inner content of each <task_result> block. The opencode task-tool
+    #     wrapper already wraps the worker output in <task_result>, and the model
+    #     may emit its own tags too, so tolerate duplicate/nested tags.
+    #  2. The whole text with all <task_result> tags stripped.
+    #  3. The first JSON value embedded anywhere in the text.
+    for block in re.findall(r"<task_result>(.*?)</task_result>", text, re.DOTALL):
+        candidate = block.strip()
+        if candidate:
+            try:
+                return json.loads(candidate)
+            except (json.JSONDecodeError, TypeError):
+                continue
+    stripped = re.sub(r"</?task_result>", "", text).strip()
+    if stripped:
+        try:
+            return json.loads(stripped)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return _find_embedded_json(text)
 
 
 def _validate_workflow(tasks: list[dict]) -> str | None:

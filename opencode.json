@@ -18,7 +18,7 @@
       "mode": "primary",
       "permission": {
         "question": "allow",
-        "task": {"*": "deny", "sdd-explore": "allow", "sdd-propose": "allow", "sdd-spec": "allow", "sdd-design": "allow", "sdd-tasks": "allow", "sdd-apply": "allow", "sdd-verify": "allow", "sdd-archive": "allow", "sdd-init": "allow", "sdd-onboard": "allow"},
+        "task": {"*": "deny", "sdd-explore": "allow", "sdd-propose": "allow", "sdd-spec": "allow", "sdd-design": "allow", "sdd-tasks": "allow", "sdd-apply": "allow", "sdd-verify": "allow", "sdd-archive": "allow", "sdd-init": "allow", "sdd-onboard": "allow", "sdd-bootstrap": "allow"},
         "bash": "deny", "read": "deny", "edit": "deny", "write": "deny", "glob": "deny", "grep": "deny", "list": "deny", "webfetch": "deny", "websearch": "deny", "tony-tools_batch_read": "deny"
       }
     },
@@ -27,6 +27,13 @@
       "mode": "subagent",
       "steps": 12,
       "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny", "todowrite": "deny", "webfetch": "deny", "websearch": "deny", "tony-tools_batch_read": "allow"}
+    },
+    "sdd-bootstrap": {
+      "hidden": true,
+      "mode": "subagent",
+      "steps": 2,
+      "description": "Bootstraps a task graph (TaskSet JSON) from the user objective. No tools.",
+      "permission": {"read": "deny", "glob": "deny", "grep": "deny", "list": "deny", "edit": "deny", "bash": "deny", "task": "deny", "todowrite": "deny", "webfetch": "deny", "websearch": "deny", "tony-tools_batch_read": "deny"}
     },
     "sdd-propose": {"hidden": true, "mode": "subagent", "steps": 10, "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
     "sdd-spec": {"hidden": true, "mode": "subagent", "steps": 14, "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
