@@ -20,16 +20,13 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           p = Path('packages/opencode/src/session/prompt.ts')
           s = p.read_text()
 
-          old = '''            const userObjective = lastUser.parts
-              .filter((part): part is SessionV1.TextPart => part.type === "text")
-              .map((part) => part.text)
-              .join("\\n")'''
-
-          new = '''            const lastUserMsg = msgs.findLast(
+          pattern = r'(?m)^\s*const userObjective = lastUser\.parts\n(?:\s*\.filter\(\(part\): part is SessionV1\.TextPart => part\.type === "text"\)\n\s*\.map\(\(part\) => part\.text\)\n\s*\.join\("\\\\n"\))'
+          replacement = '''            const lastUserMsg = msgs.findLast(
               (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,
             )
             const userObjective = lastUserMsg?.parts
@@ -37,10 +34,11 @@ jobs:
               .map((part) => part.text)
               .join("\\n") ?? ""'''
 
-          if old not in s:
+          s2, count = re.subn(pattern, replacement, s, count=1)
+          if count != 1:
               raise SystemExit('target block not found')
 
-          p.write_text(s.replace(old, new, 1))
+          p.write_text(s2)
           PY
 
       - name: Commit fix and remove workflow
