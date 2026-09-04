@@ -60,19 +60,31 @@ function installProcessHooks(observability: ObservabilityState) {
     })
   })
 
-  process.on("unhandledRejection", (reason, promise) => {
+  const onUnhandledRejection = (reason: unknown, promise: Promise<unknown>) => {
     write(observability.logPaths, "UNHANDLED_REJECTION", {
       reason: serialize(reason),
       promise: serialize(promise),
     })
-  })
 
-  process.on("uncaughtException", (error, origin) => {
+    // Observability must not turn an unhandled rejection into a swallowed error.
+    // Remove this listener so the normal uncaught-exception path remains fatal.
+    process.removeListener("unhandledRejection", onUnhandledRejection)
+    queueMicrotask(() => { throw reason instanceof Error ? reason : new Error(String(reason)) })
+  }
+  process.on("unhandledRejection", onUnhandledRejection)
+
+  const onUncaughtException = (error: Error, origin: NodeJS.UncaughtExceptionOrigin) => {
     write(observability.logPaths, "UNCAUGHT_EXCEPTION", {
       origin,
       error: serialize(error),
     })
-  })
+
+    // Keep Node's fatal semantics. The trace is synchronous, so it is flushed
+    // before the process exits.
+    process.exitCode = 1
+    process.exit(1)
+  }
+  process.on("uncaughtException", onUncaughtException)
 }
 
 export const TonyObservability: Plugin = async ({ directory }) => {
