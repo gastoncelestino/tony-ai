@@ -1,6 +1,6 @@
 import { appendFileSync } from "node:fs"
 
-const TRACE_PATH = "/home/tony/tony-ai/tony-opencode-trace.jsonl"
+const TRACE_PATH = "/home/tony/tony-ai/tony-trace.jsonl"
 
 export function tonyTrace(event: string, data: Record<string, string | number | boolean | null | undefined> = {}) {
   if (globalThis.process?.env?.TONY_TRACE !== "1") return
