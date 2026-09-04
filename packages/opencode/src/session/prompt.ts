@@ -1090,6 +1090,7 @@ const layer = Layer.effect(
         let structured: unknown
         let step = 0
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
+        const isWorkerSession = Boolean(session.parentID)
 
         while (true) {
           tonyTrace("LOOP_ENTER", { sessionID, step, kernelEnabled: Boolean(process.env.TONY_KERNEL_ROOT) })
@@ -1151,7 +1152,7 @@ const layer = Layer.effect(
 
           // Tony deterministic runtime: when enabled, the Kernel owns delegation.
           // The LLM is never asked to choose the next agent or phase.
-          if (process.env.TONY_KERNEL_ROOT) {
+          if (process.env.TONY_KERNEL_ROOT && !isWorkerSession) {
             const lastUserMsg = msgs.findLast(
               (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,
             )
