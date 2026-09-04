@@ -1,0 +1,14 @@
+{"ts":"2026-09-04T02:06:01.496Z","event":"RUN_START","sessionID":"ses_f95d58eecffeZULTWVqYiS78ka"}
+{"ts":"2026-09-04T02:06:01.557Z","event":"TOOL_REQUEST","sessionID":"ses_f95d58eecffeZULTWVqYiS78ka","callID":"prt_06a2a7152001Si3NjbAhH2sOYT","tool":"task","inputKeys":["command","description","prompt","subagent_type"],"subagent":"sdd-explore"}
+{"ts":"2026-09-04T02:06:01.557Z","event":"TASK_CREATE","sessionID":"ses_f95d58eecffeZULTWVqYiS78ka","callID":"prt_06a2a7152001Si3NjbAhH2sOYT","taskID":"prt_06a2a7152001Si3NjbAhH2sOYT","agent":"sdd-explore"}
+{"ts":"2026-09-04T02:06:01.557Z","event":"PHASE_ENTER","sessionID":"ses_f95d58eecffeZULTWVqYiS78ka","phase":"sdd-explore","taskID":"prt_06a2a7152001Si3NjbAhH2sOYT","callID":"prt_06a2a7152001Si3NjbAhH2sOYT"}
+{"ts":"2026-09-04T02:06:01.557Z","event":"KERNEL_INTERCEPT","sessionID":"ses_f95d58eecffeZULTWVqYiS78ka","callID":"prt_06a2a7152001Si3NjbAhH2sOYT","tool":"task","taskID":"prt_06a2a7152001Si3NjbAhH2sOYT","subagent":"sdd-explore"}
+{"ts":"2026-09-04T02:06:01.599Z","event":"KERNEL_DECISION","sessionID":"ses_f95d58eecffeZULTWVqYiS78ka","callID":"prt_06a2a7152001Si3NjbAhH2sOYT","taskID":"bootstrap","decision":"ALLOW","allowed":true,"reason":"authorized task bootstrap"}
+{"ts":"2026-09-04T02:06:01.599Z","event":"TOOL_EXECUTE_START","sessionID":"ses_f95d58eecffeZULTWVqYiS78ka","callID":"prt_06a2a7152001Si3NjbAhH2sOYT","tool":"task"}
+{"ts":"2026-09-04T02:06:01.636Z","event":"TOOL_REQUEST","sessionID":"ses_f95d58e7effeU7ekP3n39DtX8Z","callID":"prt_06a2a71a3001iF5sO5rYBbmsum","tool":"task","inputKeys":["command","description","prompt","subagent_type"],"subagent":"sdd-explore"}
+{"ts":"2026-09-04T02:06:01.636Z","event":"TASK_CREATE","sessionID":"ses_f95d58e7effeU7ekP3n39DtX8Z","callID":"prt_06a2a71a3001iF5sO5rYBbmsum","taskID":"prt_06a2a71a3001iF5sO5rYBbmsum","agent":"sdd-explore"}
+{"ts":"2026-09-04T02:06:01.636Z","event":"PHASE_ENTER","sessionID":"ses_f95d58e7effeU7ekP3n39DtX8Z","phase":"sdd-explore","taskID":"prt_06a2a71a3001iF5sO5rYBbmsum","callID":"prt_06a2a71a3001iF5sO5rYBbmsum"}
+{"ts":"2026-09-04T02:06:01.636Z","event":"KERNEL_INTERCEPT","sessionID":"ses_f95d58e7effeU7ekP3n39DtX8Z","callID":"prt_06a2a71a3001iF5sO5rYBbmsum","tool":"task","taskID":"prt_06a2a71a3001iF5sO5rYBbmsum","subagent":"sdd-explore"}
+{"ts":"2026-09-04T02:06:01.674Z","event":"KERNEL_DECISION","sessionID":"ses_f95d58e7effeU7ekP3n39DtX8Z","callID":"prt_06a2a71a3001iF5sO5rYBbmsum","taskID":"bootstrap","decision":"ALLOW","allowed":true,"reason":"authorized task bootstrap"}
+{"ts":"2026-09-04T02:06:01.674Z","event":"TOOL_EXECUTE_START","sessionID":"ses_f95d58e7effeU7ekP3n39DtX8Z","callID":"prt_06a2a71a3001iF5sO5rYBbmsum","tool":"task"}
+{"ts":"2026-09-04T02:06:01.678Z","event":"EVIDENCE_SNAPSHOT","sessionID":"ses_f95d58e7effeU7ekP3n39DtX8Z","callID":"prt_06a2a7152001Si3NjbAhH2sOYT","taskID":"bootstrap","count":0,"evidence":[]}
