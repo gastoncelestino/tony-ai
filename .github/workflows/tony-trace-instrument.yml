@@ -1,0 +1,82 @@
+name: Tony Trace Instrumentation
+
+on:
+  push:
+    branches: [opencode2]
+
+permissions:
+  contents: write
+
+jobs:
+  instrument:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: opencode2
+          fetch-depth: 0
+
+      - name: Instrument runtime trace
+        shell: python
+        run: |
+          from pathlib import Path
+
+          prompt = Path("packages/opencode/src/session/prompt.ts")
+          text = prompt.read_text()
+
+          marker = 'const TONY_TRACE = process.env.TONY_TRACE === "1"\nfunction tonyTrace(event: string, data: Record<string, unknown> = {}) {\n  if (!TONY_TRACE) return\n  console.error(`[TONY-TRACE] ${event} ${JSON.stringify(data)}`)\n}\n'
+          anchor = 'const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.\n'
+          if 'const TONY_TRACE = process.env.TONY_TRACE === "1"' not in text:
+              text = text.replace(anchor, marker + '\n' + anchor, 1)
+
+          replacements = [
+              (
+                  '        while (true) {\n          yield* status.set(sessionID, { type: "busy" })',
+                  '        while (true) {\n          tonyTrace("LOOP_ENTER", { sessionID, step, kernelRoot: process.env.TONY_KERNEL_ROOT ?? null })\n          yield* status.set(sessionID, { type: "busy" })',
+              ),
+              (
+                  '          const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)\n\n          // Tony deterministic runtime:',
+                  '          const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)\n\n          tonyTrace("MODEL_PATH", { sessionID, step, agent: lastUser.agent, model: model.id, kernelEnabled: Boolean(process.env.TONY_KERNEL_ROOT) })\n\n          // Tony deterministic runtime:',
+              ),
+              (
+                  '            const kernel = yield* Effect.promise(() =>\n              TonyKernel.nextAction(ctx.worktree, sessionID, userObjective),\n            )',
+                  '            tonyTrace("KERNEL_NEXT_ACTION_START", { sessionID, step, objective: userObjective.slice(0, 300) })\n            const kernel = yield* Effect.promise(() =>\n              TonyKernel.nextAction(ctx.worktree, sessionID, userObjective),\n            )\n            tonyTrace("KERNEL_NEXT_ACTION_RESULT", { sessionID, step, available: kernel.available, plan: kernel.available ? { action: kernel.plan.action, phase: kernel.plan.action === "delegate" ? kernel.plan.phase : null, taskID: kernel.plan.action === "delegate" ? kernel.plan.task_id : null, agent: kernel.plan.action === "delegate" ? kernel.plan.agent : null } : null, reason: kernel.available ? null : kernel.reason })',
+              ),
+              (
+                  '              const evidence = yield* handleSubtask({\n                task: runtimeTask,',
+                  '              tonyTrace("RUNTIME_DELEGATE_START", { sessionID, step, taskID: plan.task_id, phase: plan.phase, agent: plan.agent })\n              const evidence = yield* handleSubtask({\n                task: runtimeTask,',
+              ),
+              (
+                  '              const completion = yield* Effect.promise(() =>\n                plan.task_id === "bootstrap"',
+                  '              tonyTrace("RUNTIME_DELEGATE_END", { sessionID, step, taskID: plan.task_id, evidenceBytes: evidence.length })\n              const completion = yield* Effect.promise(() =>\n                plan.task_id === "bootstrap"',
+              ),
+              (
+                  '            const result = yield* handle.process({\n              user: lastUser,',
+                  '            tonyTrace("ORCHESTRATOR_LLM_PROCESS_START", { sessionID, step, agent: agent.name, model: model.id, messageID: lastUser.id })\n            const result = yield* handle.process({\n              user: lastUser,',
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f"prompt.ts instrumentation anchor not found: {old[:100]!r}")
+              text = text.replace(old, new, 1)
+
+          prompt.write_text(text)
+
+          processor = Path("packages/opencode/src/session/processor.ts")
+          text = processor.read_text()
+          old = '''      const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {\n        yield* Effect.logInfo("process", {\n          "session.id": input.sessionID,\n          messageID: input.assistantMessage.id,\n        })'''
+          new = '''      const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {\n        if (process.env.TONY_TRACE === "1") {\n          console.error(`[TONY-TRACE] PROCESSOR_LLM_STREAM ${JSON.stringify({ sessionID: input.sessionID, messageID: input.assistantMessage.id, agent: input.assistantMessage.agent, model: input.model.id })}`)\n        }\n        yield* Effect.logInfo("process", {\n          "session.id": input.sessionID,\n          messageID: input.assistantMessage.id,\n        })'''
+          if old not in text:
+              raise SystemExit("processor.ts instrumentation anchor not found")
+          processor.write_text(text.replace(old, new, 1))
+
+      - name: Commit instrumentation and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/opencode/src/session/prompt.ts packages/opencode/src/session/processor.ts
+          git rm .github/workflows/tony-trace-instrument.yml
+          git commit -m "tony: add runtime execution trace"
+          git push origin opencode2
