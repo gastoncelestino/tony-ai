@@ -1175,13 +1175,35 @@ const layer = Layer.effect(
                   "session.id": sessionID,
                   reason: kernel.plan.reason,
                 })
+
+                // ⬇⬇⬇ esto es lo nuevo
+                /*
+                yield* sessions.updateMessage({
+                  id: MessageID.ascending(),
+                  parentID: lastUser.id,
+                  role: "assistant",
+                  mode: lastUser.agent,
+                  agent: "tony-stark",
+                  variant: lastUser.model.variant,
+                  path: { cwd: ctx.directory, root: ctx.worktree },
+                  cost: 0,
+                  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                  modelID: model.id,
+                  providerID: model.providerID,
+                  time: { created: Date.now(), completed: Date.now() },
+                  sessionID,
+                  parts: [{ type: "text", text: `Tony runtime done: ${kernel.plan.reason}` }],
+                })
+                */
+                // ⬆⬆⬆
+
                 const completedAt = Date.now()
                 const doneMessage: SessionV1.Assistant = {
                   id: MessageID.ascending(),
                   parentID: lastUser.id,
                   role: "assistant",
                   mode: lastUser.agent,
-                  agent: lastUser.agent,
+                  agent: "tony-stark",
                   variant: lastUser.model.variant,
                   path: { cwd: ctx.directory, root: ctx.worktree },
                   cost: 0,
@@ -1192,6 +1214,7 @@ const layer = Layer.effect(
                   sessionID,
                   finish: "stop",
                 }
+
                 yield* sessions.updateMessage(doneMessage)
                 yield* sessions.updatePart({
                   id: PartID.ascending(),
@@ -1201,6 +1224,7 @@ const layer = Layer.effect(
                   text: `Tony runtime completed: ${kernel.plan.reason}`,
                   synthetic: true,
                 } satisfies SessionV1.TextPart)
+
                 break
               }
 
