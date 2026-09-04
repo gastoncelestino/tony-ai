@@ -42,7 +42,7 @@ import { Truncate } from "@/tool/truncate"
 import { Image } from "@/image/image"
 import { decodeDataUrl } from "@/util/data-url"
 import { Process } from "@/util/process"
-import { Cause, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Types } from "effect"
+import { Cause, Duration, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Types } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import { TaskTool, type TaskPromptOps } from "@/tool/task"
 import { SessionRunState } from "./run-state"
@@ -1244,20 +1244,76 @@ const layer = Layer.effect(
               }
 
               tonyTrace("DELEGATION_START", { sessionID, taskID: plan.task_id, phase: plan.phase, agent: plan.agent })
+              const subtaskTimeout = Duration.minutes(30)
               const evidence = yield* handleSubtask({
-                task: runtimeTask,
+                task: { ...runtimeTask, description: `Tony runtime task ${plan.task_id} (${plan.phase}) — max ${plan.max_iterations} iterations` },
                 model,
                 lastUser,
                 sessionID,
                 session,
                 msgs,
-              })
+              }).pipe(
+                Effect.timeoutOption(subtaskTimeout),
+                Effect.flatMap((result) =>
+                  Option.isNone(result)
+                    ? Effect.die(new Error(`[Tony Kernel] subtask '${plan.task_id}' (${plan.phase}) exceeded timeout of 30 minutes`))
+                    : Effect.succeed(result.value),
+                ),
+              )
 
               tonyTrace("DELEGATION_END", { sessionID, taskID: plan.task_id })
+
+              if (plan.task_id === "bootstrap") {
+                // The bootstrap worker must return a valid `<task_result>` TaskSet.
+                // Some reasoning models return prose instead, so retry (bounded) with
+                // explicit feedback instead of dropping the whole session.
+                let bootstrapEvidence = evidence
+                let bootstrapDone = false
+                const maxBootstrapRetries = 2
+                for (let attempt = 1; attempt <= maxBootstrapRetries; attempt++) {
+                  const attemptCompletion = yield* Effect.promise(() =>
+                    TonyKernel.completeBootstrap(ctx.worktree, sessionID, bootstrapEvidence),
+                  )
+                  if (attemptCompletion.ok) {
+                    bootstrapDone = true
+                    break
+                  }
+                  if (attempt >= maxBootstrapRetries) {
+                    throw new Error(`Tony Kernel rejected bootstrap completion after ${attempt} attempt(s): ${attemptCompletion.reason}`)
+                  }
+                  // Re-run the bootstrap worker with feedback so it can correct the TaskSet.
+                  tonyTrace("BOOTSTRAP_RETRY", { sessionID, attempt, reason: attemptCompletion.reason })
+                  const retryTask: SessionV1.SubtaskPart = {
+                    ...runtimeTask,
+                    description: runtimeTask.description,
+                    prompt: [
+                      runtimeTask.prompt,
+                      `Your previous attempt was rejected because: ${attemptCompletion.reason}`,
+                      "Return ONLY a valid JSON TaskSet wrapped in <task_result></task_result>. Do not include prose outside the tags.",
+                    ].join("\n\n"),
+                  }
+                  bootstrapEvidence = yield* handleSubtask({
+                    task: retryTask,
+                    model,
+                    lastUser,
+                    sessionID,
+                    session,
+                    msgs,
+                  }).pipe(
+                    Effect.timeoutOption(subtaskTimeout),
+                    Effect.flatMap((result) =>
+                      Option.isNone(result)
+                        ? Effect.die(new Error(`[Tony Kernel] bootstrap retry attempt ${attempt} exceeded timeout of 30 minutes`))
+                        : Effect.succeed(result.value),
+                    ),
+                  )
+                }
+                if (!bootstrapDone) throw new Error("Tony Kernel bootstrap could not be completed")
+                continue
+              }
+
               const completion = yield* Effect.promise(() =>
-                plan.task_id === "bootstrap"
-                  ? TonyKernel.completeBootstrap(ctx.worktree, sessionID, evidence)
-                  : TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
+                TonyKernel.completeTask(ctx.worktree, sessionID, plan.task_id, evidence),
               )
               if (!completion.ok) {
                 throw new Error(`Tony Kernel rejected completion for ${plan.task_id}: ${completion.reason}`)
