@@ -40,8 +40,7 @@
   "default_agent": "tony-stark",
   "mcp": {
     "context7": {"enabled": true, "type": "remote", "url": "https://mcp.context7.com/mcp"},
-    "tonymem": {"enabled": true, "type": "local", "command": ["python3", "local-memory/server.py"], "timeout": 5000},
-    "tony-tools": {"enabled": true, "type": "local", "command": ["python3", "local-tools/server.py"], "timeout": 5000}
+    "tonymem": {"enabled": true, "type": "local", "command": ["python3", "local-memory/server.py"], "timeout": 5000}
   },
   "share": "disabled"
 }
