@@ -1039,7 +1039,7 @@ const layer = Layer.effect(
         if (Exit.isSuccess(p)) continue
         yield* Effect.logError("invalid user part before save", {
           sessionID: input.sessionID,
-          messageID: info.id,
+          messageID: part.messageID,
           partID: part.id,
           partType: part.type,
           index,
@@ -1175,6 +1175,32 @@ const layer = Layer.effect(
                   "session.id": sessionID,
                   reason: kernel.plan.reason,
                 })
+                const completedAt = Date.now()
+                const doneMessage: SessionV1.Assistant = {
+                  id: MessageID.ascending(),
+                  parentID: lastUser.id,
+                  role: "assistant",
+                  mode: lastUser.agent,
+                  agent: lastUser.agent,
+                  variant: lastUser.model.variant,
+                  path: { cwd: ctx.directory, root: ctx.worktree },
+                  cost: 0,
+                  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                  modelID: model.id,
+                  providerID: model.providerID,
+                  time: { created: completedAt, completed: completedAt },
+                  sessionID,
+                  finish: "stop",
+                }
+                yield* sessions.updateMessage(doneMessage)
+                yield* sessions.updatePart({
+                  id: PartID.ascending(),
+                  messageID: doneMessage.id,
+                  sessionID,
+                  type: "text",
+                  text: `Tony runtime completed: ${kernel.plan.reason}`,
+                  synthetic: true,
+                } satisfies SessionV1.TextPart)
                 break
               }
 
