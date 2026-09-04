@@ -20,25 +20,31 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           p = Path('packages/opencode/src/session/prompt.ts')
           s = p.read_text()
 
-          pattern = r'(?m)^\s*const userObjective = lastUser\.parts\n(?:\s*\.filter\(\(part\): part is SessionV1\.TextPart => part\.type === "text"\)\n\s*\.map\(\(part\) => part\.text\)\n\s*\.join\("\\\\n"\))'
+          marker = 'const userObjective = lastUser.parts'
+          start = s.find(marker)
+          if start < 0:
+              raise SystemExit('target block not found')
+
+          line_start = s.rfind('\n', 0, start) + 1
+          end_marker = 'const kernel = yield* Effect.promise(() =>'
+          end = s.find(end_marker, start)
+          if end < 0:
+              raise SystemExit('kernel marker not found')
+
           replacement = '''            const lastUserMsg = msgs.findLast(
               (msg) => msg.info.role === "user" && msg.info.id === lastUser.id,
             )
             const userObjective = lastUserMsg?.parts
               .filter((part): part is SessionV1.TextPart => part.type === "text")
               .map((part) => part.text)
-              .join("\\n") ?? ""'''
+              .join("\\n") ?? ""\n            '''
 
-          s2, count = re.subn(pattern, replacement, s, count=1)
-          if count != 1:
-              raise SystemExit('target block not found')
-
-          p.write_text(s2)
+          s = s[:line_start] + replacement + s[end:]
+          p.write_text(s)
           PY
 
       - name: Commit fix and remove workflow
