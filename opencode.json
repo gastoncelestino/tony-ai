@@ -25,17 +25,18 @@
     "sdd-explore": {
       "hidden": true,
       "mode": "subagent",
+      "steps": 12,
       "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny", "todowrite": "deny", "webfetch": "deny", "websearch": "deny", "tony-tools_batch_read": "allow"}
     },
-    "sdd-propose": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
-    "sdd-spec": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
-    "sdd-design": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
-    "sdd-tasks": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
-    "sdd-apply": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "list": "allow", "bash": "allow", "edit": "allow", "task": "deny"}},
-    "sdd-verify": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
-    "sdd-archive": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "allow", "bash": "deny", "task": "deny"}},
-    "sdd-init": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "allow", "bash": "allow", "task": "deny"}},
-    "sdd-onboard": {"hidden": true, "mode": "subagent", "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}}
+    "sdd-propose": {"hidden": true, "mode": "subagent", "steps": 10, "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
+    "sdd-spec": {"hidden": true, "mode": "subagent", "steps": 14, "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
+    "sdd-design": {"hidden": true, "mode": "subagent", "steps": 14, "permission": {"read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
+    "sdd-tasks": {"hidden": true, "mode": "subagent", "steps": 10, "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
+    "sdd-apply": {"hidden": true, "mode": "subagent", "steps": 25, "permission": {"read": "allow", "glob": "allow", "list": "allow", "bash": "allow", "edit": "allow", "task": "deny"}},
+    "sdd-verify": {"hidden": true, "mode": "subagent", "steps": 12, "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}},
+    "sdd-archive": {"hidden": true, "mode": "subagent", "steps": 8, "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "allow", "bash": "deny", "task": "deny"}},
+    "sdd-init": {"hidden": true, "mode": "subagent", "steps": 12, "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "allow", "bash": "allow", "task": "deny"}},
+    "sdd-onboard": {"hidden": true, "mode": "subagent", "steps": 15, "permission": {"read": "allow", "glob": "allow", "list": "allow", "edit": "deny", "bash": "deny", "task": "deny"}}
   },
   "default_agent": "tony-stark",
   "mcp": {
