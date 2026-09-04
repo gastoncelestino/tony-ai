@@ -1,15 +1,9 @@
 name: Repair processor trace
-
-on:
-  push:
-    branches: [opencode2]
-
+on: push
 permissions:
   contents: write
-
 jobs:
   repair:
-    if: github.event.head_commit.message != 'fix: repair processor trace instrumentation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,22 +11,20 @@ jobs:
           ref: opencode2
           fetch-depth: 0
       - name: Restore processor and patch trace
-        env:
-          GOOD_COMMIT: 4e6c39f7f4183d63df7386d53b5b3bc940e5adae
         run: |
-          git checkout "$GOOD_COMMIT" -- packages/opencode/src/session/processor.ts
+          git checkout 4e6c39f7f4183d63df7386d53b5b3bc940e5adae -- packages/opencode/src/session/processor.ts
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("packages/opencode/src/session/processor.ts")
+          p = Path('packages/opencode/src/session/processor.ts')
           s = p.read_text()
           old = 'if (process.env.TONY_TRACE === "1") {'
           new = 'if (globalThis.process?.env?.TONY_TRACE === "1") {'
           assert s.count(old) == 1, s.count(old)
           p.write_text(s.replace(old, new))
           PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add packages/opencode/src/session/processor.ts
           git rm .github/workflows/repair-processor-trace.yml
-          git commit -m "fix: repair processor trace instrumentation"
+          git commit -m 'fix: repair processor trace instrumentation'
           git push origin HEAD:opencode2
