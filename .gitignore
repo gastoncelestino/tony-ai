@@ -2,3 +2,4 @@
 local-memory/*.db
 local-memory/*.db-wal
 local-memory/*.db-shm
+kernel/__pycache__
