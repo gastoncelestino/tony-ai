@@ -82,13 +82,13 @@ def op_get_context(req: dict) -> dict:
 def _bootstrap_objective(user_prompt: str) -> str:
     return "\n\n".join(
         [
-            "Decompose the user's task into an executable TaskSet covering the complete SDD workflow.",
+            "Decompose the user's task into an executable TaskSet that MUST cover "
+            "the full SDD pipeline for this change: explore, propose, spec, design, "
+            "tasks, apply, verify, archive. Do not stop at explore — include at least "
+            "one task per phase, chained via dependencies on the previous phase's task id.",
             f"User objective:\n{user_prompt or '(not provided)'}",
-            "The TaskSet MUST contain at least one task in EVERY phase, in this exact order: explore, propose, spec, design, tasks, apply, verify, archive.",
-            "Tasks must form a dependency chain across phases: every task in a phase after explore MUST depend (directly or through same-phase tasks) on work from the immediately preceding phase. Do not create a task in a later phase that can execute before the previous phase has produced its result.",
             "Return a TaskSet using this schema:\n<task_result>{\"tasks\":[{\"id\":\"unique-id\",\"description\":\"unique executable task description\",\"phase\":\"phase-name\",\"dependencies\":[\"other-task-id\"],\"files\":[\"optional/path\"]}]}</task_result>",
             "phase must be one of: explore, propose, spec, design, tasks, apply, verify, archive.",
-            "The workflow is not complete until the archive phase task(s) are completed.",
         ]
     )
 
@@ -127,7 +127,7 @@ def op_next_action(req: dict) -> dict:
     completed = set(state.get("completed", []))
     tasks = state.get("tasks", [])
     if tasks and all(task["id"] in completed for task in tasks):
-        return {"available": True, "plan": {"action": "done", "reason": "all workflow tasks completed through archive"}}
+        return {"available": True, "plan": {"action": "done", "reason": "all tasks completed"}}
 
     for task in tasks:
         if task["id"] in completed:
@@ -247,6 +247,11 @@ def op_complete_bootstrap(req: dict) -> dict:
         if any(dependency not in known for dependency in task.get("dependencies", [])):
             return {"ok": False, "reason": f"task {task['id']} has an unknown dependency"}
         task.setdefault("files", [])
+
+    phases_present = {task["phase"] for task in tasks}
+    required = {"explore", "propose", "spec", "design", "tasks", "apply", "verify", "archive"}
+    if not required.issubset(phases_present):
+        return {"ok": False, "reason": f"decomposition missing phases: {sorted(required - phases_present)}"}
 
     workflow_error = _validate_workflow(tasks)
     if workflow_error:
