@@ -26,6 +26,7 @@ import { isRecord } from "@/util/record"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Database } from "@opencode-ai/core/database/database"
 import { Usage, type LLMEvent } from "@opencode-ai/llm"
+import { tonyTrace } from "@/tony/trace"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
@@ -236,6 +237,7 @@ const layer = Layer.effect(
           }
           return { call: ctx.toolcalls[input.id], part }
         }
+        tonyTrace("TOOL_CALL", { sessionID: ctx.sessionID, tool: input.name })
         const part = yield* session.updatePart({
           id: PartID.ascending(),
           messageID: ctx.assistantMessage.id,
@@ -645,9 +647,7 @@ const layer = Layer.effect(
       })
 
       const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {
-        if (process.env.TONY_TRACE === "1") {
-          console.error(`[TONY-TRACE] PROCESSOR_LLM_STREAM ${JSON.stringify({ sessionID: input.sessionID, messageID: input.assistantMessage.id, agent: input.assistantMessage.agent, model: input.model.id })}`)
-        }
+        tonyTrace("LLM_STREAM_START", { sessionID: input.sessionID, agent: input.assistantMessage.agent, model: input.model.id })
         yield* Effect.logInfo("process", {
           "session.id": input.sessionID,
           messageID: input.assistantMessage.id,
