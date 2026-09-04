@@ -82,10 +82,13 @@ def op_get_context(req: dict) -> dict:
 def _bootstrap_objective(user_prompt: str) -> str:
     return "\n\n".join(
         [
-            "Decompose the user's task into an executable TaskSet.",
+            "Decompose the user's task into an executable TaskSet covering the complete SDD workflow.",
             f"User objective:\n{user_prompt or '(not provided)'}",
+            "The TaskSet MUST contain at least one task in EVERY phase, in this exact order: explore, propose, spec, design, tasks, apply, verify, archive.",
+            "Tasks must form a dependency chain across phases: every task in a phase after explore MUST depend (directly or through same-phase tasks) on work from the immediately preceding phase. Do not create a task in a later phase that can execute before the previous phase has produced its result.",
             "Return a TaskSet using this schema:\n<task_result>{\"tasks\":[{\"id\":\"unique-id\",\"description\":\"unique executable task description\",\"phase\":\"phase-name\",\"dependencies\":[\"other-task-id\"],\"files\":[\"optional/path\"]}]}</task_result>",
             "phase must be one of: explore, propose, spec, design, tasks, apply, verify, archive.",
+            "The workflow is not complete until the archive phase task(s) are completed.",
         ]
     )
 
@@ -124,7 +127,7 @@ def op_next_action(req: dict) -> dict:
     completed = set(state.get("completed", []))
     tasks = state.get("tasks", [])
     if tasks and all(task["id"] in completed for task in tasks):
-        return {"available": True, "plan": {"action": "done", "reason": "all tasks completed"}}
+        return {"available": True, "plan": {"action": "done", "reason": "all workflow tasks completed through archive"}}
 
     for task in tasks:
         if task["id"] in completed:
@@ -178,6 +181,53 @@ def _parse_decomposition(value: str) -> object:
     return json.loads(text)
 
 
+def _validate_workflow(tasks: list[dict]) -> str | None:
+    required = set(KERNEL_PHASES)
+    phases_present = {task["phase"] for task in tasks}
+    missing = required - phases_present
+    if missing:
+        return f"decomposition missing phases: {sorted(missing)}"
+
+    phase_index = {phase: index for index, phase in enumerate(KERNEL_PHASES)}
+    by_id = {task["id"]: task for task in tasks}
+
+    for task in tasks:
+        phase = task["phase"]
+        index = phase_index[phase]
+        dependencies = task.get("dependencies", [])
+        if index == 0:
+            if dependencies:
+                return f"explore task {task['id']} cannot depend on a later or unknown phase task"
+            continue
+        previous_phase = KERNEL_PHASES[index - 1]
+        if not any(by_id[dependency]["phase"] == previous_phase for dependency in dependencies):
+            return f"task {task['id']} in phase {phase} must depend on at least one task from phase {previous_phase}"
+        for dependency in dependencies:
+            dependency_phase = by_id[dependency]["phase"]
+            if phase_index[dependency_phase] > index:
+                return f"task {task['id']} depends on later phase {dependency_phase}"
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(task_id: str) -> bool:
+        if task_id in visiting:
+            return False
+        if task_id in visited:
+            return True
+        visiting.add(task_id)
+        for dependency in by_id[task_id].get("dependencies", []):
+            if not visit(dependency):
+                return False
+        visiting.remove(task_id)
+        visited.add(task_id)
+        return True
+
+    if not all(visit(task["id"]) for task in tasks):
+        return "decomposition contains a dependency cycle"
+    return None
+
+
 def op_complete_bootstrap(req: dict) -> dict:
     state = _load_state(req["project_directory"], req["session_id"])
     if state is None:
@@ -197,6 +247,11 @@ def op_complete_bootstrap(req: dict) -> dict:
         if any(dependency not in known for dependency in task.get("dependencies", [])):
             return {"ok": False, "reason": f"task {task['id']} has an unknown dependency"}
         task.setdefault("files", [])
+
+    workflow_error = _validate_workflow(tasks)
+    if workflow_error:
+        return {"ok": False, "reason": workflow_error}
+
     state["tasks"] = tasks
     state["completed"] = [BOOTSTRAP_TASK_ID]
     state["status"] = "ready"
@@ -243,7 +298,7 @@ def op_boundary(request: dict) -> dict:
     completed = set(request.get("completed", []))
     tasks = request.get("tasks", [])
     if tasks and all(task["id"] in completed for task in tasks):
-        return {"allowed": False, "decision": "done", "reason": "all tasks completed — respond to the user directly, do not call task() again", "execution_order": None}
+        return {"allowed": False, "decision": "done", "reason": "all workflow tasks completed through archive — respond to the user directly, do not call task() again", "execution_order": None}
     task = _next_eligible_task(request)
     if task is None:
         return {"allowed": False, "decision": "blocked", "reason": "requested task is not the next eligible task", "execution_order": None}
