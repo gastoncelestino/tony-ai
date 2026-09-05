@@ -1,0 +1,133 @@
+--- a/kernel/protocol.ts
++++ b/kernel/protocol.ts
+@@ -1,7 +1,7 @@
+ export const KERNEL_PHASES = ["explore", "propose", "spec", "design", "tasks", "apply", "verify", "archive"] as const
+ export type KernelPhase = (typeof KERNEL_PHASES)[number]
+ 
+-export type KernelTask = { id: string; description: string; phase: KernelPhase; dependencies: string[]; files?: string[] }
++export type KernelTask = { id: string; description: string; phase: KernelPhase; dependencies: string[]; files?: string[]; decomposedAtDepth?: number }
+ export type KernelContext = { phase: string; status: string; tasks: KernelTask[]; completed: string[] }
+ 
+ export type KernelContextRequest = { operation: "get_context"; project_directory: string; session_id: string }
+@@ -28,7 +28,7 @@
+ export function isKernelTask(value: unknown): value is KernelTask {
+   if (!value || typeof value !== "object") return false
+   const task = value as Record<string, unknown>
+-  return typeof task.id === "string" && typeof task.description === "string" && typeof task.phase === "string" && KERNEL_PHASES.includes(task.phase as KernelPhase) && Array.isArray(task.dependencies) && task.dependencies.every((id) => typeof id === "string") && (task.files === undefined || (Array.isArray(task.files) && task.files.every((file) => typeof file === "string")))
++  return typeof task.id === "string" && typeof task.description === "string" && typeof task.phase === "string" && KERNEL_PHASES.includes(task.phase as KernelPhase) && Array.isArray(task.dependencies) && task.dependencies.every((id) => typeof id === "string") && (task.files === undefined || (Array.isArray(task.files) && task.files.every((file) => typeof file === "string"))) && (task.decomposedAtDepth === undefined || typeof task.decomposedAtDepth === "number")
+ }
+ 
+ export function isKernelContext(value: unknown): value is KernelContext {
+--- a/kernel/authorize-execution.ts
++++ b/kernel/authorize-execution.ts
+@@ -1,11 +1,50 @@
++import { spawnSync } from "node:child_process"
+ import { adaptTaskExecutionContext } from "./adapter"
+ import { callKernelBoundary, callKernelCommand, getKernelContext } from "./transport"
+ import type { KernelBoundaryRequest, KernelExecutionOrder } from "./protocol"
+ 
+-const BOOTSTRAP_COMMAND = "tony:bootstrap-decompose"
+-const BOOTSTRAP_DESCRIPTION = "decompose task graph"
+ const BOOTSTRAP_READ_ONLY_TOOLS = new Set(["read", "glob", "grep", "list", "tony-tools_batch_read"])
+ 
++/**
++ * Motor de descomposicion atomica (kernel/atomic_decompose.py). Reemplaza el
++ * flujo anterior de bootstrapPrompt() + delegacion a sdd-explore: en vez de
++ * pedirle al modelo el TaskSet completo en una sola llamada libre, corre un
++ * proceso Python determinista que hace N llamadas chicas (una por nodo del
++ * arbol) contra llama-swap directamente, sin pasar por el mecanismo de
++ * agentes de OpenCode. Devuelve el mismo string JSON que completeBootstrap()
++ * ya espera, asi que boundary.py no cambia.
++ */
++function runAtomicDecompose(
++  directory: string,
++  description: string,
++  prompt: string
++): string {
++  const input = JSON.stringify({
++    description: (prompt || description).trim(),
++    phase: "explore",
++  })
++
++  const result = spawnSync("python3", ["-m", "kernel.atomic_decompose"], {
++    cwd: directory,
++    input,
++    encoding: "utf8",
++  })
++
++  if (result.error) {
++    throw new KernelUnavailableError(
++      `[Tony Kernel] atomic_decompose spawn failed: ${result.error.message}`
++    )
++  }
++
++  if (result.status !== 0) {
++    throw new KernelUnavailableError(
++      `[Tony Kernel] atomic_decompose failed: ${result.stderr || "unknown error"}`
++    )
++  }
++
++  return result.stdout.trim()
++}
++
+ export class KernelBlockedError extends Error {
+   constructor(message: string) {
+     super(message)
+@@ -83,13 +122,6 @@
+   }
+ }
+ 
+-function bootstrapPrompt(
+-  description: string,
+-  prompt: string
+-) {
+-  return `You are Tony's task-graph decomposition subagent. This is ONLY the bootstrap planning step of a new execution session.\n\nYour ONLY output is a machine-readable TaskSet. Do NOT perform the requested work, implement anything, modify files, create files, or create temporary files. Do not use bash, shell commands, write/edit tools, skills, todo lists, or the task tool — you cannot delegate, spawn subagents, or plan in multiple steps. If repository inspection is necessary, use read/glob only, directly, in this same turn.\n\nORIGINAL TASK DESCRIPTION:\n${description || "(not provided)"}\n\nORIGINAL TASK PROMPT / OBJECTIVE:\n${prompt || "(not provided)"}\n\nReturn ONLY valid JSON wrapped in <task_result> tags, with this exact top-level shape:\n<task_result>{"tasks":[{"id":"unique-id","description":"unique executable task description","phase":"phase-name","dependencies":["other-task-id"],"files":["optional/path"]}]}</task_result>\n\nThe phase field MUST use one of: explore, propose, spec, design, tasks, apply, verify, archive. Do not include the reserved bootstrap task. Do not return an empty tasks array.`
+-}
+-
+ async function kernelCommand(
+   directory: string,
+   request: Parameters<typeof callKernelCommand>[0]
+@@ -260,29 +292,30 @@
+       input.sessionID
+     )
+ 
+-    input.args.description = BOOTSTRAP_DESCRIPTION
+-    input.args.prompt = bootstrapPrompt(
+-      description,
+-      prompt
+-    )
+-    input.args.subagent_type = "sdd-explore"
+-    input.args.command = BOOTSTRAP_COMMAND
+-
+     bootstrapSessions.add(key)
+ 
+     try {
+-      provided = await getExecutionContext(
++      const decomposition = runAtomicDecompose(
+         input.directory,
+-        input.sessionID
++        description,
++        prompt
++      )
++      await completeBootstrap(
++        input.directory,
++        input.sessionID,
++        decomposition
+       )
+     } catch (error) {
+       bootstrapSessions.delete(key)
+       throw error
+     }
+ 
+-    if (provided.kind !== "available") {
+-      bootstrapSessions.delete(key)
+-    }
++    bootstrapSessions.delete(key)
++
++    provided = await getExecutionContext(
++      input.directory,
++      input.sessionID
++    )
+   }
+ 
+   if (provided.kind !== "available") {
